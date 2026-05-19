@@ -10,7 +10,7 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Model used via a secondary Codex agent for section review. Must be an OpenAI model.
-- **TARGET_VENUE = `ICLR`** — Default venue. Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR` (also ICCV/ECCV), `ACL` (also EMNLP/NAACL), `AAAI`, `ACM` (ACM MM, SIGIR, KDD, CHI, etc.), `IEEE_JOURNAL` (IEEE Transactions / Letters, e.g., T-PAMI, JSAC, TWC, TCOM, TSP, TIP), `IEEE_CONF` (IEEE conferences, e.g., ICC, GLOBECOM, INFOCOM, ICASSP). Determines style file and formatting.
+- **TARGET_VENUE = `ICLR`** — Default venue. Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR` (also ICCV/ECCV), `ACL` (also EMNLP/NAACL), `AAAI`, `ACM` (ACM MM, SIGIR, KDD, CHI, etc.), `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters, e.g., T-PAMI, JSAC, TWC, TCOM, TSP, TIP), `IEEE_CONF` (IEEE conferences, e.g., ICC, GLOBECOM, INFOCOM, ICASSP). Determines style file and formatting.
 - **ANONYMOUS = true** — If true, use anonymous author block. Set `false` for camera-ready. Note: most IEEE venues do NOT use anonymous submission — set `false` for IEEE.
 - **MAX_PAGES = 9** — Main body page limit. For ML conferences: counts from first page to end of Conclusion section, references and appendix NOT counted. **For IEEE venues: references ARE counted toward the page limit.** Typical limits: IEEE journal = no strict limit (but 12-14 pages typical for Transactions, 4-5 for Letters), IEEE conference = 5-8 pages including references.
 - **DBLP_BIBTEX = true** — Fetch real BibTeX from DBLP/CrossRef instead of LLM-generated entries. Eliminates hallucinated citations. Zero install required. Set `false` to use legacy behavior (LLM search + `[VERIFY]` markers).
@@ -59,6 +59,16 @@ The skill includes conference templates in `templates/`. Select based on TARGET_
 ```latex
 \documentclass[accepted]{icml2025}
 % Use [accepted] for camera-ready
+```
+
+**CoRL** (Conference on Robot Learning, PMLR):
+```latex
+\documentclass{article}
+\usepackage{corl_2026}            % Anonymous initial submission (default)
+% \usepackage[final]{corl_2026}    % Camera-ready: authors visible + CoRL footnote
+% \usepackage[preprint]{corl_2026} % arXiv preprint: authors visible, no CoRL footnote
+% Required: 4-6 sentence single-paragraph abstract; \keywords{...} (2-3 keywords) after abstract.
+% bib style auto-set to corlabbrvnat by the corl_2026 package; uses natbib (\citep / \citet).
 ```
 
 **IEEE Journal** (Transactions, Letters):
