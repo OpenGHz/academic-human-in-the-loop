@@ -1,4 +1,4 @@
-# Venue Checklists for ICLR, NeurIPS, and ICML
+# Venue Checklists for ICLR, NeurIPS, ICML, and CoRL
 
 Use this reference near the end of `paper-plan` and during the final checks in `paper-write`.
 
@@ -61,6 +61,30 @@ Final-check implications:
 - Decide whether LLM disclosure is required for this project.
 - Confirm the paper includes enough reproducibility guidance, code/data availability information, and limitations discussion.
 - Check that the contribution is already clear by the end of the Introduction.
+
+## CoRL (Conference on Robot Learning, PMLR)
+
+Planning implications:
+
+- Use `\documentclass{article}` with `\usepackage{corl_2026}` (anonymous initial submission, double-blind by default). For camera-ready use `[final]`; for arXiv preprint use `[preprint]`.
+- Citation style is `natbib` (`\citep{}` / `\citet{}`). Bibliography style is auto-set to `corlabbrvnat` by the package — do NOT add a manual `\bibliographystyle{}`.
+- Abstract is **strictly 4-6 sentences in a single paragraph**. Gross violations are corrected at camera-ready.
+- `\keywords{...}` with 2-3 keywords is **mandatory**, placed immediately after the abstract.
+- Page budget: typically 8-9 pages main body (excluding references and appendix) for initial submission; check the current year's CFP for the exact limit. References and appendix do NOT count toward the page limit (like NeurIPS/ICML).
+- CoRL reviewers strongly prefer **real-robot experiments** or rigorous sim-to-real validation; sim-only work has a high bar and should justify the sim setup. Plan a multi-task or generalization story rather than single-task SOTA.
+- **Video supplementary is critical at CoRL** — reviewers expect demonstration videos. Plan a 2-3 minute video early in the writing phase, not as an afterthought.
+- Plan an explicit failure-mode / limitations section; CoRL reviewers weight honest limitations highly.
+
+Final-check implications:
+
+- Verify abstract is 4-6 sentences and a single paragraph.
+- Verify `\keywords{}` is present and has 2-3 entries.
+- Confirm no manual `\bibliographystyle{}` is set (the corl_2026 package handles it).
+- Verify all citations use `\citep` / `\citet`, not `\cite`.
+- For initial submission, confirm `corl_2026` is loaded WITHOUT `[final]` / `[preprint]` (anonymous).
+- Confirm video / supplementary materials are referenced in the paper and prepared.
+- Verify hardware experiments (or sim justification) are discussed with enough detail to reproduce.
+- Confirm at least one task-generalization or cross-scene result is reported.
 
 ## Minimal Submission Checklist
 
