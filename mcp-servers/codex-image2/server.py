@@ -60,6 +60,12 @@ SAVE_RUN_LOGS = os.environ.get("CODEX_IMAGE2_SAVE_RUN_LOGS", "").strip().lower()
     "yes",
     "on",
 }
+REST_FALLBACK_ENABLED = os.environ.get("CODEX_IMAGE2_REST_FALLBACK", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 STATE_DIR = Path(
     os.environ.get(
         "CODEX_IMAGE2_STATE_DIR",
@@ -432,6 +438,67 @@ def materialize_generated_image(
     return None, None, None, "imageGeneration item did not contain a savedPath or decodable result"
 
 
+def _try_rest_fallback(
+    *,
+    prompt: str,
+    system: str | None,
+    output_path: Path,
+    model: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Attempt the images/generations REST fallback.
+
+    Triggered when the Codex app-server reports NATIVE_IMAGE_UNAVAILABLE.
+    Loads images_api_fallback from the same directory and calls it directly.
+    Returns the same payload shape as the native path so the caller can
+    pass it straight through.
+    """
+    if not REST_FALLBACK_ENABLED:
+        return None, None
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import images_api_fallback  # type: ignore  # noqa: WPS433
+    except ImportError as exc:
+        return None, f"REST fallback module not importable: {exc}"
+    finally:
+        try:
+            sys.path.remove(str(Path(__file__).resolve().parent))
+        except ValueError:
+            pass
+
+    try:
+        result = images_api_fallback.generate_via_rest(
+            prompt=prompt,
+            output_path=output_path,
+            system=system,
+            model=os.environ.get("GPT_IMAGE2_MODEL", images_api_fallback.DEFAULT_MODEL),
+            size=os.environ.get("GPT_IMAGE2_SIZE", images_api_fallback.DEFAULT_SIZE),
+            quality=os.environ.get("GPT_IMAGE2_QUALITY", images_api_fallback.DEFAULT_QUALITY),
+        )
+    except images_api_fallback.FallbackError as exc:
+        return None, str(exc)
+    except Exception as exc:  # noqa: BLE001
+        return None, f"REST fallback crashed: {exc}"
+
+    payload = {
+        "threadId": None,
+        "response": "[REST fallback] image generated via images/generations endpoint",
+        "model": result.get("model") or model,
+        "duration_ms": None,
+        "nativeToolConfirmed": True,
+        "imageCount": result.get("imageCount", 1),
+        "outputPath": result.get("outputPath", str(output_path)),
+        "sourceSavedPath": None,
+        "revisedPrompt": result.get("revisedPrompt"),
+        "runLogPath": None,
+        "fallback": result.get("fallback", "rest"),
+        "endpoint": result.get("endpoint"),
+    }
+    debug_log(
+        f"REST_FALLBACK_OK model={payload['model']} endpoint={payload.get('endpoint')}"
+    )
+    return payload, None
+
+
 def run_codex_image(
     prompt: str,
     *,
@@ -443,6 +510,29 @@ def run_codex_image(
     timeout_sec: int | None = None,
     run_log_path: Path | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
+    # Fast path: if the user has explicitly configured a REST image endpoint
+    # via GPT_IMAGE2_API_KEY or GPT_IMAGE2_API_URL, skip the Codex CLI entirely
+    # and go straight to images/generations. Avoids the ~15 s wait for Codex to
+    # return NATIVE_IMAGE_UNAVAILABLE before falling back.
+    if REST_FALLBACK_ENABLED and (
+        os.environ.get("GPT_IMAGE2_API_KEY", "").strip()
+        or os.environ.get("GPT_IMAGE2_API_URL", "").strip()
+    ):
+        output_path = output_path.resolve()
+        output_path_error = validate_output_path(output_path, cwd=cwd)
+        if output_path_error:
+            return None, output_path_error
+        debug_log("REST_DIRECT triggered by GPT_IMAGE2_* env var")
+        payload, error = _try_rest_fallback(
+            prompt=prompt,
+            system=system,
+            output_path=output_path,
+            model=model,
+        )
+        if payload is not None:
+            return payload, None
+        return None, error or "REST image generation failed without a specific error"
+
     bin_path = find_codex_bin()
     if not bin_path:
         return None, f"Codex CLI not found: {CODEX_BIN}"
@@ -506,7 +596,18 @@ def run_codex_image(
                 break
         stderr_text = result.stderr.strip()
         if final_message == "NATIVE_IMAGE_UNAVAILABLE":
-            return None, "Codex app-server reported that native image generation is unavailable in this session."
+            fallback_payload, fallback_error = _try_rest_fallback(
+                prompt=prompt,
+                system=system,
+                output_path=output_path,
+                model=model,
+            )
+            if fallback_payload is not None:
+                return fallback_payload, None
+            base_msg = "Codex app-server reported that native image generation is unavailable in this session."
+            if fallback_error:
+                return None, f"{base_msg} REST fallback also failed: {fallback_error}"
+            return None, base_msg
         if final_message:
             return None, f"Codex did not emit an imageGeneration item. Final message: {final_message}"
         if stderr_text:
