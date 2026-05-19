@@ -44,7 +44,7 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 Writer choice is independent of reviewer routing. Accept user/project preferences in natural language or `— writer: antigravity, writer-model: gemini-4-argon-high, writer-effort: high`; follow `../shared-references/writing-principles.md` for configured-worker use and executor fallback. Carry these writer options and any active writer session to `/paper-write` and the fix-implementation phase of `/auto-paper-improvement-loop`, separately from reviewer/model/effort overrides. Apply its Launch Mindset from planning through final revision.
 
-- **VENUE = `ICLR`** — Target venue. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
+- **VENUE = `ICLR`** — Target venue. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
 - **MAX_IMPROVEMENT_ROUNDS = 2** — Number of review→fix→recompile rounds in the improvement loop.
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via Codex MCP for plan review, figure review, writing review, and improvement loop.
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
