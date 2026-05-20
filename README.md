@@ -1031,7 +1031,7 @@ Already have an experiment plan (from Workflow 1 or your own)? `/experiment-brid
 
 > **"Turn my research narrative into a submission-ready PDF."** Requires a local LaTeX environment — see [Prerequisites](#prerequisites).
 
-1. 📝 **Narrate** — write `NARRATIVE_REPORT.md` (claims, experiments, results, figure descriptions); see [`templates/NARRATIVE_REPORT_TEMPLATE.md`](templates/NARRATIVE_REPORT_TEMPLATE.md)
+1. 📝 **Narrate** — `/narrative-bridge` auto-synthesizes `NARRATIVE_REPORT.md` from Workflow 2 outputs (`review-stage/AUTO_REVIEW.md` + `CLAIMS_FROM_RESULTS.md` + `figures/`), or write it manually using [`templates/NARRATIVE_REPORT_TEMPLATE.md`](templates/NARRATIVE_REPORT_TEMPLATE.md)
 2. 🧭 **Plan** — `/paper-plan` builds the claims-evidence matrix + section plan
 3. 📊 **Figures** — `/paper-figure` generates data-driven plots and comparison tables from JSON/CSV
 4. ✍️ **Write** — `/paper-write` produces section-by-section LaTeX
@@ -1039,7 +1039,7 @@ Already have an experiment plan (from Workflow 1 or your own)? `/experiment-brid
 6. ✨ **Improve** — `/auto-paper-improvement-loop` runs 2 rounds of GPT-5.6-Sol content review + final format check
 
 <details>
-<summary><b>Show W3 architecture diagram and exact writing flow</b> — NARRATIVE_REPORT → /paper-plan → /paper-figure → /paper-write → /paper-compile → improvement loop</summary>
+<summary><b>Show W3 architecture diagram and exact writing flow</b> — /narrative-bridge → /paper-plan → /paper-figure → /paper-write → /paper-compile → improvement loop</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1067,7 +1067,7 @@ Already have an experiment plan (from Workflow 1 or your own)? `/experiment-brid
 │   └──────────────────────────────────────────────────┘       │
 │                                                               │
 │   Typical flow:                                               │
-│   1. Write NARRATIVE_REPORT.md (from Workflow 2 results)      │
+│   1. /narrative-bridge (synthesize NARRATIVE from W2 outputs) │
 │   2. /paper-plan (claims-evidence matrix + section plan)      │
 │   3. /paper-figure (comparison tables, training curves, etc.) │
 │   4. /paper-write (section-by-section LaTeX generation)       │
@@ -1078,7 +1078,7 @@ Already have an experiment plan (from Workflow 1 or your own)? `/experiment-brid
 
 </details>
 
-**Skills involved:** `paper-plan` + `paper-figure` + `paper-write` + `paper-compile` + `auto-paper-improvement-loop` + (post-acceptance) `paper-poster-html` + `paper-slides`
+**Skills involved:** `narrative-bridge` + `paper-plan` + `paper-figure` + `paper-write` + `paper-compile` + `auto-paper-improvement-loop` + (post-acceptance) `paper-poster-html` + `paper-slides`
 
 > **One-command shortcut:** `/paper-writing "NARRATIVE_REPORT.md"` runs this entire workflow automatically.
 

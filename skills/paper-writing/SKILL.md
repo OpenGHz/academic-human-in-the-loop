@@ -39,10 +39,22 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 This pipeline accepts one of:
 
 1. **`NARRATIVE_REPORT.md`** (best) — structured research narrative with claims, experiments, results, figures
-2. **Research direction + experiment results** — the skill will help draft the narrative first
-3. **Existing `PAPER_PLAN.md`** — skip Phase 1, start from **Phase 1.5** (the contract negotiation still runs; only resuming a genuine pre-1.5 legacy run may skip it, and then Phase 6.0's row 0 records "no contract")
+2. **Workflow 2 outputs** (`review-stage/AUTO_REVIEW.md` + `CLAIMS_FROM_RESULTS.md` + `figures/`) — invoke `/narrative-bridge` first to synthesize `NARRATIVE_REPORT.md`, then proceed
+3. **Research direction + experiment results** — the skill will help draft the narrative first
+4. **Existing `PAPER_PLAN.md`** — skip Phase 1, start from **Phase 1.5** (the contract negotiation still runs; only resuming a genuine pre-1.5 legacy run may skip it, and then Phase 6.0's row 0 records "no contract")
 
 The more detailed the input (especially figure descriptions and quantitative results), the better the output.
+
+### Auto-bridge from Workflow 2
+
+**Before Phase 1**, check for an existing `NARRATIVE_REPORT.md`. If absent **but** Workflow 2 outputs exist (`review-stage/AUTO_REVIEW.md` OR `CLAIMS_FROM_RESULTS.md` OR `EXPERIMENT_LOG.md`), invoke `/narrative-bridge` to compose one — this is the canonical W2→W3 bridge. If `/narrative-bridge` is unavailable, fall back to drafting from `review-stage/AUTO_REVIEW.md` directly (legacy path). Do not silently abort the pipeline.
+
+```bash
+if [ ! -f NARRATIVE_REPORT.md ] && { [ -f review-stage/AUTO_REVIEW.md ] || [ -f AUTO_REVIEW.md ] || [ -f CLAIMS_FROM_RESULTS.md ] || [ -f EXPERIMENT_LOG.md ]; }; then
+  echo "📝 No NARRATIVE_REPORT.md but Workflow 2 outputs detected — invoking /narrative-bridge"
+  # Skill invocation: /narrative-bridge — venue: <VENUE>
+fi
+```
 
 ## Optional: Style reference (`— style-ref: <source>`, opt-in)
 

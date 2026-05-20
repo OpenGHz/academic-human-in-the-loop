@@ -915,7 +915,7 @@ ARIS 全流程完成并进入投稿/审稿阶段的真实项目。**所列分数
 
 > "把我的研究报告变成可投稿的 PDF。" 需要本地 LaTeX 环境——见[前置条件](#prerequisites)。
 
-1. 📝 **叙事** — 写 `NARRATIVE_REPORT.md`（声明 / 实验 / 结果 / 图表说明）；模板见 [`templates/NARRATIVE_REPORT_TEMPLATE.md`](templates/NARRATIVE_REPORT_TEMPLATE.md)
+1. 📝 **叙事** — `/narrative-bridge` 自动从工作流 2 产物（`review-stage/AUTO_REVIEW.md` + `CLAIMS_FROM_RESULTS.md` + `figures/`）合成 `NARRATIVE_REPORT.md`；或手动按模板 [`templates/NARRATIVE_REPORT_TEMPLATE.md`](templates/NARRATIVE_REPORT_TEMPLATE.md) 撰写
 2. 🧭 **规划** — `/paper-plan` 生成 claims-evidence 矩阵 + 分节计划
 3. 📊 **画图** — `/paper-figure` 从 JSON/CSV 生成数据驱动的图表和对比表
 4. ✍️ **写作** — `/paper-write` 逐 section 生成 LaTeX
@@ -923,16 +923,16 @@ ARIS 全流程完成并进入投稿/审稿阶段的真实项目。**所列分数
 6. ✨ **润色** — `/auto-paper-improvement-loop` 跑 2 轮 GPT-5.6-Sol 内容审稿 + 终局格式合规检查
 
 <details>
-<summary><b>展开工作流 3 的写作流向图与命令清单</b> —— NARRATIVE_REPORT → /paper-plan → /paper-figure → /paper-write → /paper-compile → 润色循环</summary>
+<summary><b>展开工作流 3 的写作流向图与命令清单</b> —— /narrative-bridge → /paper-plan → /paper-figure → /paper-write → /paper-compile → 润色循环</summary>
 
 ```
-NARRATIVE_REPORT.md ──► /paper-plan ──► /paper-figure ──► /paper-write ──► /paper-compile
-    (研究叙事)          (大纲+矩阵)     (图表+LaTeX)      (逐节LaTeX)      (编译PDF)
+W2 产物 ──► /narrative-bridge ──► /paper-plan ──► /paper-figure ──► /paper-write ──► /paper-compile
+            (合成 NARRATIVE)     (大纲+矩阵)     (图表+LaTeX)      (逐节LaTeX)      (编译PDF)
 ```
 
 ```
 典型流程：
-1. 写 NARRATIVE_REPORT.md（来自工作流 2 的结果）
+1. /narrative-bridge — 从工作流 2 输出合成 NARRATIVE_REPORT.md（无数据捏造、claim 不静默升级）
 2. /paper-plan — 生成 claims-evidence 矩阵 + 分节计划
 3. /paper-figure — 生成对比表、训练曲线等图表
 4. /paper-write — 逐 section 生成 LaTeX（含 bib 清理、de-AI 打磨）
@@ -942,7 +942,7 @@ NARRATIVE_REPORT.md ──► /paper-plan ──► /paper-figure ──► /pap
 
 </details>
 
-**涉及 Skills：** `paper-plan` + `paper-figure` + `paper-write` + `paper-compile` + `auto-paper-improvement-loop` +（投稿后）`paper-poster-html` + `paper-slides`
+**涉及 Skills：** `narrative-bridge` + `paper-plan` + `paper-figure` + `paper-write` + `paper-compile` + `auto-paper-improvement-loop` +（投稿后）`paper-poster-html` + `paper-slides`
 
 > **一键调用：** `/paper-writing "NARRATIVE_REPORT.md"` 自动跑完整个工作流 3。
 
