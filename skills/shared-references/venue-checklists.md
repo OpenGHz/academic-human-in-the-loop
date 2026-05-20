@@ -70,18 +70,23 @@ Planning implications:
 - Citation style is `natbib` (`\citep{}` / `\citet{}`). Bibliography style is auto-set to `corlabbrvnat` by the package — do NOT add a manual `\bibliographystyle{}`.
 - Abstract is **strictly 4-6 sentences in a single paragraph**. Gross violations are corrected at camera-ready.
 - `\keywords{...}` with 2-3 keywords is **mandatory**, placed immediately after the abstract.
-- Page budget: typically 8-9 pages main body (excluding references and appendix) for initial submission; check the current year's CFP for the exact limit. References and appendix do NOT count toward the page limit (like NeurIPS/ICML).
+- **Page budget (initial submission): 8 pages main text.** Acknowledgments, References, and Appendix do NOT count. Camera-ready gets one extra page (9 pages main text) to accommodate review feedback.
+- **`\section{Limitations}` is MANDATORY** and counts toward the 8-page limit. It must explicitly cover limiting assumptions, failure modes, and how these could be addressed in future work. Reviewers may reject papers that omit it.
+- The Appendix is optional but, when present, should be at the end of the camera-ready PDF — NOT a separate supplementary file. Reviewers are not obligated to read the Appendix; put load-bearing claims in the main paper.
+- CoRL strongly encourages **enough detail in main paper + appendix to let future researchers reproduce the work** — hyperparameters, data, hardware setup, training procedure all explicit.
 - CoRL reviewers strongly prefer **real-robot experiments** or rigorous sim-to-real validation; sim-only work has a high bar and should justify the sim setup. Plan a multi-task or generalization story rather than single-task SOTA.
 - **Video supplementary is critical at CoRL** — reviewers expect demonstration videos. Plan a 2-3 minute video early in the writing phase, not as an afterthought.
-- Plan an explicit failure-mode / limitations section; CoRL reviewers weight honest limitations highly.
 
 Final-check implications:
 
 - Verify abstract is 4-6 sentences and a single paragraph.
 - Verify `\keywords{}` is present and has 2-3 entries.
+- **Verify `\section{Limitations}` exists in the main paper and is substantive (not a sentence).**
 - Confirm no manual `\bibliographystyle{}` is set (the corl_2026 package handles it).
 - Verify all citations use `\citep` / `\citet`, not `\cite`.
-- For initial submission, confirm `corl_2026` is loaded WITHOUT `[final]` / `[preprint]` (anonymous).
+- Initial submission: `corl_2026` loaded WITHOUT `[final]` / `[preprint]` (anonymous); page count of main text (Title through end of Conclusion or Limitations, whichever is last) ≤ 8.
+- Camera-ready: switch to `\usepackage[final]{corl_2026}`; **author list is NOT anonymous**; page count of main text ≤ 9; Appendix (if any) placed at end of the camera-ready PDF, not a separate file.
+- Camera-ready footer on page 1 must read: `10th Conference on Robot Learning (CoRL 2026), Austin, Texas, USA.` — this is inserted automatically by `\usepackage[final]{corl_2026}`. Verify it appears in the compiled PDF.
 - Confirm video / supplementary materials are referenced in the paper and prepared.
 - Verify hardware experiments (or sim justification) are discussed with enough detail to reproduce.
 - Confirm at least one task-generalization or cross-scene result is reported.
