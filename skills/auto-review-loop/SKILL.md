@@ -946,12 +946,14 @@ When loop ends (positive assessment or max rounds):
 3. Update project notes with conclusions
 4. **Write method/pipeline description** to `review-stage/AUTO_REVIEW.md` under a `## Method Description` section — a concise 1-2 paragraph description of the final method, its architecture, and data flow. This serves as input for `/paper-illustration` in Workflow 3 (so it can generate architecture diagrams automatically).
 5. **Generate claims from results** — invoke `/result-to-claim` to convert experiment results from `review-stage/AUTO_REVIEW.md` into structured paper claims. Output: `CLAIMS_FROM_RESULTS.md`. This bridges Workflow 2 → Workflow 3 so `/paper-plan` can directly use validated claims instead of extracting them from scratch. If `/result-to-claim` is not installed, skip this step (no `CLAIMS_FROM_RESULTS.md` is produced; `/paper-plan` extracts claims from the narrative as before) — but NEVER fabricate the file or its verdict. If it ran but its output starts with `verdict: REVIEW_UNAVAILABLE`, keep that file AS-IS (do not overwrite or paraphrase it) and record in `AUTO_REVIEW.md` that claims are UNADJUDICATED — downstream paper stages must not treat them as validated.
-6. If stopped at max rounds without positive assessment:
+6. **Synthesize narrative for Workflow 3** — invoke `/narrative-bridge` to compose `NARRATIVE_REPORT.md` from `review-stage/AUTO_REVIEW.md` (§ Method Description + latest-round Remaining Weaknesses) + `CLAIMS_FROM_RESULTS.md` + `EXPERIMENT_LOG.md` + `figures/`. This is the Workflow 2.5 bridge — without it, the user has to write the narrative by hand before `/paper-writing` will run. Fire condition: at least one of the four inputs exists AND the loop terminated with a positive assessment (not at max rounds with score < threshold — premature narrative on a failing project is misleading). If `/narrative-bridge` is not available, skip silently and print a one-line hint: `Run /narrative-bridge then /paper-writing` so the user knows the next step.
+7. If stopped at max rounds without positive assessment:
    - List remaining blockers
    - Estimate effort needed for each
    - Suggest whether to continue manually or pivot
-7. **Feishu notification** (if configured): Send `pipeline_done` with final score progression table
-8. **Render HTML view** (if `RENDER_HTML = true`, default): invoke `/render-html` on the cumulative review log:
+   - Skip step 6 (narrative bridge): a failing project should not be packaged as a paper narrative until weaknesses are addressed
+8. **Feishu notification** (if configured): Send `pipeline_done` with final score progression table
+9. **Render HTML view** (if `RENDER_HTML = true`, default): invoke `/render-html` on the cumulative review log:
    ```
    /render-html "review-stage/AUTO_REVIEW.md" --no-review --state review-stage/REVIEW_STATE.json
    ```
