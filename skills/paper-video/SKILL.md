@@ -1,7 +1,7 @@
 ---
 name: paper-video
 description: "Produce a paper-submission demonstration video (CoRL / ICRA / RSS / NeurIPS-supp / project-page) under hard size + duration gates. Default target: H.264 MP4, ≤180 s, ≤250 MB (CoRL ceiling). Claude plans narration + shot list, ffmpeg assembles raw clips, helper enforces gates, optional zip-package emits the full supplementary bundle. Use when user says \"做 supplementary video\", \"做投稿 demo 视频\", \"CoRL video\", \"demo video\", \"supp 视频\", or wants the recorded experiments turned into a submission-ready clip."
-argument-hint: "[paper-dir-or-raw-clips] [— venue: CORL|ICRA|RSS|NEURIPS|GENERIC] [— max-mb: N] [— max-seconds: N] [— with-subtitles] [— with-narration]"
+argument-hint: "[paper-dir-or-raw-clips] [— mode: submission|showcase|teaser] [— venue: CORL|ICRA|RSS|NEURIPS|GENERIC] [— max-mb: N] [— max-seconds: N] [— with-subtitles] [— with-narration]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
@@ -26,16 +26,18 @@ about right".
 
 ## Constants
 
-- **DEFAULT_VENUE = `CORL`** — Determines `MAX_MB` / `MAX_SECONDS`. Override with `— venue:`.
-- **MAX_MB = 250** — Hard size ceiling. CoRL strict. ICRA/RSS typically ≤100 MB.
-- **MAX_SECONDS = 180** — Soft duration ceiling (CoRL: 3 min "suggested"). Verified, warns on overshoot.
+- **DEFAULT_MODE = `submission`** — Three modes governing tone, anonymity, length, and CTA. See **Mode Profiles** below. Override with `— mode:`.
+- **DEFAULT_VENUE = `CORL`** — Determines `MAX_MB` / `MAX_SECONDS` for `submission` mode (other modes default by mode, not venue). Override with `— venue:`.
+- **MAX_MB = 250** — Hard size ceiling. CoRL strict. ICRA/RSS typically ≤100 MB. `showcase` / `teaser` modes target a smaller size (web-friendly).
+- **MAX_SECONDS** — Soft duration ceiling. `submission` → venue cap (CoRL: 180 s "suggested"). `showcase` → 90 s. `teaser` → 45 s. Verified; over-cap is a soft fail.
 - **TARGET_CODEC = `libx264 + aac (faststart)`** — Most-compatible across reviewer players.
 - **TARGET_RESOLUTION = `1920x1080`** — 1080p; we downscale 4K input, never upscale.
 - **TARGET_FPS = `30`** — 30 fps; matches most experiment recordings.
-- **OUTPUT_DIR = `submission/video/`** — All artifacts land here.
+- **OUTPUT_DIR = `submission/video/`** — All artifacts land here (named after the most common case — overridable).
 - **SUPPLEMENTARY_DIR = `submission/supplementary/`** — Optional zip bundle root.
-- **NARRATION_LANGUAGE = `English`** — Default. CoRL / ICRA / RSS are English-only.
+- **NARRATION_LANGUAGE = `English`** — Default. CoRL / ICRA / RSS are English-only. Default narration is **off** for `submission`, **on** for `showcase` / `teaser`; override with `— with-narration` / `— no-narration`.
 - **VENUE_PROFILES** — Built into the helper. CORL: 250 MB / 180 s. ICRA: 100 MB / 180 s. RSS: 100 MB / 300 s. NEURIPS: 100 MB / 600 s. GENERIC: caller-supplied.
+- **MODE_PROFILES** — Built into the helper. `submission` → use venue limits + anon scan. `showcase` → 100 MB / 90 s, no anon scan. `teaser` → 50 MB / 45 s, no anon scan.
 - **VIDEO_HELPER** — canonical name `paper_video.py`, resolved per
   [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2
   (Policy A — skill-local gate). Canonical location is
@@ -66,6 +68,39 @@ about right".
 
   All invocations below use `python3 "$VIDEO_HELPER" <subcommand>`.
 
+## Mode Profiles
+
+A submission-review video and a camera-ready / project-page video are
+**different artifacts** with different audiences, different anonymity rules,
+and different optimal lengths. This skill exposes three modes; pick one
+explicitly at the call site.
+
+| Aspect | `submission` (default) | `showcase` | `teaser` |
+|---|---|---|---|
+| **Audience** | 3-4 skeptical reviewers | Public, citations, project page | Social media (X, BlueSky) |
+| **Anonymity** | Strict (no logo / lab / URL / QR / email) | Free (lab logos, project URL, arXiv ID expected) | Free |
+| **Default duration** | Venue cap (CoRL: 180 s) | 90 s | 45 s |
+| **Default size cap** | Venue cap (CoRL: 250 MB) | 100 MB | 50 MB |
+| **Captions** | **Mandatory** (assume muted playback) | Optional (audio narration carries) | Optional |
+| **Voiceover narration** | Off by default | **On by default** | On by default |
+| **Music / BGM** | Avoid (distracts reviewer) | Allowed (light) | Allowed |
+| **Failure cases** | Encouraged (one honest failure) | Skip | Skip |
+| **Comparison vs baselines** | Full side-by-side with numbers | One quick "vs prior" cut | Hero shot only |
+| **Pace / cuts** | Slow, deliberate, label-heavy | Fast, energetic | Very fast, trailer-style |
+| **Title cards** | Plain (white background, sans-serif) | Brand-styled, motion-graphic optional | Brand-styled, big text |
+| **Closing card** | "See paper for details" | `arxiv.org/abs/...` + project URL | Project URL + arXiv |
+| **Identifying info scan** | **On** (helper greps manifest for URL / email / @-handle) | Off | Off |
+
+Pick the mode that matches the **deadline you are working against**:
+
+- Submitting to the venue's CMT / OpenReview portal in the next 7 days → `submission`
+- Paper just got accepted; building the project page, Twitter thread, talk preview → `showcase`
+- Already have a showcase; need a 45-second cut for social → `teaser`
+
+You can produce all three from the same raw clips — re-run with different
+`— mode` and `— output`. The manifest will usually need pruning between
+modes (showcase / teaser drop the failure-case shots).
+
 ## Scope
 
 | Use case | Fit |
@@ -85,11 +120,11 @@ Render this checklist explicitly before starting:
 
 ```text
 📋 paper-video integration checklist:
-   [ ] 1. python3 "$VIDEO_HELPER" preflight --workspace <cwd> --venue <VENUE> --json-out submission/video/preflight.json
+   [ ] 1. python3 "$VIDEO_HELPER" preflight --workspace <cwd> --mode <MODE> --venue <VENUE> --json-out submission/video/preflight.json
    [ ] 2. Confirm preflight JSON says ok=true (ffmpeg + ffprobe + writable OUTPUT_DIR)
    [ ] 3. Plan shot list + narration (Step 1)
-   [ ] 4. Assemble via python3 "$VIDEO_HELPER" assemble --manifest <manifest.json>
-   [ ] 5. Verify via python3 "$VIDEO_HELPER" verify --video <mp4> --venue <VENUE> --json-out submission/video/verify.json
+   [ ] 4. Assemble via python3 "$VIDEO_HELPER" assemble --manifest <manifest.json> --mode <MODE>
+   [ ] 5. Verify via python3 "$VIDEO_HELPER" verify --video <mp4> --mode <MODE> --venue <VENUE> --manifest <manifest.json> --json-out submission/video/verify.json
    [ ] 6. (Optional) Package supplementary via python3 "$VIDEO_HELPER" package
 ```
 
@@ -103,6 +138,7 @@ Render this checklist explicitly before starting:
 ```bash
 python3 "$VIDEO_HELPER" preflight \
   --workspace . \
+  --mode "${MODE:-submission}" \
   --venue "${VENUE:-CORL}" \
   --json-out submission/video/preflight.json
 ```
@@ -151,26 +187,60 @@ This is a JSON file the helper consumes. Required structure:
 }
 ```
 
-Planning rules (Claude enforces, helper does not):
+Planning rules (Claude enforces — these are mode-specific):
 
-- **Total budgeted duration ≤ MAX_SECONDS** — leave 10 % headroom for transitions
-- **Lead with the result** — first 10 s must show the strongest demonstration
+**Universal (all modes):**
+
+- Lead with the result — first 5–10 s must show the strongest demonstration
+- Caption every clip in `submission` (mandatory); optional in `showcase` / `teaser` if narration carries
+- Speed up baseline failures (2×–4×); never speed up your own method
+
+**`submission` mode (anonymous review):**
+
+- Total budgeted duration ≤ venue MAX_SECONDS — leave 10 % headroom for transitions
 - **No talking-head intros** — reviewers skip them
-- **Caption every clip** — assume the reviewer plays muted
 - **No identifying info during double-blind** — strip institution logos, name plates, watermarks
-- **No external URLs / QR codes / contact info during anonymous review**
-- **Speed up baseline failures (2×–4×); never speed up your own method**
+- **No external URLs / QR codes / contact info / email / Twitter handles** during anonymous review (the helper's `verify --mode submission --manifest <m>` greps for these and fails closed)
+- **Show one honest failure case** if the venue values reproducibility (CoRL / ICRA / RSS)
+- Captions are **mandatory** (reviewer commonly plays muted on a second monitor)
+- Final card: plain "See paper for details" — no URL
+
+**`showcase` mode (camera-ready / project page):**
+
+- Default target ≈ 90 s — longer than this loses viewers on the project page
+- Hero-shot driven: open with your best 3 seconds of footage, no title card preamble
+- **Show lab logos, institution, project URL** — anonymity is over
+- Voiceover narration is the default; aim for ~2.0 words / second
+- Drop the failure cases unless the failure itself is the story
+- Final card: arXiv ID + project URL + GitHub URL stacked vertically
+- Light BGM at −18 dB is acceptable; never overpower narration
+
+**`teaser` mode (social media):**
+
+- Default target ≈ 45 s — Twitter / BlueSky video cap is short
+- Trailer pacing — many cuts, big captions, fast comparison
+- Heavy on hero shots and headline numbers; skip method details
+- One result, one number, one CTA — anything more is too much for 45 s
+- Final card: project URL only (3 s, big text)
 
 Save the manifest to `submission/video/manifest.json`.
 
 ### Step 2: (Optional) Narration Script
 
-If `— with-narration` is set, draft an English voiceover. Constraints:
+Narration default is **mode-dependent**:
 
-- 2.4 words / second average pace (≈ 432 words for 180 s, but you also need clip captions)
+- `submission` — narration **off** (reviewers commonly play muted; captions are the channel)
+- `showcase` — narration **on** (voiceover is the primary attention driver)
+- `teaser` — narration **on**, terse
+
+Override either way with `— with-narration` / `— no-narration`. When narration
+is on, draft an English voiceover with these constraints:
+
+- ~2.0 words / second for showcase, ~1.6 wps for teaser (matches faster cuts)
+- ~432 words for a 180 s submission, ~180 for a 90 s showcase, ~70 for a 45 s teaser
 - Tied to shot timing — every shot in `manifest.json` gets a `narration` field
 - Read aloud — short sentences, active voice, no acronym soup
-- Mention the headline number twice (intro + outro)
+- Mention the headline number twice (intro + outro) for showcase; once for teaser
 
 Persist as `submission/video/narration.md`. If the user has a TTS tool, the
 helper's `narrate` subcommand can splice a WAV track later (out of MVP scope,
@@ -190,11 +260,17 @@ Hand the manifest to the helper:
 python3 "$VIDEO_HELPER" assemble \
   --manifest submission/video/manifest.json \
   --output submission/video/supplementary.mp4 \
+  --mode "${MODE:-submission}" \
   --target-mb 230 \
   --target-resolution 1920x1080 \
   --target-fps 30 \
   --json-out submission/video/assemble.json
 ```
+
+`--mode` is passed through to disambiguate output filenames in logs and to
+trigger mode-aware default size/duration. For `showcase` / `teaser`, the
+suggested filename is `submission/video/showcase.mp4` / `teaser.mp4` to keep
+the three artifacts side-by-side.
 
 The helper:
 
@@ -213,26 +289,39 @@ The helper:
 If `assemble.json` has `ok=false`, the failing ffmpeg stderr is included
 verbatim — do not retry blindly; read it, fix the manifest, rerun.
 
-### Step 5: Verify Against Venue Gates
+### Step 5: Verify Against Venue + Mode Gates
 
 This is the **blocking gate**. The helper exits non-zero if any gate fails:
 
 ```bash
 python3 "$VIDEO_HELPER" verify \
   --video submission/video/supplementary.mp4 \
+  --mode "${MODE:-submission}" \
   --venue "${VENUE:-CORL}" \
+  --manifest submission/video/manifest.json \
   --json-out submission/video/verify.json
 ```
 
-Gates checked:
+`--manifest` is required when `--mode submission` so the anonymity scan can
+run. Omit it for `showcase` / `teaser` (or pass it but skip the scan).
+
+Gates checked (all modes):
 
 - `size_bytes ≤ MAX_MB × 1024 × 1024` — **hard fail**
-- `duration_seconds ≤ MAX_SECONDS` — **soft fail** (CoRL "suggested 3 min")
-- `video_codec ∈ {h264, hevc}` — hard fail
+- `duration_seconds ≤ MAX_SECONDS` — **soft fail** (limits differ by mode)
+- `video_codec ∈ {h264, hevc, av1}` — hard fail
 - `audio_codec ∈ {aac, ac3, opus, none}` — hard fail
 - `pixel_format == yuv420p` — hard fail (older players choke on yuv422/444)
 - `faststart` MOOV atom at front — hard fail (silent stall on web players)
 - `fps ≤ 60`, `width ≤ 3840`, `height ≤ 2160` — sanity
+
+Additional `submission`-only gate:
+
+- `no_identifying_strings` — manifest title cards / captions are grepped
+  against a built-in blocklist (URLs, emails, `@handle`, `github.com`,
+  `.edu` / `.ac.uk` domains) plus any caller-supplied `--anon-blocklist`
+  regex. **Hard fail** when matched. This is the same check reviewers do
+  manually; failing here means your video would expose your identity.
 
 `verify.json` schema:
 
@@ -240,6 +329,7 @@ Gates checked:
 {
   "ok": true,
   "video": "submission/video/supplementary.mp4",
+  "mode": "submission",
   "venue": "CORL",
   "limits": {"max_mb": 250, "max_seconds": 180},
   "actual": {
@@ -253,6 +343,7 @@ Gates checked:
     "width": 1920,
     "height": 1080
   },
+  "anon_scan": {"checked": true, "matches": []},
   "violations": [],
   "checkedAt": "2026-05-19T10:00:00Z"
 }
@@ -303,12 +394,12 @@ The helper enforces zip size limits via stored compression for already-
 compressed inputs (`.mp4`, `.png`, `.pdf`) and `deflate` for the rest, and
 fails closed if the bundle exceeds `--max-mb`.
 
-### Step 8: Reference the Video in the Paper
+### Step 8: Reference the Video (Mode-Dependent)
 
-This step is **mandatory** but must be done by Claude editing the LaTeX
-source — the helper does not touch paper text.
+This step is **mandatory** but the form depends on mode and is done by
+Claude editing the appropriate source — the helper does not touch text.
 
-Add to the appropriate Experiments / Results section:
+**`submission` mode** — edit the paper LaTeX, **no URLs**:
 
 ```latex
 \textbf{Supplementary video.}\ A \unit[180]{s} demonstration video is provided in the
@@ -319,8 +410,35 @@ supplementary materials, showing %
 ```
 
 During **double-blind** review: **do not** include URLs, lab names, or
-project-page links in the supplementary. Camera-ready can add the
-project-page URL.
+project-page links anywhere in the supplementary.
+
+**`showcase` mode** — edit the project-page HTML (or camera-ready LaTeX
+with the now-de-anonymized author info). URL embedding is encouraged:
+
+```html
+<video src="static/showcase.mp4" controls autoplay muted playsinline
+       poster="static/hero.jpg" style="width:100%;max-width:960px"></video>
+<p>
+  <a href="https://arxiv.org/abs/YYMM.NNNNN">Paper</a> ·
+  <a href="https://github.com/lab/project">Code</a> ·
+  <a href="https://lab.edu/project">Project page</a>
+</p>
+```
+
+Camera-ready LaTeX add-on (CoRL `[final]` mode):
+
+```latex
+\textbf{Project page and code.}\ Demo video, code, and trained checkpoints are available at \url{https://lab.edu/project}.
+```
+
+**`teaser` mode** — embed in the social-media post body. Twitter / BlueSky
+auto-play, so put the headline number in the first frame, not the post
+text. Caption suggestion:
+
+```
+[Method Name]: [headline-number] [task] in [setting] — paper + code in 🧵
+arxiv.org/abs/YYMM.NNNNN
+```
 
 ## Output Layout
 
@@ -375,6 +493,8 @@ helper's error verbatim. There are no fallbacks. A failed `verify` is not
 
 ## Defaults Summary
 
+**By venue (used in `submission` mode):**
+
 | Setting | Default | CoRL | ICRA | RSS | NeurIPS-supp |
 |---|---|---|---|---|---|
 | MAX_MB | 250 | 250 | 100 | 100 | 100 |
@@ -383,6 +503,19 @@ helper's error verbatim. There are no fallbacks. A failed `verify` is not
 | FPS | 30 | 30 | 30 | 30 | 30 |
 | Codec | h264 + aac | h264 + aac | h264 + aac | h264 + aac | h264 + aac |
 | Faststart | yes | yes | yes | yes | yes |
+| Anon scan | yes | yes | yes | yes | yes |
 
-Override at the command line: `— venue: ICRA — max-mb: 100`. The helper
-always treats CLI overrides as authoritative over the venue profile.
+**By mode (overrides venue defaults when set):**
+
+| Setting | `submission` | `showcase` | `teaser` |
+|---|---|---|---|
+| MAX_MB | venue (e.g. 250 for CoRL) | 100 | 50 |
+| MAX_SECONDS | venue (e.g. 180 for CoRL) | 90 | 45 |
+| Default narration | off | on | on |
+| Default captions | on (mandatory) | optional | optional |
+| Anon scan | on | off | off |
+| Default output name | `supplementary.mp4` | `showcase.mp4` | `teaser.mp4` |
+
+Override at the command line: `— mode: showcase — max-mb: 80 — max-seconds: 75`.
+The helper treats CLI overrides as authoritative over both venue and mode
+profiles.
