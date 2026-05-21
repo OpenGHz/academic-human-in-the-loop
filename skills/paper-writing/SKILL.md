@@ -56,6 +56,19 @@ if [ ! -f NARRATIVE_REPORT.md ] && { [ -f review-stage/AUTO_REVIEW.md ] || [ -f 
 fi
 ```
 
+### figures/ readiness check
+
+**Also before Phase 1**, after NARRATIVE_REPORT.md is confirmed (whether pre-existing or just synthesized), check that `figures/MANIFEST.md` exists. Its presence is the green-light signal from `/figures-prep` that all data referenced by the narrative's Figures section has been extracted and gated. If the manifest is missing, the data input contract is not satisfied and Phase 2 (`/paper-figure`) will be guessing at file paths.
+
+```bash
+if [ -f NARRATIVE_REPORT.md ] && [ ! -f figures/MANIFEST.md ]; then
+  echo "🧱 NARRATIVE_REPORT.md present but figures/MANIFEST.md missing — invoking /narrative-bridge to delegate to /figures-prep"
+  # Skill invocation: /narrative-bridge   (Phase 0 will detect existing narrative and run figures-prep only)
+fi
+```
+
+If `/figures-prep` blocks on missing data (`figures/GATE_REPORT.md` written, no MANIFEST), `/paper-writing` must surface the report and stop — do not proceed into Phase 1 with an incomplete figures/ directory.
+
 ## Optional: Style reference (`— style-ref: <source>`, opt-in)
 
 Lets the user steer **structural** style (section ordering, theorem density, sentence cadence, figure density, bibliography style) of the generated paper toward a reference paper they admire. **Default OFF — when the user does not pass `— style-ref`, do nothing differently from before.**
