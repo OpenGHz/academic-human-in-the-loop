@@ -69,6 +69,10 @@ HRULE_RE = re.compile(r"^---\s*$", re.MULTILINE)
 MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
 MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 MD_ITALIC_RE = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
+VIDEO_MARKER_RE = re.compile(
+    r"^\s*\[VIDEO:\s*(?P<path>[^\]@]+?)(?:\s*@\s*(?P<start>[\d:.]+)\s*-\s*(?P<end>[\d:.]+))?\s*\]\s*$",
+    re.MULTILINE,
+)
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -153,6 +157,32 @@ def _check_whisper() -> dict[str, Any]:
 # ── Slide model + parse ──────────────────────────────────────────────────────
 
 @dataclass
+class VideoClipRef:
+    declared_path: str
+    path: str
+    trim_start_seconds: float | None = None
+    trim_end_seconds: float | None = None
+    source_duration_seconds: float | None = None
+    effective_duration_seconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+    exists: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "declared_path": self.declared_path,
+            "path": self.path,
+            "trim_start_seconds": round(self.trim_start_seconds, 3) if self.trim_start_seconds is not None else None,
+            "trim_end_seconds": round(self.trim_end_seconds, 3) if self.trim_end_seconds is not None else None,
+            "source_duration_seconds": round(self.source_duration_seconds, 3) if self.source_duration_seconds is not None else None,
+            "effective_duration_seconds": round(self.effective_duration_seconds, 3) if self.effective_duration_seconds is not None else None,
+            "width": self.width,
+            "height": self.height,
+            "exists": self.exists,
+        }
+
+
+@dataclass
 class SlideEntry:
     slide_number: int
     title: str
@@ -162,6 +192,8 @@ class SlideEntry:
     raw_body: str
     fallback_mode: bool = False
     warnings: list[str] = field(default_factory=list)
+    video_clip: VideoClipRef | None = None
+    extra_video_markers: list[str] = field(default_factory=list)
 
     @property
     def planned_seconds(self) -> float:
@@ -178,6 +210,8 @@ class SlideEntry:
             "speakable_preview": (self.speakable_text[:60] + "...") if len(self.speakable_text) > 60 else self.speakable_text,
             "fallback_mode": self.fallback_mode,
             "warnings": list(self.warnings),
+            "video_clip": self.video_clip.to_dict() if self.video_clip else None,
+            "extra_video_markers": list(self.extra_video_markers),
         }
 
 
@@ -188,9 +222,65 @@ def _strip_markdown(text: str) -> str:
     return text
 
 
+def _extract_video_markers(
+    raw_body: str,
+    script_dir: Path,
+) -> tuple[VideoClipRef | None, list[str], list[str]]:
+    """Pull VIDEO markers out of a slide body.
+
+    Returns (first_clip_ref, extra_marker_lines, marker_errors). The caller is
+    expected to strip marker lines from the body before quoted-speech extraction.
+    """
+    matches = list(VIDEO_MARKER_RE.finditer(raw_body))
+    if not matches:
+        return None, [], []
+
+    first_ref: VideoClipRef | None = None
+    extras: list[str] = []
+    errors: list[str] = []
+    for i, match in enumerate(matches):
+        declared = match.group("path").strip()
+        start_str = match.group("start")
+        end_str = match.group("end")
+        if i > 0:
+            extras.append(match.group(0).strip())
+            continue
+        trim_start: float | None = None
+        trim_end: float | None = None
+        if start_str is not None and end_str is not None:
+            try:
+                trim_start = _parse_timestamp(start_str)
+                trim_end = _parse_timestamp(end_str)
+            except ValueError as e:
+                errors.append(f"invalid VIDEO trim range: {e}")
+                # Still build a ref (without trim) so downstream can flag a clearer error
+                trim_start, trim_end = None, None
+            if trim_start is not None and trim_end is not None:
+                if trim_start < 0 or trim_end <= trim_start:
+                    errors.append(
+                        f"invalid VIDEO trim range [{start_str}-{end_str}]: must satisfy 0 ≤ start < end"
+                    )
+                    trim_start, trim_end = None, None
+        declared_path = declared
+        resolved = (script_dir / declared).resolve() if not Path(declared).is_absolute() else Path(declared).resolve()
+        first_ref = VideoClipRef(
+            declared_path=declared_path,
+            path=str(resolved),
+            trim_start_seconds=trim_start,
+            trim_end_seconds=trim_end,
+            exists=resolved.is_file(),
+        )
+    return first_ref, extras, errors
+
+
+def _strip_video_markers(raw_body: str) -> str:
+    return VIDEO_MARKER_RE.sub("", raw_body)
+
+
 def _extract_speakable(raw_body: str) -> tuple[str, bool]:
     """Return (speakable_text, fallback_mode)."""
-    body = TRANSITION_RE.sub("", raw_body)
+    body = _strip_video_markers(raw_body)
+    body = TRANSITION_RE.sub("", body)
     body = STAGE_RE.sub("", body)
     quotes: list[str] = []
     for match in QUOTE_RE.finditer(body):
@@ -219,6 +309,7 @@ def parse_talk_script(script_path: Path) -> tuple[list[SlideEntry], list[dict[st
     if not script_path.is_file():
         return [], [{"slide_number": None, "line": None, "message": f"talk script not found: {script_path}"}]
     text = script_path.read_text(encoding="utf-8")
+    script_dir = script_path.parent
     matches = list(SLIDE_HEADER_RE.finditer(text))
     if not matches:
         return [], [{"slide_number": None, "line": None, "message": "no slide headers found; expected '## Slide N: Title [MM:SS - MM:SS]'"}]
@@ -259,10 +350,18 @@ def parse_talk_script(script_path: Path) -> tuple[list[SlideEntry], list[dict[st
             body = body[: hrule_match.start()]
         raw_body = body.strip("\n")
 
+        video_clip, extras, marker_errors = _extract_video_markers(raw_body, script_dir)
+        for me in marker_errors:
+            errors.append({"slide_number": slide_num, "line": header_line, "message": me})
+
         speakable, fallback = _extract_speakable(raw_body)
         warnings: list[str] = []
         if fallback:
             warnings.append("no quoted speech found; using full body as fallback")
+        if extras:
+            warnings.append(f"{len(extras)} extra VIDEO marker(s) ignored; first marker wins")
+        if video_clip is not None and not video_clip.exists:
+            warnings.append(f"VIDEO clip not found at parse time: {video_clip.path}")
         if not speakable:
             errors.append({"slide_number": slide_num, "line": header_line, "message": "speakable text is empty after extraction"})
             continue
@@ -276,6 +375,8 @@ def parse_talk_script(script_path: Path) -> tuple[list[SlideEntry], list[dict[st
             raw_body=raw_body,
             fallback_mode=fallback,
             warnings=warnings,
+            video_clip=video_clip,
+            extra_video_markers=extras,
         ))
 
     # Monotonic slide-number check
@@ -354,6 +455,36 @@ def _ffprobe_duration(audio_path: Path) -> float:
         return 0.0
 
 
+def _probe_clip(clip_path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Probe a video clip for duration/dimensions/audio-track presence.
+
+    Returns ({duration, width, height, video_codec, has_audio_track}, error).
+    """
+    if not clip_path.is_file():
+        return None, f"clip not found: {clip_path}"
+    try:
+        info = _ffprobe_streams(clip_path)
+    except SystemExit as e:
+        return None, str(e)
+    fmt = info.get("format", {}) or {}
+    try:
+        duration = float(fmt.get("duration") or 0.0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    streams = info.get("streams", []) or []
+    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    if vstream is None:
+        return None, f"no video stream in clip: {clip_path}"
+    astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    return {
+        "duration": duration,
+        "width": int(vstream.get("width") or 0),
+        "height": int(vstream.get("height") or 0),
+        "video_codec": vstream.get("codec_name") or "",
+        "has_audio_track": astream is not None,
+    }, None
+
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
 
 def cmd_preflight(args: argparse.Namespace) -> int:
@@ -380,8 +511,65 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     if args.with_subtitles and not whisper_info["available"]:
         warnings.append("whisper not available; subtitles will be skipped when render runs with --with-subtitles")
 
+    # Optional clip probing when --talk-script is provided
+    clips_info: list[dict[str, Any]] = []
+    clip_errors: list[str] = []
+    if args.talk_script:
+        script_path = Path(args.talk_script).resolve()
+        slides, parse_errors = parse_talk_script(script_path)
+        if parse_errors:
+            for pe in parse_errors:
+                clip_errors.append(
+                    f"talk script parse error (slide {pe.get('slide_number')}): {pe.get('message')}"
+                )
+        for slide in slides:
+            if slide.video_clip is None:
+                continue
+            ref = slide.video_clip
+            clip_path = Path(ref.path)
+            probe_info, probe_err = (None, None) if not ffprobe else _probe_clip(clip_path)
+            entry: dict[str, Any] = {
+                "slide_number": slide.slide_number,
+                "declared_path": ref.declared_path,
+                "path": ref.path,
+                "exists": clip_path.is_file(),
+                "trim_start_seconds": ref.trim_start_seconds,
+                "trim_end_seconds": ref.trim_end_seconds,
+                "source_duration_seconds": None,
+                "effective_duration_seconds": None,
+                "width": None,
+                "height": None,
+                "video_codec": None,
+                "has_audio_track": None,
+                "probe_error": probe_err,
+            }
+            if probe_info:
+                entry.update({
+                    "source_duration_seconds": round(probe_info["duration"], 3),
+                    "width": probe_info["width"],
+                    "height": probe_info["height"],
+                    "video_codec": probe_info["video_codec"],
+                    "has_audio_track": probe_info["has_audio_track"],
+                })
+                # Trim bounds validation
+                if ref.trim_start_seconds is not None and ref.trim_end_seconds is not None:
+                    if ref.trim_end_seconds > probe_info["duration"] + 0.01:
+                        clip_errors.append(
+                            f"slide {slide.slide_number}: VIDEO trim_end ({ref.trim_end_seconds:.2f}s) > source_duration ({probe_info['duration']:.2f}s) for {ref.declared_path}"
+                        )
+                        entry["effective_duration_seconds"] = None
+                    else:
+                        entry["effective_duration_seconds"] = round(ref.trim_end_seconds - ref.trim_start_seconds, 3)
+                else:
+                    entry["effective_duration_seconds"] = round(probe_info["duration"], 3)
+            elif probe_err:
+                clip_errors.append(f"slide {slide.slide_number}: clip probe failed: {probe_err}")
+            elif not clip_path.is_file():
+                clip_errors.append(f"slide {slide.slide_number}: clip not found: {ref.path}")
+            clips_info.append(entry)
+
     required_ok = bool(edge_tts_info["available"]) and bool(pdftoppm) and bool(ffmpeg) and bool(ffprobe) and can_write
-    ok = required_ok
+    ok = required_ok and not clip_errors
 
     payload: dict[str, Any] = {
         "ok": ok,
@@ -394,6 +582,8 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         "outputDir": str(out_dir),
         "outputDirWritable": can_write,
         "withSubtitles": bool(args.with_subtitles),
+        "talkScript": str(Path(args.talk_script).resolve()) if args.talk_script else None,
+        "clips": clips_info,
         "warnings": warnings,
         "checkedAt": _now(),
     }
@@ -409,6 +599,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         errors.append("ffprobe not on PATH (usually shipped with ffmpeg)")
     if not can_write:
         errors.append(f"output directory not writable: {out_dir}")
+    errors.extend(clip_errors)
     if errors:
         payload["error"] = "; ".join(errors)
 
@@ -816,6 +1007,79 @@ def _ffmpeg_compose_slide(
     return True, None
 
 
+def _ffmpeg_compose_video_slide(
+    clip: VideoClipRef,
+    wav: Path,
+    out_mp4: Path,
+    width: int,
+    height: int,
+    fps: int,
+) -> tuple[bool, dict[str, Any] | None, str | None]:
+    """Compose one slide segment from a video clip + narration WAV.
+
+    Policy (user-confirmed):
+      - clip source audio is fully muted; narration is the only audio
+      - narration > clip: loop the clip, no upper cap
+      - clip > narration: pad narration with silence to clip duration
+
+    Returns (ok, info_dict_or_none, error_or_none). info_dict carries the
+    measured durations for drift accounting.
+    """
+    out_mp4.parent.mkdir(parents=True, exist_ok=True)
+    clip_path = Path(clip.path)
+    probe_info, probe_err = _probe_clip(clip_path)
+    if probe_info is None:
+        return False, None, probe_err or "clip probe failed"
+
+    if clip.trim_start_seconds is not None and clip.trim_end_seconds is not None:
+        if clip.trim_end_seconds > probe_info["duration"] + 0.01:
+            return False, None, (
+                f"VIDEO trim_end ({clip.trim_end_seconds:.2f}s) > source_duration "
+                f"({probe_info['duration']:.2f}s) for {clip.declared_path}"
+            )
+        effective = max(0.001, clip.trim_end_seconds - clip.trim_start_seconds)
+    else:
+        effective = max(0.001, float(probe_info["duration"]))
+
+    narration_dur = _ffprobe_duration(wav)
+    if narration_dur <= 0.0:
+        return False, None, f"failed to probe narration duration for {wav}"
+    total = max(narration_dur, effective)
+
+    vf = (
+        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,"
+        f"fps={fps},format=yuv420p[v];"
+        f"[1:a]apad=whole_dur={total:.3f}[a]"
+    )
+    cmd: list[str] = ["ffmpeg", "-y", "-stream_loop", "-1"]
+    if clip.trim_start_seconds is not None and clip.trim_end_seconds is not None:
+        cmd += ["-ss", f"{clip.trim_start_seconds:.3f}", "-to", f"{clip.trim_end_seconds:.3f}"]
+    cmd += [
+        "-i", str(clip_path),
+        "-i", str(wav),
+        "-filter_complex", vf,
+        "-map", "[v]", "-map", "[a]",
+        "-t", f"{total:.3f}",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+        "-c:a", "aac", "-b:a", "128k",
+        str(out_mp4),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        return False, None, (proc.stderr or proc.stdout or "ffmpeg failed").strip()[-1200:]
+    info = {
+        "narration_seconds": round(narration_dur, 3),
+        "clip_effective_seconds": round(effective, 3),
+        "clip_source_seconds": round(float(probe_info["duration"]), 3),
+        "clip_source_width": probe_info["width"],
+        "clip_source_height": probe_info["height"],
+        "total_seconds": round(total, 3),
+        "loop_factor": round(total / effective, 3) if effective > 0 else None,
+    }
+    return True, info, None
+
+
 def _ffmpeg_concat(segments: list[Path], output: Path) -> tuple[bool, str | None]:
     output.parent.mkdir(parents=True, exist_ok=True)
     concat_list = output.parent / "concat.txt"
@@ -972,22 +1236,33 @@ def cmd_render(args: argparse.Namespace) -> int:
     segments_dir = workspace / "slides" / "render" / "segments"
     segments: list[Path] = []
     per_slide_drift: list[dict[str, Any]] = []
+    slides_by_num = {s.slide_number: s for s in slides}
     for slide_record, png in zip(narrate_results, pngs):
         slide_num = slide_record["slide_number"]
+        slide = slides_by_num.get(slide_num)
         wav, _ = _audio_paths(workspace, slide_num)
         seg = segments_dir / f"slide_{slide_num:02d}.mp4"
-        ok, err = _ffmpeg_compose_slide(png, wav, seg, width, height, fps)
+        compose_info: dict[str, Any] | None = None
+        if slide is not None and slide.video_clip is not None:
+            ok, compose_info, err = _ffmpeg_compose_video_slide(
+                slide.video_clip, wav, seg, width, height, fps,
+            )
+            compose_mode = "video"
+        else:
+            ok, err = _ffmpeg_compose_slide(png, wav, seg, width, height, fps)
+            compose_mode = "still"
         if not ok:
             payload = {
                 "ok": False,
                 "error": f"ffmpeg compose failed for slide {slide_num}: {err}",
+                "compose_mode": compose_mode,
                 "checkedAt": _now(),
             }
             _print_and_dump(payload, args, stream=sys.stderr)
             return 3
         actual = _ffprobe_duration(seg)
         planned = next((s.planned_seconds for s in slides if s.slide_number == slide_num), 0.0)
-        per_slide_drift.append({
+        drift_entry: dict[str, Any] = {
             "slide_number": slide_num,
             "title": next((s.title for s in slides if s.slide_number == slide_num), ""),
             "planned_seconds": round(planned, 3),
@@ -995,7 +1270,16 @@ def cmd_render(args: argparse.Namespace) -> int:
             "drift_seconds": round(actual - planned, 3),
             "audio_cached": slide_record.get("cached", False),
             "content_hash": slide_record.get("content_hash"),
-        })
+            "compose_mode": compose_mode,
+        }
+        if compose_info:
+            drift_entry["narration_seconds"] = compose_info.get("narration_seconds")
+            drift_entry["clip_effective_seconds"] = compose_info.get("clip_effective_seconds")
+            drift_entry["clip_source_seconds"] = compose_info.get("clip_source_seconds")
+            drift_entry["loop_factor"] = compose_info.get("loop_factor")
+            if slide is not None and slide.video_clip is not None:
+                drift_entry["clip_path"] = slide.video_clip.path
+        per_slide_drift.append(drift_entry)
         segments.append(seg)
 
     if not segments:
@@ -1175,6 +1459,7 @@ def _build_parser() -> argparse.ArgumentParser:
     pre = sub.add_parser("preflight", help="Check edge-tts / pdftoppm / ffmpeg / ffprobe and writable output dir")
     pre.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     pre.add_argument("--with-subtitles", action="store_true", help="Also probe whisper availability")
+    pre.add_argument("--talk-script", default=None, help="Optional TALK_SCRIPT.md path; when given, probe any [VIDEO: ...] clip references")
     pre.add_argument("--json-out", help="Path to write JSON result")
     pre.set_defaults(func=cmd_preflight)
 
