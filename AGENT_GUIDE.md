@@ -93,6 +93,7 @@ Post-paper:      W4 (rebuttal), W5 (resubmit to new venue), W6 (talk)
 | W5 | `/resubmit-pipeline "paper/" --- venue: X` | polished paper + new venue | `<NEW_VENUE_DIR>/` + `RESUBMIT_REPORT.json` | Port to another venue under hard constraints |
 | W6 | `/paper-talk "paper/" --- venue: X` | paper | Beamer + PPTX + speaker notes + Q&A prep | Conference talk after acceptance |
 | W6.5 | `/paper-video "paper/" --- venue: CORL` | raw clips + paper | `submission/video/supplementary.mp4` + `verify.json` | Robotics venues (CoRL / ICRA / RSS) and NeurIPS-supp video |
+| W6.6 | `/paper-slides-render "slides/" [--- with-subtitles]` | `slides/main.pdf` + `slides/TALK_SCRIPT.md` | `slides/render/presentation.mp4` + `verify.json` | Turn slides + talk script into a narrated MP4 (bridges /paper-slides → /paper-video) |
 
 Hard constraints on W5: no new experiments, no bib edits, no framework changes, never overwrites prior submissions. Enforced via `--edit-whitelist` + `RESUBMIT_REPORT.json` 7-state failure-mode ledger.
 
@@ -168,7 +169,7 @@ Layer 3:  $ARIS_REPO/tools/<helper>                # global fallback
 
 Pick a failure policy from `integration-contract.md` §2 per-helper table: A (gate) / B (side-effect) / C (forensic) / D1 (cascade) / D2 (multi-source aggregate) / E (diagnostic). Each has POSIX-sh + `set -e` + `set -u` safe example blocks.
 
-Advisory CI lint at `.github/workflows/lint-skills-helpers.yml` flags hardcoded `python3 tools/foo.py` patterns in PR-modified SKILL.md (warning only, never fails CI). Single-owner helpers (used by exactly one SKILL) live at `skills/<owner>/scripts/<helper>` per Arch C; precedents: `figure-spec`, `paper-illustration-image2`, `paper-video`, `experiment-queue`, `render-html`.
+Advisory CI lint at `.github/workflows/lint-skills-helpers.yml` flags hardcoded `python3 tools/foo.py` patterns in PR-modified SKILL.md (warning only, never fails CI). Single-owner helpers (used by exactly one SKILL) live at `skills/<owner>/scripts/<helper>` per Arch C; precedents: `figure-spec`, `paper-illustration-image2`, `paper-video`, `paper-slides-render`, `experiment-queue`, `render-html`.
 
 ## Cross-Model Protocol
 
