@@ -52,6 +52,7 @@ The dangerous citation problems are **not** wildly fake citations — those are 
 - **STATE = `CITATION_AUDIT.json`** — Machine-readable verdict ledger consumable by downstream tools.
 - **SOFT_ONLY = `false`** — When true (set via `— soft-only` / `— soft_only` flag), the audit runs all three layers normally but **forbids any `.bib` file mutation**. Findings that would otherwise mutate the bib (FIX / REPLACE / REMOVE) are translated into per-occurrence sentence-rewrite proposals against the citing `*.tex` files. Used by `/resubmit-pipeline` Phase 1 to honor the user's hard "freeze the bib" constraint.
 - **RENDER_HTML = true** — When `true` (default), auto-render `CITATION_AUDIT.md` to HTML after writing the report. Uses **full Codex review gate** (audit-class artifact — render-fidelity check matches the skill's cross-model audit invariant). Set `false` to skip, or pass `— render html: false`.
+- **MIN_REFERENCES = `30`** — Hard floor on the number of unique cited bib entries (`|cited_keys|`). Inherited from `/paper-writing`; surfaced here as a coverage axis. A bib with fewer than `MIN_REFERENCES` cited entries produces verdict `FAIL` / `reason_code: under_min_references`, even if every entry is otherwise clean (KEEP). Override only via the orchestrator's `— min-references: <n>` CLI flag — never silently lower to make the gate pass.
 
 ## Workflow
 
@@ -476,6 +477,7 @@ any file outside the paper dir.
 | No `.bib` file or no `\cite{...}` usage                        | `NOT_APPLICABLE` | `no_citations`        |
 | `.bib` file referenced but unreadable / missing                | `BLOCKED`        | `bib_unreadable`      |
 | Every entry KEEP, all three axes green                         | `PASS`           | `all_entries_keep`    |
+| Coverage below floor: `|cited_keys| < MIN_REFERENCES`          | `FAIL`           | `under_min_references` |
 | Only FIX verdicts (metadata drift, no context errors)          | `WARN`           | `metadata_drift`      |
 | Any REPLACE or REMOVE (wrong-context or hallucinated entry)    | `FAIL`           | `wrong_context`       |
 | Web lookups timed out / reviewer invocation failed             | `ERROR`          | `reviewer_error`      |

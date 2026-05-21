@@ -13,6 +13,7 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Model used via Codex MCP for outline review. Must be an OpenAI model.
 - **TARGET_VENUE = `ICLR`** — Fallback venue used only when neither (a) the `— venue:` CLI argument nor (b) the input narrative document's `## Target Venue` section specifies one. Resolution priority is **CLI arg > NARRATIVE/topic doc > this default**, applied silently — do not prompt for confirmation when the narrative supplies a venue, even if it differs from this default. Parse common variants case-insensitively and strip year suffix (e.g. "CoRL 2026" → `CORL`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences).
+- **MIN_REFERENCES = `30`** — Hard floor on bibliographic entries for the final paper, inherited from `/paper-writing` (override via `— min-references: <N>`). At plan time, the Citation Scaffolding step (Step 5) must inventory the seed `references.bib` plus all `\cite`-able papers mentioned in the input narrative, and if the union has fewer entries than this floor, the plan emits a `GAP_REFERENCES` block telling the user to run `/research-lit` (or `/comm-lit-review` / `/openalex` / `/gemini-search`) before kicking off `/paper-write`. The plan is allowed to proceed — the hard block lives in `/paper-write` and `/citation-audit` — but proceeding without closing the gap will burn writing-phase cost and then fail downstream.
 - **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; IEEE conference ≈ 5-8 pages total (including references).
 
 ## Inputs
@@ -299,6 +300,31 @@ For each section, list required citations:
 2. Every citation must be verified: correct authors, year, venue
 3. Flag any citation you're unsure about with `[VERIFY]`
 4. Prefer published versions over arXiv preprints when available
+
+#### Reference Floor Check (`MIN_REFERENCES`)
+
+After drafting the Citation Plan, count the union of:
+- Entries already in any seed `references.bib`
+- `\cite`-able papers mentioned in the input narrative (Related Work, Experiments, Method)
+- Papers newly listed in the Citation Plan above
+
+If the union is fewer than `MIN_REFERENCES` entries, append a `GAP_REFERENCES` block to the plan:
+
+```markdown
+## ⚠️ GAP_REFERENCES
+
+Current planned citations: {N}
+Required floor (MIN_REFERENCES): {MIN_REFERENCES}
+Gap: {MIN_REFERENCES - N} more references needed.
+
+Recommended action **before** running /paper-write:
+  - /research-lit "<topic — same as paper's positioning>"
+  - /comm-lit-review (for community-driven literature)
+  - /openalex / /gemini-search (broader sources)
+Re-run /paper-plan after the literature pass to refresh the Citation Plan.
+```
+
+Proceeding to `/paper-write` with the gap unresolved is allowed (the gap is informational at plan time), but `/paper-write` will hard-fail at completion if `\cite{}` keys do not meet the floor, and `/citation-audit` will refuse a PASS verdict on a thin bibliography. Closing the gap up front avoids burning a writing phase.
 
 ### Step 6: Cross-Review with REVIEWER_MODEL
 

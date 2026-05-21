@@ -16,6 +16,7 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 - **ANONYMOUS = true** — If true, use anonymous author block. Set `false` for camera-ready. Note: most IEEE venues do NOT use anonymous submission — set `false` for IEEE.
 - **MAX_PAGES = 9** — Main body page limit. For ML conferences: counts from first page to end of Conclusion section, references and appendix NOT counted. **For IEEE venues: references ARE counted toward the page limit.** Typical limits: IEEE journal = no strict limit (but 12-14 pages typical for Transactions, 4-5 for Letters), IEEE conference = 5-8 pages including references.
 - **DBLP_BIBTEX = true** — Fetch real BibTeX from DBLP/CrossRef instead of LLM-generated entries. Eliminates hallucinated citations. Zero install required. Set `false` to use legacy behavior (LLM search + `[VERIFY]` markers).
+- **MIN_REFERENCES = `30`** — Hard floor inherited from `/paper-writing`. Counted as unique `\cite{}` / `\citep{}` / `\citet{}` keys across all `*.tex` files in `paper/`. Enforced in Step 8: Final Checks — write completion is blocked when below the floor.
 
 ## Inputs
 
@@ -580,6 +581,7 @@ Before declaring done:
 
 - [ ] All `\ref{}` and `\label{}` match (no undefined references)
 - [ ] All citation commands (`\citep{}`/`\citet{}` for ML conferences, `\cite{}` for IEEE) have corresponding BibTeX entries
+- [ ] **Reference floor gate** — unique cite-key count ≥ `MIN_REFERENCES` (see check below)
 - [ ] No author information in anonymous mode
 - [ ] Figure/table numbering is correct
 - [ ] Page count within MAX_PAGES (main body to Conclusion end)
@@ -593,6 +595,31 @@ Before declaring done:
 - [ ] **Section files match main.tex** — file numbering and `\input` paths are consistent
 - [ ] Venue-specific required sections/checklists satisfied (read `../shared-references/venue-checklists.md` if needed)
 - [ ] A skim reader can recover the main claim from the title, abstract, introduction, and Figure 1/captions
+
+#### Reference Floor Gate (`MIN_REFERENCES`)
+
+Count unique cite-keys across `*.tex` files in the paper directory and compare against `MIN_REFERENCES`:
+
+```bash
+# Count unique \cite{}, \citep{}, \citet{}, \citeauthor{}, \citeyear{} keys.
+# Handles multi-key forms like \citep{a,b,c} and ignores commented-out lines.
+COUNT=$(grep -rhoE '\\(cite|citep|citet|citeauthor|citeyear)\{[^}]*\}' paper/ \
+  | sed -E 's/\\(cite|citep|citet|citeauthor|citeyear)\{//; s/\}$//' \
+  | tr ',' '\n' \
+  | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' \
+  | grep -v '^$' \
+  | sort -u \
+  | wc -l)
+echo "Unique cite-keys: ${COUNT} (floor: ${MIN_REFERENCES})"
+```
+
+**If `COUNT < MIN_REFERENCES`:** do NOT declare write complete. Emit a `GAP_REFERENCES.md` next to `main.tex` listing the current count, the floor, and the recommended remediation:
+
+1. Re-open Related Work and add 1-paragraph treatments of comparator work missing citations.
+2. Re-run `/research-lit "<topic>"` and `/openalex` to surface fresh references for under-cited claims.
+3. After adding new `\cite{}` calls, re-run `/paper-compile` so BibTeX picks up the new keys, then re-run this gate.
+
+Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing` orchestrator and propagated here intentionally. Override only via the orchestrator's `— min-references: <n>` CLI flag.
 
 ## Key Rules
 

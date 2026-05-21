@@ -30,9 +30,11 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
 - **HUMAN_CHECKPOINT = false** — When `true`, the improvement loop (Phase 5) pauses after each round's review to let you see the score and provide custom modification instructions. When `false` (default), the loop runs fully autonomously. Passed through to `/auto-paper-improvement-loop`.
 - **ILLUSTRATION = `figurespec`** — Architecture/illustration generator for Phase 2b: `figurespec` (default, deterministic JSON→SVG via `/figure-spec`, best for architecture/workflow/topology), `gemini` (AI-generated via `/paper-illustration`, best for qualitative method illustrations; needs `GEMINI_API_KEY`), `codex-image2` (AI-generated via `/paper-illustration-image2` through the local Codex native image bridge — no external API key, uses your ChatGPT Plus/Pro quota; experimental), `mermaid` (Mermaid syntax via `/mermaid-diagram`, free, best for flowcharts), or `false` (skip Phase 2b, manual only).
+- **MIN_REFERENCES = `30`** — Hard floor on the number of unique bibliographic entries cited in the final paper. Enforced at three layers: (1) `/paper-plan` warns if the seeded `references.bib` + narrative-cited papers cannot reach this floor (recommending `/research-lit` before writing); (2) `/paper-write` blocks completion if unique `\cite{}` keys across all `*.tex` < `MIN_REFERENCES`; (3) `/citation-audit` refuses a PASS verdict if the bibliography has fewer entries. Default 30 is venue-agnostic and intentionally conservative — most ML/robotics venues (ICLR/NeurIPS/CoRL/CVPR) trend 40–80. Override with `— min-references: <N>`. Setting `0` disables enforcement (not recommended for submission).
 
 > Override inline: `/paper-writing "NARRATIVE_REPORT.md" — venue: NeurIPS, illustration: gemini, human checkpoint: true`
 > IEEE example: `/paper-writing "NARRATIVE_REPORT.md" — venue: IEEE_JOURNAL`
+> Lower floor for short/workshop papers: `/paper-writing "NARRATIVE_REPORT.md" — min-references: 15`
 
 ### Venue Resolution (no redundant prompts)
 

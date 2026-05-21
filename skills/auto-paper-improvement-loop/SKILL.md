@@ -34,6 +34,7 @@ Unlike `/auto-review-loop` (which iterates on **research** — running experimen
 - **REVIEW_LOG = `PAPER_IMPROVEMENT_LOG.md`** — Cumulative log of all rounds, stored in paper directory.
 - **HUMAN_CHECKPOINT = false** — When `true`, pause after each round's review and present score + weaknesses to the user. The user can approve fixes, provide custom modification instructions, skip specific fixes, or stop early. When `false` (default), runs fully autonomously.
 - **EDIT_WHITELIST = `null`** — Optional path to a YAML/JSON whitelist file constraining which paths and operations the fix-implementation step may touch. When `null` (default), all edits proceed unconstrained. When set via `— edit-whitelist <path>` (also accepts `— edit_whitelist <path>`), the loop loads the file at startup and consults it before each edit; rejected edits are logged to `PAPER_IMPROVEMENT_LOG.md` rather than silently dropped. See "Optional: Edit Whitelist" below.
+- **MIN_REFERENCES = `30`** — Hard floor inherited from `/paper-writing`. The improvement loop must never drop the unique cite-key count below this floor between rounds. Enforced as a regression check in Step 4.6 after each recompile; under-floor halts the loop with a `GAP_REFERENCES` entry in `PAPER_IMPROVEMENT_LOG.md`. Override only via the orchestrator's `— min-references: <n>` CLI flag.
 
 > 💡 Override: `/auto-paper-improvement-loop "paper/" — human checkpoint: true`
 
@@ -396,6 +397,32 @@ The inline Python check above is the default and is sufficient for routine main-
 
 This is advisory only — the inline Step 4.5 check remains the default and continues to run on every loop round. Consider invoking `/proof-checker --restatement-check` when (a) you suspect cross-location drift outside the main↔appendix axis (e.g., abstract overclaim relative to theorem statement), or (b) you want reviewer-graded drift signatures rather than raw string mismatches. Running both is supported and they are independent: the inline check fails fast on string drift, the proof-checker pass surfaces semantic-class drift.
 
+### Step 4.6: Reference Floor Regression
+
+After every recompilation (run this after Step 4 and again after Step 7), re-count unique cite-keys and verify the loop has not pruned the bibliography below `MIN_REFERENCES`. Improvement rounds routinely soften overclaims and drop weak citations; without this gate, a paper that started compliant can silently slip under the floor.
+
+```bash
+# Count unique \cite{}, \citep{}, \citet{}, \citeauthor{}, \citeyear{} keys.
+# Handles multi-key forms like \citep{a,b,c}; skips comments.
+COUNT=$(grep -rhoE '\\(cite|citep|citet|citeauthor|citeyear)\{[^}]*\}' paper/ \
+  | sed -E 's/\\(cite|citep|citet|citeauthor|citeyear)\{//; s/\}$//' \
+  | tr ',' '\n' \
+  | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' \
+  | grep -v '^$' \
+  | sort -u \
+  | wc -l)
+echo "Unique cite-keys after round: ${COUNT} (floor: ${MIN_REFERENCES})"
+```
+
+**Behavior on under-floor:**
+
+- **Halt the loop immediately.** Do not proceed to the next round, do not run Step 8 format check, do not declare done.
+- Append a `## GAP_REFERENCES (Round N)` block to `PAPER_IMPROVEMENT_LOG.md` recording: current count, floor, and the per-file delta of cite-keys removed during this round (diff against the count snapshot taken at loop start).
+- Recommend remediation: re-open the citations that were dropped this round (visible in `git diff paper/`), or add new references via `/research-lit "<topic>"` / `/openalex` to restore coverage before resuming the loop.
+- Do **not** lower `MIN_REFERENCES` to unblock; the floor is a contract from `/paper-writing` and is intentionally propagated here.
+
+**Snapshot at loop start.** At the top of Step 1 (Collect Paper Text), record the baseline count with the same grep recipe and store it in `PAPER_IMPROVEMENT_LOG.md` as `## Reference Count Baseline: <N>`. Step 4.6 reports the post-round delta against this baseline so the user can see at a glance how many citations the loop has churned.
+
 ### Step 5: Round 2 Review
 
 If `REVIEWER_BIAS_GUARD = true` (default), use a **fresh** `mcp__codex__codex` thread for Round 2. Do not reuse the Round 1 threadId for prompting. Save the returned threadId only for recovery bookkeeping.
@@ -654,6 +681,7 @@ paper/
 - **Respect the paper's claims** — narrow genuine overclaims rather than adding unsupported new claims, and state supported claims directly rather than wrapping them in fresh hedges
 - **Global consistency** — when renaming notation or changing a claim's scope, keep every restatement semantically consistent across ALL files (abstract, intro, method, experiments, theory sections, conclusion, tables, figure captions); consistency means matching scope, not copying disclaimer sentences everywhere
 - **Edit-whitelist rejections are LOGGED, not silently dropped** — when `EDIT_WHITELIST` is set and an edit is rejected for a path or forbidden-operation violation, the rejection MUST be appended to `PAPER_IMPROVEMENT_LOG.md` with file, reason, offending pattern, and the original reviewer concern. The loop reports a rejection summary at the end of every round (and in the checkpoint, if `HUMAN_CHECKPOINT = true`). Never silently swallow a whitelist rejection — the audit trail is the whole point of the parameter.
+- **Reference floor is a one-way ratchet** — the loop must never reduce the unique cite-key count below `MIN_REFERENCES`. Step 4.6 halts the loop on under-floor and writes a `GAP_REFERENCES` block; do not silently drop citations during fix-implementation to satisfy other reviewer comments.
 
 ## Typical Score Progression
 
