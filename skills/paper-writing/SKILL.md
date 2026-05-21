@@ -24,7 +24,7 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 ## Constants
 
-- **VENUE = `ICLR`** — Target venue. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
+- **VENUE = `ICLR`** — Fallback venue used only when neither (a) the `— venue:` CLI argument nor (b) the NARRATIVE_REPORT.md `## Target Venue` section specifies one. Resolution priority is **CLI arg > NARRATIVE > this default**, applied silently — do **not** prompt the user to confirm when NARRATIVE supplies a venue, even if it differs from this default. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
 - **MAX_IMPROVEMENT_ROUNDS = 2** — Number of review→fix→recompile rounds in the improvement loop.
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Model used via Codex MCP for plan review, figure review, writing review, and improvement loop.
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
@@ -33,6 +33,22 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 > Override inline: `/paper-writing "NARRATIVE_REPORT.md" — venue: NeurIPS, illustration: gemini, human checkpoint: true`
 > IEEE example: `/paper-writing "NARRATIVE_REPORT.md" — venue: IEEE_JOURNAL`
+
+### Venue Resolution (no redundant prompts)
+
+Before Phase 1, resolve the effective venue **silently** using this priority:
+
+1. **CLI argument** `— venue: <X>` if present → use `<X>`
+2. Else **NARRATIVE_REPORT.md `## Target Venue`** section if present → parse the venue name (case-insensitive; strip year, e.g. "CoRL 2026" → `CORL`) and use it
+3. Else **VENUE constant default** (`ICLR`)
+
+**Do not** ask the user to confirm when NARRATIVE specifies a venue, even if it differs from the constant default — the narrative is the spec, the constant is just the fallback. Print a one-line resolution log instead:
+
+```
+🎯 Venue resolved: CORL (source: NARRATIVE_REPORT.md § Target Venue; CLI arg not provided)
+```
+
+The only situation that warrants a confirmation prompt is an **explicit conflict** between the CLI arg and the NARRATIVE (e.g., user passes `— venue: NeurIPS` but NARRATIVE says CoRL 2026). In that case, ask once which to honor, then proceed.
 
 ## Inputs
 
