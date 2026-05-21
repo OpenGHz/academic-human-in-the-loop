@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 
-# ── Venue profiles ────────────────────────────────────────────────────────────
+# ── Venue + mode profiles ─────────────────────────────────────────────────────
 
 VENUE_PROFILES: dict[str, dict[str, int]] = {
     "CORL":     {"max_mb": 250, "max_seconds": 180},
@@ -53,6 +53,28 @@ VENUE_PROFILES: dict[str, dict[str, int]] = {
     "CVPR":     {"max_mb": 100, "max_seconds": 600},
     "GENERIC":  {"max_mb": 250, "max_seconds": 300},
 }
+
+# Mode profiles override venue when mode != submission. The submission mode
+# is the only one that defers to the venue's hard limit. Showcase and teaser
+# target shorter, web-friendly cuts regardless of submission venue.
+MODE_PROFILES: dict[str, dict[str, Any]] = {
+    "submission": {"max_mb": None, "max_seconds": None, "anon_scan": True},
+    "showcase":   {"max_mb": 100,  "max_seconds": 90,   "anon_scan": False},
+    "teaser":     {"max_mb": 50,   "max_seconds": 45,   "anon_scan": False},
+}
+
+# Anonymity blocklist applied when mode == submission. These patterns mark
+# strings that almost always identify the authors / institution and would
+# get flagged at desk-reject. Caller can add more via --anon-blocklist.
+ANON_BLOCKLIST_PATTERNS: list[tuple[str, str]] = [
+    (r"https?://\S+",                                   "URL"),
+    (r"\bwww\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b",          "www-URL"),
+    (r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b", "email"),
+    (r"(?<!\w)@[A-Za-z][A-Za-z0-9_]{2,}\b",             "social-handle"),
+    (r"\bgithub\.com\b",                                "github-url"),
+    (r"\b[a-zA-Z0-9-]+\.(?:edu|ac\.uk|ac\.jp|ac\.cn|edu\.cn)\b", "institutional-domain"),
+    (r"\barxiv\.org/abs/\d{4}\.\d{4,5}\b",              "arxiv-id"),
+]
 
 ALLOWED_VIDEO_CODECS = {"h264", "hevc", "av1"}
 ALLOWED_AUDIO_CODECS = {"aac", "ac3", "opus", "none", ""}
@@ -72,6 +94,13 @@ def _dump(payload: dict[str, Any], path: Path | None) -> None:
     tmp.replace(path)
 
 
+def _resolve_mode(mode: str | None) -> tuple[str, dict[str, Any]]:
+    key = (mode or "submission").lower()
+    if key not in MODE_PROFILES:
+        raise SystemExit(f"unknown --mode {mode!r}; expected one of {sorted(MODE_PROFILES)}")
+    return key, MODE_PROFILES[key]
+
+
 def _resolve_venue(venue: str | None) -> tuple[str, dict[str, int]]:
     key = (venue or "CORL").upper()
     if key not in VENUE_PROFILES:
@@ -80,11 +109,35 @@ def _resolve_venue(venue: str | None) -> tuple[str, dict[str, int]]:
     return key, VENUE_PROFILES[key]
 
 
+def _effective_limits(
+    mode_key: str,
+    venue_profile: dict[str, int],
+    cli_max_mb: float | None,
+    cli_max_seconds: float | None,
+) -> tuple[float, float]:
+    """Resolve effective MAX_MB / MAX_SECONDS in this precedence:
+       CLI override > mode profile (when non-null) > venue profile."""
+    mode_profile = MODE_PROFILES[mode_key]
+    max_mb = float(
+        cli_max_mb
+        if cli_max_mb is not None
+        else (mode_profile["max_mb"] if mode_profile["max_mb"] is not None else venue_profile["max_mb"])
+    )
+    max_seconds = float(
+        cli_max_seconds
+        if cli_max_seconds is not None
+        else (mode_profile["max_seconds"] if mode_profile["max_seconds"] is not None else venue_profile["max_seconds"])
+    )
+    return max_mb, max_seconds
+
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
 
 def cmd_preflight(args: argparse.Namespace) -> int:
     workspace = Path(args.workspace).resolve()
-    venue, profile = _resolve_venue(args.venue)
+    venue, venue_profile = _resolve_venue(args.venue)
+    mode_key, _ = _resolve_mode(args.mode)
+    effective_mb, effective_seconds = _effective_limits(mode_key, venue_profile, None, None)
     out_dir = workspace / "submission" / "video"
 
     ffmpeg = shutil.which("ffmpeg")
@@ -105,7 +158,9 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         "ok": ok,
         "workspace": str(workspace),
         "venue": venue,
-        "limits": profile,
+        "mode": mode_key,
+        "limits": {"max_mb": effective_mb, "max_seconds": effective_seconds},
+        "venueLimits": venue_profile,
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "outputDir": str(out_dir),
@@ -192,19 +247,68 @@ def _has_faststart(video: Path) -> bool:
     return moov < mdat
 
 
+def _scan_manifest_for_anon_violations(
+    manifest_path: Path,
+    extra_patterns: list[str] | None = None,
+) -> list[dict[str, str]]:
+    """Scan a manifest JSON for strings that would break double-blind review.
+
+    Walks the manifest body as text (not JSON-aware on purpose, so it catches
+    matches inside any nested string field — captions, narration, titles,
+    file paths, comments, etc.). Returns a list of violation entries shaped
+    like the rest of verify's output: {check, hint}.
+    """
+    if not manifest_path.is_file():
+        return [{"check": "no_identifying_strings", "hint": f"manifest not found for anon scan: {manifest_path}"}]
+    try:
+        text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return [{"check": "no_identifying_strings", "hint": f"could not read manifest: {e}"}]
+
+    patterns: list[tuple[str, str]] = list(ANON_BLOCKLIST_PATTERNS)
+    for extra in extra_patterns or []:
+        patterns.append((extra, "user-supplied"))
+
+    violations: list[dict[str, str]] = []
+    for pattern, label in patterns:
+        try:
+            compiled = re.compile(pattern)
+        except re.error as e:
+            violations.append({
+                "check": "no_identifying_strings",
+                "hint": f"invalid blocklist pattern {pattern!r} ({label}): {e}",
+            })
+            continue
+        for match in compiled.finditer(text):
+            snippet = match.group(0)
+            if len(snippet) > 80:
+                snippet = snippet[:77] + "..."
+            violations.append({
+                "check": "no_identifying_strings",
+                "hint": f"manifest contains {label!r} match {snippet!r}; remove or paraphrase before submission",
+            })
+    return violations
+
+
 # ── Verify ────────────────────────────────────────────────────────────────────
 
 def cmd_verify(args: argparse.Namespace) -> int:
     video = Path(args.video).resolve()
-    venue, profile = _resolve_venue(args.venue)
-    max_mb = float(args.max_mb) if args.max_mb is not None else float(profile["max_mb"])
-    max_seconds = float(args.max_seconds) if args.max_seconds is not None else float(profile["max_seconds"])
+    venue, venue_profile = _resolve_venue(args.venue)
+    mode_key, mode_profile = _resolve_mode(args.mode)
+    max_mb, max_seconds = _effective_limits(
+        mode_key,
+        venue_profile,
+        args.max_mb,
+        args.max_seconds,
+    )
 
     if not video.is_file():
         payload = {
             "ok": False,
             "video": str(video),
             "venue": venue,
+            "mode": mode_key,
             "violations": [{"check": "exists", "hint": f"video file not found: {video}"}],
             "checkedAt": _now(),
         }
@@ -262,12 +366,35 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if width > 3840 or height > 2160:
         violations.append({"check": "resolution", "hint": f"{width}x{height} exceeds 3840x2160; downscale with -vf scale=1920:1080"})
 
+    anon_scan_ran = False
+    anon_violations: list[dict[str, str]] = []
+    if mode_profile["anon_scan"] and args.manifest:
+        anon_scan_ran = True
+        anon_violations = _scan_manifest_for_anon_violations(
+            Path(args.manifest).resolve(),
+            extra_patterns=args.anon_blocklist or None,
+        )
+        violations.extend(anon_violations)
+    elif mode_profile["anon_scan"] and not args.manifest:
+        violations.append({
+            "check": "no_identifying_strings",
+            "hint": "submission mode requires --manifest to run the anonymity scan; pass the manifest used for assemble",
+        })
+
     ok = not violations
     payload = {
         "ok": ok,
         "video": str(video),
         "venue": venue,
+        "mode": mode_key,
         "limits": {"max_mb": max_mb, "max_seconds": max_seconds},
+        "anon_scan": {
+            "enabled": bool(mode_profile["anon_scan"]),
+            "ran": anon_scan_ran,
+            "manifest": str(Path(args.manifest).resolve()) if args.manifest else None,
+            "extra_patterns": list(args.anon_blocklist or []),
+            "violations": anon_violations,
+        },
         "actual": {
             "size_mb": round(size_mb, 2),
             "duration_seconds": round(duration, 2),
@@ -331,7 +458,18 @@ def cmd_assemble(args: argparse.Namespace) -> int:
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    target_mb = float(args.target_mb)
+
+    venue, venue_profile = _resolve_venue(args.venue)
+    mode_key, _ = _resolve_mode(args.mode)
+    # mode-aware default target_mb: if caller did not pass --target-mb,
+    # derive it from the effective limit (90% of the cap, capped to 230 MB
+    # to leave headroom for muxing overhead).
+    effective_mb, effective_seconds = _effective_limits(mode_key, venue_profile, None, None)
+    if args.target_mb is not None:
+        target_mb = float(args.target_mb)
+    else:
+        target_mb = float(min(230.0, effective_mb * 0.92))
+
     w, h = (int(x) for x in args.target_resolution.lower().split("x"))
     fps = int(args.target_fps)
 
@@ -447,6 +585,10 @@ def cmd_assemble(args: argparse.Namespace) -> int:
         "ok": True,
         "manifest": str(manifest_path),
         "output": str(output),
+        "venue": venue,
+        "mode": mode_key,
+        "limits": {"max_mb": effective_mb, "max_seconds": effective_seconds},
+        "target_mb": round(target_mb, 2),
         "size_mb": round(output.stat().st_size / (1024 * 1024), 2),
         "planned_duration_seconds": round(planned_total, 2),
         "target_bitrate_kbps": target_bitrate_kbps,
@@ -492,6 +634,7 @@ def cmd_package(args: argparse.Namespace) -> int:
             print(json.dumps({"ok": False, "error": f"include path not found: {it}"}), file=sys.stderr)
             return 1
 
+    mode_key, _ = _resolve_mode(args.mode)
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     max_bytes = int(args.max_mb * 1024 * 1024)
@@ -518,6 +661,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         payload = {
             "ok": False,
             "output": str(output),
+            "mode": mode_key,
             "size_mb": round(size_mb, 2),
             "limit_mb": args.max_mb,
             "violations": [{"check": "package_size", "hint": f"bundle {size_mb:.1f} MB exceeds limit {args.max_mb} MB; drop large items or pre-compress"}],
@@ -531,6 +675,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     payload = {
         "ok": True,
         "output": str(output),
+        "mode": mode_key,
         "size_mb": round(size_mb, 2),
         "limit_mb": args.max_mb,
         "files": len(file_list),
@@ -547,16 +692,25 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="paper_video.py", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
 
+    mode_choices = sorted(MODE_PROFILES.keys())
+
     pre = sub.add_parser("preflight", help="Check ffmpeg/ffprobe + writable output dir")
     pre.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     pre.add_argument("--venue", default="CORL", help="Venue profile name (default: CORL)")
+    pre.add_argument("--mode", choices=mode_choices, default="submission",
+                     help="Video mode (default: submission). Submission obeys venue limits; "
+                          "showcase / teaser override with shorter, web-friendly defaults.")
     pre.add_argument("--json-out", help="Path to write JSON result")
     pre.set_defaults(func=cmd_preflight)
 
     asm = sub.add_parser("assemble", help="Assemble shots into a single MP4")
     asm.add_argument("--manifest", required=True, help="Manifest JSON path")
     asm.add_argument("--output", required=True, help="Output MP4 path")
-    asm.add_argument("--target-mb", type=float, default=230.0, help="Target output size in MB (default: 230)")
+    asm.add_argument("--venue", default="CORL", help="Venue profile name (default: CORL)")
+    asm.add_argument("--mode", choices=mode_choices, default="submission",
+                     help="Video mode (default: submission). Drives the default --target-mb when omitted.")
+    asm.add_argument("--target-mb", type=float, default=None,
+                     help="Target output size in MB. If omitted, derived from the resolved mode/venue limits.")
     asm.add_argument("--target-resolution", default="1920x1080", help="WxH (default: 1920x1080)")
     asm.add_argument("--target-fps", type=int, default=30, help="Output fps (default: 30)")
     asm.add_argument("--json-out", help="Path to write JSON result")
@@ -565,14 +719,23 @@ def _build_parser() -> argparse.ArgumentParser:
     ver = sub.add_parser("verify", help="Verify finished MP4 against venue gates")
     ver.add_argument("--video", required=True, help="Path to the finished MP4")
     ver.add_argument("--venue", default="CORL", help="Venue profile name (default: CORL)")
-    ver.add_argument("--max-mb", type=float, help="Override venue MAX_MB")
-    ver.add_argument("--max-seconds", type=float, help="Override venue MAX_SECONDS")
+    ver.add_argument("--mode", choices=mode_choices, default="submission",
+                     help="Video mode (default: submission). Selects effective MAX_MB / MAX_SECONDS and "
+                          "enables the anonymity scan when manifest is supplied.")
+    ver.add_argument("--manifest", default=None,
+                     help="Optional manifest path. Required for the anonymity scan in submission mode.")
+    ver.add_argument("--anon-blocklist", action="append", default=[],
+                     help="Extra regex pattern to add to the submission-mode anonymity scan (repeatable).")
+    ver.add_argument("--max-mb", type=float, help="Override the resolved MAX_MB")
+    ver.add_argument("--max-seconds", type=float, help="Override the resolved MAX_SECONDS")
     ver.add_argument("--json-out", help="Path to write JSON result")
     ver.set_defaults(func=cmd_verify)
 
     pkg = sub.add_parser("package", help="Zip a supplementary bundle and enforce size ceiling")
     pkg.add_argument("--include", action="append", required=True, help="Path to include (repeatable)")
     pkg.add_argument("--output", required=True, help="Output zip path")
+    pkg.add_argument("--mode", choices=mode_choices, default="submission",
+                     help="Video mode (default: submission). Reported in the output JSON for traceability.")
     pkg.add_argument("--max-mb", type=float, default=250.0, help="Size ceiling MB (default: 250)")
     pkg.add_argument("--json-out", help="Path to write JSON result")
     pkg.set_defaults(func=cmd_package)
