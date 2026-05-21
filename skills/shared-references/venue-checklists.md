@@ -75,7 +75,7 @@ Planning implications:
 - The Appendix is optional but, when present, should be at the end of the camera-ready PDF — NOT a separate supplementary file. Reviewers are not obligated to read the Appendix; put load-bearing claims in the main paper.
 - CoRL strongly encourages **enough detail in main paper + appendix to let future researchers reproduce the work** — hyperparameters, data, hardware setup, training procedure all explicit.
 - CoRL reviewers strongly prefer **real-robot experiments** or rigorous sim-to-real validation; sim-only work has a high bar and should justify the sim setup. Plan a multi-task or generalization story rather than single-task SOTA.
-- **Video supplementary is critical at CoRL** — reviewers expect demonstration videos. Plan a 2-3 minute video early in the writing phase, not as an afterthought.
+- **Video supplementary is critical at CoRL** — reviewers expect demonstration videos. Plan a 2-3 minute video early in the writing phase, not as an afterthought. Use `/paper-video` to assemble + gate-check the video (250 MB / 180 s hard limits, h264 + faststart enforced).
 
 Final-check implications:
 
@@ -87,7 +87,7 @@ Final-check implications:
 - Initial submission: `corl_2026` loaded WITHOUT `[final]` / `[preprint]` (anonymous); page count of main text (Title through end of Conclusion or Limitations, whichever is last) ≤ 8.
 - Camera-ready: switch to `\usepackage[final]{corl_2026}`; **author list is NOT anonymous**; page count of main text ≤ 9; Appendix (if any) placed at end of the camera-ready PDF, not a separate file.
 - Camera-ready footer on page 1 must read: `10th Conference on Robot Learning (CoRL 2026), Austin, Texas, USA.` — this is inserted automatically by `\usepackage[final]{corl_2026}`. Verify it appears in the compiled PDF.
-- Confirm video / supplementary materials are referenced in the paper and prepared.
+- Confirm video / supplementary materials are referenced in the paper and prepared. If a video is produced via `/paper-video`, attach the `submission/video/verify.json` artifact (ok=true is the gate).
 - Verify hardware experiments (or sim justification) are discussed with enough detail to reproduce.
 - Confirm at least one task-generalization or cross-scene result is reported.
 
