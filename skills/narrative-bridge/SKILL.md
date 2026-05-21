@@ -1,6 +1,6 @@
 ---
 name: narrative-bridge
-description: "Workflow 2.5: Bridge between auto-review loop and paper writing. Synthesizes NARRATIVE_REPORT.md from `review-stage/AUTO_REVIEW.md`, `CLAIMS_FROM_RESULTS.md`, `EXPERIMENT_LOG.md`, and `figures/` data — the document `/paper-writing` expects as input. Use when user says \"写 NARRATIVE_REPORT\", \"narrative report\", \"从 review 到 narrative\", \"准备投稿叙事\", \"bridge W2 to W3\", or has finished `/auto-review-loop` and needs the narrative report before invoking `/paper-writing`."
+description: "Workflow 2.5: Bridge between auto-review loop and paper writing. Synthesizes NARRATIVE_REPORT.md from `review-stage/AUTO_REVIEW.md`, `CLAIMS_FROM_RESULTS.md`, `EXPERIMENT_LOG.md`, and `figures/` data, then delegates to `/figures-prep` to materialize the `figures/*.json` data files — together these are the two inputs `/paper-writing` expects. Honors a strict idempotency rule: an existing NARRATIVE_REPORT.md is never overwritten or re-synthesized, only figures-prep runs against it. Use when user says \"写 NARRATIVE_REPORT\", \"narrative report\", \"从 review 到 narrative\", \"准备投稿叙事\", \"bridge W2 to W3\", or has finished `/auto-review-loop` and needs the narrative report (and figures/ data) before invoking `/paper-writing`."
 argument-hint: "[topic-or-claim-override] [— style-ref: <source>] [— venue: <venue>]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill, mcp__codex__codex, mcp__codex__codex-reply
 ---
@@ -11,15 +11,24 @@ Synthesize `NARRATIVE_REPORT.md` from Workflow 2 outputs so `/paper-writing` can
 
 ## Overview
 
-This skill bridges Workflow 2 (auto-review loop) and Workflow 3 (paper writing). It reads everything `/auto-review-loop` produced — verified claims, method description, experiment numbers, latest remaining weaknesses — and composes them into the single artifact `/paper-plan` consumes.
+This skill bridges Workflow 2 (auto-review loop) and Workflow 3 (paper writing). It reads everything `/auto-review-loop` produced — verified claims, method description, experiment numbers, latest remaining weaknesses — and composes them into the single artifact `/paper-plan` consumes. After the narrative is in place (whether newly synthesized or already on disk), it delegates to `/figures-prep` to materialize the structured `figures/*.json` data files that `/paper-figure` will render from.
 
 ```
 Workflow 2 output:                       This skill:                              Workflow 3 input:
-review-stage/AUTO_REVIEW.md         →   read → map → synthesize → review     →   NARRATIVE_REPORT.md
-CLAIMS_FROM_RESULTS.md                  (no fabrication, source-cited)            ready for /paper-writing
-findings.md / EXPERIMENT_LOG.md
-figures/*.json
+review-stage/AUTO_REVIEW.md         →   read → map → synthesize → review →    →   NARRATIVE_REPORT.md
+CLAIMS_FROM_RESULTS.md                  (no fabrication, source-cited)            +
+findings.md / EXPERIMENT_LOG.md         then: delegate to /figures-prep           figures/*.json + MANIFEST.md
+figures/*.json (if any)                                                            (both ready for /paper-writing)
 ```
+
+## Idempotency Contract (洁癖 Principle)
+
+`/narrative-bridge` is strictly non-destructive against `NARRATIVE_REPORT.md`:
+
+- If `NARRATIVE_REPORT.md` **already exists** at the resolved output path, this skill **does not re-synthesize, edit, or overwrite it** — not even to "improve" it, fix typos, or fold in newer W2 outputs.
+- In that case the skill jumps straight to figures-prep delegation. The user may have hand-written or hand-edited the narrative, and that authorship is respected.
+- To force a re-synthesis the user must explicitly delete or rename the existing NARRATIVE_REPORT.md.
+- Synthesis (Phases 1–5 below) runs **only when no NARRATIVE_REPORT.md exists** at the target path.
 
 ## Constants
 
@@ -35,17 +44,22 @@ figures/*.json
 
 ## Activation Predicate
 
-Fires when **at least one** of these exists (best-effort: the more inputs present, the higher fidelity):
+Fires when **at least one** of these holds:
 
 ```bash
-[ -f review-stage/AUTO_REVIEW.md ] || [ -f AUTO_REVIEW.md ] \
-  || [ -f CLAIMS_FROM_RESULTS.md ] \
-  || [ -f EXPERIMENT_LOG.md ] \
-  || [ -f findings.md ] \
-  || ls figures/*.json 2>/dev/null | head -1
+# (a) Synthesis path — narrative missing, W2 outputs present
+([ ! -f NARRATIVE_REPORT.md ] && (
+    [ -f review-stage/AUTO_REVIEW.md ] || [ -f AUTO_REVIEW.md ] \
+    || [ -f CLAIMS_FROM_RESULTS.md ] \
+    || [ -f EXPERIMENT_LOG.md ] \
+    || [ -f findings.md ] \
+    || ls figures/*.json 2>/dev/null | head -1
+)) \
+# (b) Figures-prep-only path — narrative exists, figures/ not yet manifest-clean
+|| ([ -f NARRATIVE_REPORT.md ] && [ ! -f figures/MANIFEST.md ])
 ```
 
-If **none** exist, do not invent a narrative — ask the user whether they actually want `/paper-plan` directly with a topic string instead.
+If neither holds (no narrative, no W2 outputs) — do not invent a narrative. Ask the user whether they actually want `/paper-plan` directly with a topic string instead.
 
 ## Output Protocols
 
@@ -72,6 +86,28 @@ The skill consumes (in priority order; missing files degrade gracefully into `DA
 | `references.bib` or `research-wiki/papers/` | Related work seed | Related Work |
 
 ## Workflow
+
+### Phase 0: Idempotency Branch
+
+Decide which path to take based on the idempotency contract:
+
+```bash
+if [ -f NARRATIVE_REPORT.md ]; then
+    MODE=figures_only       # Skip synthesis (Phases 1-5); jump to Phase 6
+else
+    MODE=full               # Run synthesis, then Phase 6
+fi
+```
+
+Announce the decision to the user in one line:
+
+```
+📘 NARRATIVE_REPORT.md detected — running in figures-only mode (synthesis skipped).
+# OR
+📝 No NARRATIVE_REPORT.md — running full synthesis from W2 outputs.
+```
+
+In `figures_only` mode, jump directly to **Phase 6** below. Phases 1–5 are described as the `full` mode body.
 
 ### Phase 1: Discover & Read
 
@@ -205,12 +241,42 @@ Save the trace per `shared-references/review-tracing.md` (Policy C — never sil
    /paper-plan will still run, but these slots will become <!-- DATA_NEEDED --> in the LaTeX output.
    ```
 
-### Phase 6: Hand-off
+### Phase 6: Delegate to /figures-prep
 
-Print exactly one suggested next command:
+Both `full` and `figures_only` modes converge here. NARRATIVE_REPORT.md now exists at the resolved path. Invoke `/figures-prep` via the `Skill` tool to materialize `figures/*.json`:
 
 ```
-✅ NARRATIVE_REPORT.md ready.
+Skill(figures-prep, args: "NARRATIVE_REPORT.md")
+```
+
+Pass through `— gate: <mode>` only if the user explicitly set it on the `/narrative-bridge` invocation; otherwise let `/figures-prep` use its default strict gate.
+
+**Behavior on gate failure (strict mode default):**
+
+- `/figures-prep` exits non-zero and writes `figures/GATE_REPORT.md` with a per-figure breakdown of what is missing
+- `/narrative-bridge` surfaces the gate report's location to the user, does **not** print "ready for /paper-writing", and exits without success
+- The user resolves the gated items (add missing data, adjust source files, or revise the narrative's Figures section), then re-runs `/narrative-bridge` — Phase 0 will detect the existing narrative, skip straight here, and re-attempt figures-prep
+
+**Behavior on gate pass:**
+
+- `/figures-prep` writes `figures/MANIFEST.md` and `figures/MANUAL_FIGURES.md` (if any manual figures are needed)
+- Continue to Phase 7
+
+This delegation is intentionally asymmetric to the narrative's own graceful-degradation behavior: a NARRATIVE with `<!-- DATA_NEEDED -->` markers is still a useful document; a `figures/` with missing JSONs causes silent failures downstream. The gate enforced by `/figures-prep` is the safety net.
+
+### Phase 7: Hand-off
+
+Print exactly one suggested next command, branching on whether manual figures are pending:
+
+```
+# Case A: figures/MANUAL_FIGURES.md is non-empty
+✅ NARRATIVE_REPORT.md ready. figures/ data prepared, but {N} manual figure(s) still needed (see figures/MANUAL_FIGURES.md).
+Next:
+  1. Address manual figures (/paper-illustration or hand-draw)
+  2. /paper-writing "NARRATIVE_REPORT.md" — venue: {TARGET_VENUE}
+
+# Case B: no manual figures pending
+✅ NARRATIVE_REPORT.md and figures/ ready.
 Next: /paper-writing "NARRATIVE_REPORT.md" — venue: {TARGET_VENUE}
 ```
 
@@ -224,6 +290,7 @@ Do not invoke `/paper-writing` automatically — the user should confirm the nar
 - **Latest weaknesses, not cherry-picked.** Use the last `AUTO_REVIEW` round's `Remaining Weaknesses` — that is what the external reviewer still flagged after all repair rounds. Earlier-round weaknesses may have been fixed.
 - **Template is authoritative.** If the user has customized `templates/NARRATIVE_REPORT_TEMPLATE.md` (e.g., extra Reproducibility section), follow their schema, not the one in this SKILL.md.
 - **Idempotent.** Running `/narrative-bridge` twice on the same project state must produce byte-identical output (modulo timestamp). No randomness, no LLM-flavored prose variation.
+- **Strict NARRATIVE non-destruction.** Phase 0 enforces: an existing NARRATIVE_REPORT.md is never re-synthesized, edited, or overwritten by this skill. The user owns that file once it exists; this skill only contributes when it does not. Re-running against an existing narrative re-invokes `/figures-prep` and nothing else.
 
 ## Anti-patterns (do NOT do these)
 
@@ -232,7 +299,8 @@ Do not invoke `/paper-writing` automatically — the user should confirm the nar
 - ❌ Skip Known Weaknesses to make the paper look stronger.
 - ❌ Emit a `Figure 1: training curve` without checking `figures/` actually has training-curve data.
 - ❌ Auto-trigger `/paper-writing` on completion — the user must review the narrative first.
-- ❌ Overwrite a user-edited `NARRATIVE_REPORT.md` without warning: if the existing file has no timestamp twin in `MANIFEST.md`, ask before overwriting.
+- ❌ Overwrite a user-edited `NARRATIVE_REPORT.md`. Phase 0's idempotency branch skips synthesis whenever the file exists — no exceptions, no "ask before overwriting" prompt. The user must explicitly delete or rename the existing file to force re-synthesis.
+- ❌ Materialize `figures/*.json` inline. Delegate to `/figures-prep` in Phase 6 — that skill is the source of truth for the figures/ contract.
 
 ## Review Tracing
 
