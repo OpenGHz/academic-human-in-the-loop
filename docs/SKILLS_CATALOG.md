@@ -137,7 +137,7 @@ After-paper outputs and venue porting.
 | Skill | Role | Requires |
 |---|---|---|
 | [`/paper-slides`](../skills/paper-slides/SKILL.md) | Conference presentation — Beamer LaTeX → PDF + editable PPTX + speaker notes + full talk script | LaTeX, python-pptx |
-| [`/paper-slides-render`](../skills/paper-slides-render/SKILL.md) | Bridge between `/paper-slides` (PDF + script) and `/paper-video` — TTS via `edge-tts`, rasterize via `pdftoppm`, compose per-slide ffmpeg segments, optional whisper-aligned SRT burn-in | `edge-tts`, `pdftoppm`, `ffmpeg`, optional `openai-whisper` |
+| [`/paper-slides-render`](../skills/paper-slides-render/SKILL.md) | Bridge between `/paper-slides` (PDF + script) and `/paper-video` — TTS via `edge-tts`, rasterize via `pdftoppm`, compose per-slide ffmpeg segments, optional whisper-aligned SRT burn-in; per-slide `[VIDEO: path]` markers swap the still PNG for a clip with auto-loop / silent-pad | `edge-tts`, `pdftoppm`, `ffmpeg`, optional `openai-whisper` |
 | [`/slides-polish`](../skills/slides-polish/SKILL.md) | Per-page Codex review + targeted python-pptx / Beamer fixes (font scaling, frame resize, banner-as-tcolorbox, italic leak guard, em-dash spacing, CJK font hint, anonymity placeholder discipline) | Codex MCP, python-pptx |
 | [`/paper-poster-html`](../skills/paper-poster-html/SKILL.md) | **Default** conference poster — single HTML/CSS file with measurement-driven hard gates (two-hue tokens, real paper figures with provenance, anti-patch-loop fix vocabulary) → print-ready PDF via headless Chromium | Playwright (Chromium), PyMuPDF |
 | [`/paper-poster`](../skills/paper-poster/SKILL.md) | DEPRECATED — redirect stub to `/paper-poster-html` (legacy LaTeX pipeline retired; in git history) | — |

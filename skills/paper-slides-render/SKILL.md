@@ -101,6 +101,7 @@ Parsing rules (enforced by the helper):
 - `→ *Transition*: ...` markers are stripped.
 - Italicized stage directions (`*[Wait for chair...]*` lines) are stripped.
 - If no quotes are found, the helper falls back to the full body with markdown stripped, and flags the slide in `fallback_mode_slides`.
+- A slide body may also carry one `[VIDEO: path]` marker that swaps the rasterized PNG for a video clip at compose time. See [Embedding experiment videos](#embedding-experiment-videos) for syntax + duration semantics.
 
 ## Workflow: MUST EXECUTE ALL STEPS
 
@@ -133,11 +134,14 @@ Render this checklist explicitly:
    ```bash
    python3 "$RENDER_HELPER" preflight \
      --workspace . \
+     --talk-script slides/TALK_SCRIPT.md \
      ${WITH_SUBTITLES:+--with-subtitles} \
      --json-out slides/render/preflight.json
    ```
 
-3. If `ok=false`, stop and surface the helper's error verbatim. The most common cause is `edge-tts` not installed: `pip install edge-tts`. For `pdftoppm`: `apt-get install poppler-utils` (Linux) or `brew install poppler` (macOS).
+   The `--talk-script` flag is optional but recommended — it lets preflight probe any `[VIDEO: ...]` clip references and fail fast on missing files or out-of-bounds trim ranges, before any TTS or ffmpeg work starts. See [Embedding experiment videos](#embedding-experiment-videos) below.
+
+3. If `ok=false`, stop and surface the helper's error verbatim. The most common cause is `edge-tts` not installed: `pip install edge-tts`. For `pdftoppm`: `apt-get install poppler-utils` (Linux) or `brew install poppler` (macOS). For missing/invalid video clips, fix the referenced file or the trim range in `TALK_SCRIPT.md`.
 
 4. Write the initial `slides/render/RENDER_STATE.json` with `phase: 0`:
 
@@ -162,13 +166,14 @@ python3 "$RENDER_HELPER" parse \
   --json-out slides/render/parse.json
 ```
 
-Then present a per-slide table to the user (slide number, title, planned duration, first 60 chars of speakable text). If `parse.json.fallback_mode_slides` is non-empty, ⚠️ flag those slides — the helper used a markdown-stripped body instead of quoted speech, which usually means the talk script needs quotes.
+Then present a per-slide table to the user (slide number, title, planned duration, first 60 chars of speakable text, and **video clip** if a `[VIDEO: ...]` marker is present — show path + effective duration). If `parse.json.fallback_mode_slides` is non-empty, ⚠️ flag those slides — the helper used a markdown-stripped body instead of quoted speech, which usually means the talk script needs quotes. If any slide carries a `video_clip` whose `exists` is `false`, ⛔ stop and ask the user to fix the path.
 
 **⛔ STOP HERE**. Confirm with the user:
 
 - Slide count matches what `slides/main.pdf` actually contains.
 - No fallback-mode slides (or the user accepts the fallback).
 - Voice + subtitle flags are correct.
+- Video-clip-backed slides (if any) point at the intended clips and trim ranges.
 
 On "go", advance state to `phase: 1`.
 
@@ -319,3 +324,62 @@ Soft-fail slot: `subtitles.skipReason ∈ {"whisper-missing", "whisper-failed", 
 | Duration tolerance | 15 % | `--duration-tolerance 0.10` (on the helper directly) |
 
 Edge TTS voice list: `edge-tts --list-voices` (200+ voices across 50+ locales).
+
+## Embedding experiment videos
+
+Robotics, manipulation, and animation work usually needs a moving demonstration on at least one slide — the static PDF page can't communicate "the arm grasps the unseen object in two seconds". This skill lets the talk script swap any slide's still PNG for a video clip at compose time, without touching the beamer source.
+
+### Syntax
+
+Add a `[VIDEO: path]` marker on its own line inside a slide body. Paths are resolved relative to `TALK_SCRIPT.md`'s directory; absolute paths are also allowed. One marker per slide — extras are ignored with a warning.
+
+```markdown
+## Slide 3: Grasping Demo [0:30 - 0:42]
+
+[VIDEO: figures/grasp.mp4]
+
+"Our policy executes the grasp on the unseen object in under two seconds."
+```
+
+Optional clip trim (start–end inside the source clip; seconds or `MM:SS`):
+
+```markdown
+[VIDEO: figures/grasp.mp4 @ 2.5-7.0]
+[VIDEO: figures/grasp.mp4 @ 0:02-0:07]
+```
+
+### Duration policy
+
+For a video-backed slide the helper computes `total = max(narration_dur, clip_effective_dur)` and:
+
+| Case | Behavior |
+|---|---|
+| `narration > clip` | Loop the clip until narration finishes. **No upper cap on loop count** — a 60 s narration over a 1 s clip plays 60 loops. Use trim to make the loop unit longer if that's a problem. |
+| `clip > narration` | Narration plays once at the start; remainder is silent until the clip finishes. |
+| `narration == clip` | Plays once. |
+
+Always: **the clip's source audio is muted** (motor whirr, ambient sound, etc. are discarded). Narration is the only audio track in the output. If you want clip audio mixed in, render the clip into the beamer PDF via `\movie` instead — this skill won't do dubbing.
+
+### Aesthetic notes
+
+- Video slides are letterboxed/pillarboxed against a **black** background to match `/paper-video`'s clip pipeline. Still-PNG slides use white. Mixing both in one deck is fine but the pad color visibly differs at clip boundaries.
+- The PDF still shows whatever figure beamer rendered — VIDEO markers are a render-time substitution, not a beamer change. Reviewers who only have the PDF (no MP4) still see the static figure.
+
+### Preflight (recommended)
+
+Pass `--talk-script` to preflight so missing files / out-of-bounds trim ranges fail before any TTS or ffmpeg work starts:
+
+```bash
+python3 "$RENDER_HELPER" preflight \
+  --workspace . \
+  --talk-script slides/TALK_SCRIPT.md \
+  --json-out slides/render/preflight.json
+```
+
+`preflight.json.clips[]` lists every referenced clip with `exists`, `source_duration_seconds`, `width`, `height`, and `effective_duration_seconds` (after trim). Non-zero exit on any missing clip or trim range exceeding the source duration.
+
+### When NOT to embed video here
+
+- **Whole project-page video / supplementary submission video** → use `/paper-video` directly. It's tuned for assembling raw clips with shot lists and venue gates.
+- **Multi-clip composition on one slide** (side-by-side rollouts, picture-in-picture) → pre-stitch into one MP4 via `/paper-video` or external tools, then reference it via a single VIDEO marker.
+- **Animated slide transitions** → out of scope; this skill renders each slide as a discrete segment and concatenates with cuts.
