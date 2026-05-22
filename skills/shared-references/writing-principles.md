@@ -333,6 +333,24 @@ A useful paragraph skeleton is:
 
 Do not bury the key sentence in the middle.
 
+### Punctuation: Cap the Em-Dash
+
+**Hard cap: at most two em-dashes (`—`) in the entire main body.** Em-dashes are aesthetically tempting and grammatically permissive, so drafts accumulate them quickly: a parenthetical mid-clause, an emphatic appositive, a trailing afterthought, a clause break that "feels right." A reader who hits the third em-dash starts noticing the punctuation instead of the content, and the prose acquires a recognizable AI-shaped rhythm.
+
+The cap forces a real edit. For each em-dash, pick the right replacement based on what the em-dash was doing:
+
+| What the em-dash was doing | Replacement |
+|---|---|
+| Parenthetical aside (`X — which is Y — Z`) | Commas, or split into two sentences |
+| Strong appositive (`the result — a 15% lift — confirms ...`) | Comma, colon, or a separate sentence |
+| Clause break / shift in direction | Semicolon, period, or `, and` / `, but` |
+| Trailing emphasis / afterthought | Colon, or just delete the dash and let the sentence end |
+| List-item gloss (`item — explanation`) | Colon, or restructure the list with explicit bullets |
+
+After the substitution pass, count remaining em-dashes across abstract + main body. If more than two remain, keep editing. The same applies to figure captions and table notes — captions are prose.
+
+This rule does *not* target hyphens (`-`, in compounds like `state-of-the-art`) or en-dashes (`–`, in numeric ranges like `5–10`). Only the long em-dash (`—`) is capped.
+
 ## Word Choice and Precision
 
 ### Zachary Lipton Style: Remove Needless Hedging
@@ -623,6 +641,7 @@ Do:
 | Too much passive voice | Prefer active constructions |
 | Hedging everywhere | Keep hedging only where uncertainty is real |
 | Code identifiers, CLI flags, file paths, internal slugs in the main body | Substitute the concept; relocate the literal token to an appendix table |
+| Em-dashes (`—`) scattered through the prose (more than two in the whole main body) | Replace with comma, colon, semicolon, or split sentence — see [Punctuation: Cap the Em-Dash](#punctuation-cap-the-em-dash) |
 
 ### Figure Mistakes
 
@@ -668,7 +687,8 @@ Do:
 - [ ] No code identifiers, CLI flags, file paths, dotted metric keys, or internal dataset slugs remain in the main body; literal tokens live in an appendix table.
 - [ ] Every figure has been opened and visually inspected: no schematic box, arrow label, axis title, or in-image annotation contains a code-shaped identifier; figure captions follow the same rule.
 - [ ] No method-level claim is bound to a specific model name, hyperparameter value, or dataset tag outside §Setup / §Experiments; the recipe is defined once and referenced conceptually elsewhere.
-- [ ] The Introduction has exactly 2-4 contribution bullets — not five. Bullets that describe an experiment or a benchmark have been folded into §Experiments / §Setup.
+- [ ] The Introduction has 2-4 contribution bullets, not five. Bullets that describe an experiment or a benchmark have been folded into §Experiments / §Setup.
+- [ ] At most two em-dashes (`—`) in the entire main body (figure captions and table notes included). Hyphens and en-dashes are not counted.
 
 ### Technical
 
