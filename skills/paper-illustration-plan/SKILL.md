@@ -93,8 +93,24 @@ and the method section in depth.
 
 ### Step 1: Read and Extract
 
-Read the paper (skim, then deep-read the method section). Extract a structured
-brief into `figures/ai_generated/plans/paper_brief.md`:
+Read the paper (skim, then deep-read the method section). While reading, also
+identify any **existing architecture / pipeline figure that the paper itself
+references**:
+
+- **PDF input** — When you Read the PDF, the architecture figure is **embedded
+  inside the paper**; you see it visually. Note its page, its caption, and what
+  it depicts (modules, arrows, grouping). The paper's existing figure is the
+  structural source of truth.
+- **LaTeX input** — Grep / scan the source for `\includegraphics{...}` calls
+  whose surrounding `\caption{...}` mentions *architecture*, *pipeline*,
+  *overview*, *framework*. Record the referenced file path.
+- **Method note / free-form text input** — Likely no existing figure; mark as
+  `none`.
+
+Do NOT scan arbitrary filesystem paths looking for figures — the paper is the
+authoritative index of which figure is the architecture figure.
+
+Extract a structured brief into `figures/ai_generated/plans/paper_brief.md`:
 
 ```markdown
 # Paper Brief — <Title>
@@ -122,6 +138,14 @@ brief into `figures/ai_generated/plans/paper_brief.md`:
 
 ## Terminology
 - preferred names for each concept (use these exact strings in BOTH figures)
+
+## Existing architecture figure in the paper
+- `none` | <description of what the paper's existing architecture figure shows;
+  for PDF: page number + visual summary; for LaTeX: \includegraphics path +
+  caption + visual summary>
+- If present, this becomes the **structural reference** the architecture prompt
+  must replicate (same modules, same connections, same grouping). Only the
+  illustrative style differs.
 ```
 
 Keep `paper_brief.md` short and source-of-truth — both prompt files refer back to
@@ -182,6 +206,17 @@ The architecture figure is the engineering view:
 - label inputs and outputs explicitly
 - group related modules
 
+**Default behavior — use the paper's existing architecture figure as a
+structural reference.** If `paper_brief.md` recorded an existing architecture
+figure, the new prompt must **replicate that figure's structure**: same modules,
+same connection topology, same grouping, same left-to-right (or top-to-bottom)
+flow. Only the illustrative style (palette, typography, rounded blocks, gentle
+gradients) is regenerated. State this constraint explicitly in the prompt so the
+renderer does not silently re-layout.
+
+When no existing figure is referenced in the paper (free-form input or
+method note), draft the architecture prompt from `paper_brief.md` from scratch.
+
 Write `figures/ai_generated/plans/architecture_prompt.md`:
 
 ```markdown
@@ -189,6 +224,12 @@ Write `figures/ai_generated/plans/architecture_prompt.md`:
 
 ## Figure type
 Paper architecture / pipeline diagram.
+
+## Structural reference
+- `<source: e.g. paper PDF p.4 Figure 2, or figures/arch.pdf via \includegraphics>`
+  | `none — drafted from paper_brief.md`
+- If a reference is given, the renderer MUST preserve modules, connections,
+  grouping, and flow direction. Only the illustrative style is regenerated.
 
 ## Modules (left → right unless otherwise noted)
 1. <module name> — <role>
@@ -305,15 +346,20 @@ When the renderer is invoked with a plan file:
 3. The teaser is narrative (one-pane story); the architecture is modular
    (engineering blueprint). Do not let the teaser turn into another block
    diagram.
-4. Iterate via dialogue with the user before saving the final versions.
-5. Every change that touches terminology or palette updates `shared_style.md`
+4. If the paper already contains an architecture / pipeline figure, default to
+   using it as the **structural reference** for the architecture prompt
+   (same modules, same connections, same grouping; only style is regenerated).
+   Identify it by reading the paper itself — do NOT scan arbitrary filesystem
+   paths.
+5. Iterate via dialogue with the user before saving the final versions.
+6. Every change that touches terminology or palette updates `shared_style.md`
    AND propagates to both prompt files.
-6. Save plans as Markdown files under `figures/ai_generated/plans/`, ready to
+7. Save plans as Markdown files under `figures/ai_generated/plans/`, ready to
    be consumed by `/paper-illustration-image2`.
-7. Do NOT render images in this skill — hand off to `/paper-illustration-image2`.
-8. Prefer English labels unless the user requests another language.
-9. Stop on explicit user acceptance; do not auto-finalize.
-10. Keep prompts paper-ready (grayscale-safe, restrained palette, no slide-deck
+8. Do NOT render images in this skill — hand off to `/paper-illustration-image2`.
+9. Prefer English labels unless the user requests another language.
+10. Stop on explicit user acceptance; do not auto-finalize.
+11. Keep prompts paper-ready (grayscale-safe, restrained palette, no slide-deck
     decoration).
 
 ## Output Structure
