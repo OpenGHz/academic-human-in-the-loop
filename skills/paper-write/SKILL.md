@@ -584,7 +584,7 @@ Before declaring done:
 - [ ] **Reference floor gate** — unique cite-key count ≥ `MIN_REFERENCES` (see check below)
 - [ ] No author information in anonymous mode
 - [ ] Figure/table numbering is correct
-- [ ] Page count within MAX_PAGES (main body to Conclusion end)
+- [ ] Page count within MAX_PAGES (main body to Conclusion end) — if over, apply [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) in order; never delete experiments, theorems, or citations to fit
 - [ ] No TODO/FIXME/XXX markers left in the text
 - [ ] No `[VERIFY]` markers left unchecked
 - [ ] Abstract is self-contained (understandable without reading the paper)
