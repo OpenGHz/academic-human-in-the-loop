@@ -224,6 +224,32 @@ Turn the user request into a **fully specified image prompt**. Include:
 When the input is a method note or a paper section, summarize it first into a
 clean figure brief before writing the final image prompt.
 
+### Step 1B: Honor an Existing Plan File (if present)
+
+`/paper-illustration-plan` produces ready-to-render plan files. If any of these
+conditions hold, **read the plan file as the prompt body and skip the from-scratch
+extraction above**:
+
+- `$ARGUMENTS` resolves to a path under `figures/ai_generated/plans/` ending in
+  `_prompt.md` (typically `teaser_prompt.md` or `architecture_prompt.md`)
+- OR the user mentions an existing plan (e.g. "use the teaser plan",
+  "render from the architecture prompt") and a matching file exists under
+  `figures/ai_generated/plans/`
+
+When a plan file is used:
+
+1. Read the plan file verbatim — it is already a fully specified image prompt.
+2. If `figures/ai_generated/plans/shared_style.md` exists, prepend or
+   concatenate it as additional style context so teaser and architecture stay
+   consistent across renders.
+3. Skip re-summarizing the source paper; the plan is the source of truth.
+4. Proceed to Step 2 (Layout Optimization) with the plan + shared style as
+   input.
+
+If the user invokes this skill without a plan file but a paper PDF / method
+note is provided, prefer asking the user whether to run `/paper-illustration-plan`
+first (to produce coherent teaser + architecture plans) before rendering.
+
 ## Step 2: Layout Optimization
 
 This step is required. Before rendering, refine the prompt into a concrete
