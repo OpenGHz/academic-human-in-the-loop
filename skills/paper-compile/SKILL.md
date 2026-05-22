@@ -191,7 +191,7 @@ for i, page in enumerate(pages):
 
 If Conclusion ends mid-page and References start on the same page, the main body is that page number (e.g., if both are on page 9, main body = ~8.5 pages, which is fine for a 9-page limit since it leaves room for the References header).
 
-If over limit, apply the ordered remediation in [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md). Don't paraphrase the steps here — the shared doc owns the protocol so all skills cut in the same order. Report the overflow as:
+If over limit, apply the ordered remediation in [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md). Don't paraphrase the steps here — the shared doc owns the protocol so all skills cut in the same order. **Before applying any step, read `<paper-dir>/PAPER_PREFERENCES.md`** (if present) and check `## Hard don'ts` — a bullet like "Do not move Theorem 1 to appendix" overrides the corresponding heuristic step. When the next-best heuristic step conflicts with a hard don't, halt and surface to the user per the failure-mode section. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Report the overflow as:
 
 > "Main body is X pages (limit: MAX_PAGES). Apply shared-references/page-shrink-heuristic.md — start at step 1 (compress conclusion) and stop as soon as the count drops to ≤ MAX_PAGES."
 
