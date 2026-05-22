@@ -586,7 +586,7 @@ echo "$BIB_OVERFULL"
 | Appendix overfull > 10pt | Apply the same fix if the spill is visible |
 | Bibliography overfull ≤ 20pt | Warn only unless caused by malformed entry or clipping |
 | Bibliography overfull > 20pt | Fix malformed entry, URL, or DOI formatting |
-| Over page limit | Move content to appendix, compress tables, reduce figure sizes |
+| Over page limit | Apply the ordered protocol in [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) — start at step 1 (compress conclusion) and stop the moment count ≤ limit. Do **not** delete experiments, theorems, or citations to satisfy the limit (see hard constraints in the shared doc). |
 
 **Location-aware interpretation:**
 - Classify by the source file reported in the `-file-line-error` log.

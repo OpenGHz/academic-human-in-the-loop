@@ -392,7 +392,7 @@ Save the final outline to `PAPER_PLAN.md` in the project root:
 - **Large file handling**: If the Write tool fails due to file size, immediately retry using Bash (`cat << 'EOF' > file`) to write in chunks. Do NOT ask the user for permission — just do it silently.
 - **Do NOT generate author information** — leave author block as placeholder or anonymous
 - **Be honest about evidence gaps** — mark claims as "needs experiment" rather than overclaiming
-- **Page budget is hard** — if content exceeds MAX_PAGES, suggest what to move to appendix
+- **Page budget is hard** — if planned content sums above MAX_PAGES, apply the ordered protocol in [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) at plan time. Catching the overrun here is cheaper than writing content you'll delete in `/auto-paper-improvement-loop` later.
 - **MAX_PAGES counting differs by venue** — ML conferences: main body to Conclusion end, references/appendix NOT counted; AAAI main track is typically 7 technical-content pages plus references. **IEEE venues: references ARE counted toward the page limit.**
 - **Venue-specific norms** — ML conferences (ICLR/NeurIPS/ICML) use `natbib` (`\citep`/`\citet`); **IEEE venues use `cite` package (`\cite{}`, numeric style)**
 - **Claims-Evidence Matrix is the backbone** — every claim must map to evidence, every experiment must support a claim

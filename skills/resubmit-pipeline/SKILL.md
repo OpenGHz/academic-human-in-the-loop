@@ -346,15 +346,12 @@ If `overleaf-target` is not provided, skip Overleaf push and tell the user to ei
 
 ## Page-Shrink Heuristic
 
-When Phase 0.5 or Phase 4 detects page overflow, apply this **ordered** heuristic. Stop as soon as the page limit is met. Each step is fully constrained by the edit whitelist (no theorem changes, no bib changes, no framework changes):
+When Phase 0.5 or Phase 4 detects page overflow, apply the ordered heuristic defined in [`shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md). Same five steps (compress conclusion → tighten hedging → move marginal figures → move proof sketches → compress related-work prose), same hard constraints (no experiment removal, no theorem removal from main, no citation removal — the bib is frozen under resubmit), same failure mode.
 
-1. **Compress conclusion** (typically 1-2 paragraphs of "future work" can be cut to 2-3 sentences each). Save: 0.3-0.7 pages.
-2. **Tighten abstract / intro hedging** (cut "in this paper, we" → "we"; cut "it is well known that" → straight to point). Save: 0.2-0.4 pages.
-3. **Move marginal figures to appendix** (figures whose information is not load-bearing for the main argument). Save: 0.5-1 page per figure.
-4. **Move proof sketches / extended remarks to appendix** (keep theorem statements + 1-line proof intuition in main; full proof goes to appendix). Save: 0.5-2 pages.
-5. **Compress related-work prose** (cite-by-citation comparisons → comparison table). Save: 0.3-0.5 pages.
+This skill adds two resubmit-specific compositions on top of the shared protocol:
 
-**Forbidden** under this heuristic: removing experiments, removing theorems from main, removing citations (bib frozen). If after step 5 the paper still overflows, emit `RESUBmit_REPORT.json` with `verdict: BLOCKED, reason_code: page_shrink_failed_under_constraints` and surface to user — they must decide whether to relax a constraint or pick a different target venue.
+- **Edit-whitelist composition**: every step is additionally constrained by the resubmit edit whitelist. If the whitelist forbids `sections/proofs/*.tex` edits, step 4 is unavailable — escalate per the whitelist's rules rather than violating it.
+- **Verdict emission**: when the heuristic exhausts (post-step-5 still overflowing), this skill emits `RESUBMIT_REPORT.json` with `verdict: BLOCKED, reason_code: page_shrink_failed_under_constraints` and surfaces to the user the relax-a-constraint / pick-different-venue choice described in the shared doc.
 
 ## Convergence Criteria (Phase 2 stop condition)
 
@@ -443,5 +440,5 @@ Every Codex MCP reviewer call across all phases saves traces per `shared-referen
 
 - This skill orchestrates several existing skills (proof-checker, paper-claim-audit, citation-audit, auto-paper-improvement-loop, kill-argument, paper-compile, overleaf-sync) plus uses two recently-added parameters (`/auto-paper-improvement-loop --edit-whitelist`, `/citation-audit --soft-only`). Make sure those parameters resolve to the current SKILL.md versions before relying on the resubmit pipeline.
 - The 5-layer anonymity scan is intentionally more thorough than `/paper-compile`'s generic self-citation warning, because resubmit-mode often inherits camera-ready text from a non-double-blind venue going to a double-blind venue.
-- Page-shrink heuristic is ordered (compress conclusion → tighten hedging → move marginal figures → move proof sketches → compress related-work prose). The order is calibrated to "least risky to most risky" — compressing conclusion is mostly editorial; moving proof sketches changes the reading flow. Stop as early as page limit is met.
+- Page-shrink heuristic is ordered and stops as early as the page limit is met. See [`shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) for the five steps and rationale; resubmit composes the whitelist constraint on top.
 - `RESUBMIT_REPORT.json` schema follows `shared-references/assurance-contract.md` exactly. This makes resubmit runs forensically reproducible. **Note**: `verify_paper_audits.sh` does not currently include `RESUBMIT_REPORT.json` in its `MANDATORY_AUDITS` list (the verifier checks proof / paper-claim / citation / kill-argument). The 4 mandatory audit files consumed by resubmit (which DO live in `<NEW_VENUE_DIR>/`) are recognized by the verifier as usual; `RESUBMIT_REPORT.json` is the orchestrator's own ledger and is not yet a verifier mandatory artifact. Adding it to the verifier is a separate follow-up if the user wants resubmit to be a submission gate via the verifier.
