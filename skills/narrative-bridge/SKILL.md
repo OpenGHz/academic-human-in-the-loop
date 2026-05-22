@@ -222,16 +222,32 @@ Save the trace per `shared-references/review-tracing.md` (Policy C — never sil
 
 1. Write timestamped: `NARRATIVE_REPORT_{YYYYMMDD_HHmmss}.md` at project root.
 2. Copy to `NARRATIVE_REPORT.md` (the fixed name `/paper-plan` reads).
-3. Append two rows to `MANIFEST.md`:
+3. **Scaffold `PAPER_PREFERENCES.md` at paper directory root if it does not exist**, with just frontmatter and a stub comment (no bullets). This gives the user a discoverable place to drop standing orders before downstream skills start asking. Skip the scaffold if the file already exists. Template:
+   ```markdown
+   ---
+   paper: {paper-slug}
+   last-updated: {YYYY-MM-DD}
+   ---
+
+   # Paper-Specific Preferences
+
+   <!-- Standing orders for this paper. Bullets here override defaults from
+   shared-references/ and global auto-memory. See
+   skills/shared-references/paper-preferences.md for the spec. -->
+
+   ## Hard don'ts
+   <!-- (none yet) -->
+   ```
+4. Append two rows to `MANIFEST.md`:
    ```
    | {ts} | /narrative-bridge | NARRATIVE_REPORT_{ts}.md | paper-writing | synthesized from W2 outputs (N claims, M experiments, K data files) |
    | {ts} | /narrative-bridge | NARRATIVE_REPORT.md | paper-writing | latest copy |
    ```
-4. Append one line to `findings.md`:
+5. Append one line to `findings.md`:
    ```
    - [{ts}] narrative-bridge: NARRATIVE_REPORT.md synthesized. Claims yes/partial/no = X/Y/Z. Unsourced numbers resolved = N. DATA_NEEDED markers remaining = M.
    ```
-5. If `DATA_NEEDED` markers remain, list them for the user with the fix command. Example:
+6. If `DATA_NEEDED` markers remain, list them for the user with the fix command. Example:
    ```
    ⚠️  3 DATA_NEEDED markers remain:
      - Related Work (line 87)   → /research-lit "<topic>"
