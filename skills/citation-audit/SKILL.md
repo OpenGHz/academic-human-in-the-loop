@@ -56,6 +56,12 @@ The dangerous citation problems are **not** wildly fake citations — those are 
 
 ## Workflow
 
+### Step 0: Load per-paper preferences
+
+Read `<paper-dir>/PAPER_PREFERENCES.md` if it exists. Bullets in `## Notation`, `## Hard don'ts`, and `## Section-specific` may forbid specific citations or contexts (e.g., "do not cite Chen 2024 in this paper — wrong context"). When the audit reviewer surfaces an entry that conflicts with such a bullet, escalate to the user rather than silently keeping or removing. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty; do not error.
+
+**Reviewer independence**: do NOT pass PAPER_PREFERENCES.md to the fresh cross-model reviewer thread. The reviewer must judge each entry on its own merits; preferences gate *which fixes get applied*, not what the reviewer sees.
+
 ### Step 1: Discover bib file and section files
 
 Locate:

@@ -25,6 +25,7 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 3. **Generated figures** — PDF/PNG files in `figures/` (from `/paper-figure`)
 4. **LaTeX includes** — `figures/latex_includes.tex` (from `/paper-figure`)
 5. **Bibliography** — existing `.bib` file, or will create one
+6. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — per-paper standing orders. Read at workflow start, before drafting any section. Bullets in `## Hard don'ts`, `## Notation`, `## Style / tone`, and `## Section-specific` override defaults from this skill and from `../shared-references/writing-principles.md`. When you apply a bullet, cite it in your output (e.g., "Skipping 'novel' per PAPER_PREFERENCES.md §Style/tone"). Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty; do not error.
 
 If no PAPER_PLAN.md exists, ask the user to run `/paper-plan` first or provide a brief outline.
 

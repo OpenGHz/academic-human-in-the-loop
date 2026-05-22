@@ -57,6 +57,7 @@ For each candidate, verify the path actually exists (`test -e <path>`) before ad
 1. **Paper directory** with `main.tex`, `sections/*.tex`, and a `.bib` file.
 2. **Whichever gap report triggered the run** — read it to learn the current count, target floor, and any per-section hints the upstream gate left.
 3. **Optional: `NARRATIVE_REPORT.md`** — useful for understanding what the paper actually claims, so the new citations attach to real load-bearing sentences.
+4. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — read at Phase 0. Bullets in `## Notation`, `## Hard don'ts`, and `## Section-specific` may forbid specific citations or constrain how new ones are introduced (e.g., "do not cite Chen 2024 — wrong context", "Related Work must keep prose form, not table"). The search filter (Phase 4) and insertion (Phase 6) must respect these bullets. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty.
 
 ## Workflow
 

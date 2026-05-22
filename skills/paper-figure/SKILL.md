@@ -37,6 +37,7 @@ Generate all figures and tables for a paper based on: **$ARGUMENTS**
 1. **PAPER_PLAN.md** — figure plan table (from `/paper-plan`)
 2. **Experiment data** — JSON files, CSV files, or screen logs in `figures/` or project root
 3. **Existing figures** — any manually created figures to preserve
+4. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — read for figure-relevant standing orders. Bullets in `## Notation` may fix terminology that goes into axis labels and legends; bullets in `## Hard don'ts` may forbid specific figure changes (e.g., "do not change the color of method A's curve — reserved for the ablation panel"). Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty.
 
 If no PAPER_PLAN.md exists, scan for data files and ask the user which figures to generate.
 
