@@ -36,9 +36,19 @@ Skip this skill if the floor is already met — adding citations for the sake of
 - **REAL_CITE_REQUIRED = true** — Every new bib entry MUST be referenced by at least one `\cite{}` in the body before this skill declares done. Bare bib entries don't count toward the floor and will be pruned by `--uncited`.
 - **PAPER_LIBRARY** — Local path(s) for paper retrieval. Resolution order (first non-empty wins):
   1. `— paper-library: <path>` CLI override (comma-separated paths accepted).
-  2. `## Paper Library` section in `CLAUDE.md` (project- or user-level).
-  3. `papers/` or `literature/` under the paper directory.
-  4. None — skip the local phase entirely and go straight to web.
+  2. **Path-like tokens in the user's free-form prompt** — see "Prompt path extraction" below. Catches the common case where the user *says* "我的文献在 `~/my-papers/` 里" without using the formal flag. The skill echoes the extracted path(s) back in `plan.md` and proceeds; the user can correct in-band by re-invoking with `— paper-library: <correct path>`.
+  3. `## Paper Library` section in `CLAUDE.md` (project- or user-level).
+  4. `papers/` or `literature/` under the paper directory.
+  5. None — skip the local phase entirely and go straight to web.
+
+**Prompt path extraction** (resolution step 2): scan `$ARGUMENTS` for tokens matching any of:
+- `~/...` or `$HOME/...`
+- absolute paths starting with `/`
+- relative paths starting with `./` or `../`
+- bare directory names ending with `/` that exist on disk relative to CWD
+- `.bib` file paths
+
+For each candidate, verify the path actually exists (`test -e <path>`) before adopting it. Silently ignore non-existent tokens — users often paste fragments. Always log the extracted paths to `plan.md` under `## PAPER_LIBRARY resolution` so the user can audit; if extraction is ambiguous (multiple candidates of unclear intent), pick the first existing one and note the alternates as "candidates not selected".
 - **SEARCH_STRATEGY = `local_first`** — Two-pass routing: pass 1 hits Zotero / Obsidian / local PDFs only; pass 2 hits the web only for topics where pass 1 returned fewer than `LOCAL_HITS_THRESHOLD` usable candidates. Override with `— strategy: web_only` (skip local) or `— strategy: parallel` (run both passes concurrently — faster but burns more web quota and risks redundant hits).
 - **LOCAL_HITS_THRESHOLD = `3`** — Per-topic minimum from the local pass before the web pass is skipped for that topic. Set per topic, not globally — a topic with 4 strong local hits skips the web; a sibling topic with 0 local hits still gets the web pass.
 
