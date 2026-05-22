@@ -197,6 +197,10 @@ Sources accepted: local TeX dir / file, local PDF, arXiv id, http(s) URL. Overle
 
 **Not for:** Statistical plots (use `/paper-figure`), photo-realistic images
 
+## Inputs
+
+`<paper-dir>/PAPER_PREFERENCES.md` (if present) — read before drafting the figure plan. Bullets in `## Notation` may fix terminology that goes into in-figure labels (e.g., "π_θ is the policy"); bullets in `## Hard don'ts` may constrain visual choices (e.g., "do not use a circular layout — reviewer found it confusing"). Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty.
+
 ## Workflow: MUST EXECUTE ALL STEPS
 
 ### Step 0: Pre-flight Check
