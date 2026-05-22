@@ -14,6 +14,7 @@ This is the expanded English counterpart to the detailed Chinese version. It is 
 - [Sentence-Level Clarity](#sentence-level-clarity)
 - [Micro-Level Writing Tactics](#micro-level-writing-tactics)
 - [Word Choice and Precision](#word-choice-and-precision)
+- [Implementation Identifiers Stay Out of the Main Body](#implementation-identifiers-stay-out-of-the-main-body)
 - [Mathematical Writing](#mathematical-writing)
 - [Figure Design](#figure-design)
 - [Common Mistakes](#common-mistakes)
@@ -374,6 +375,66 @@ Stronger alternatives are often:
 
 This is not about mechanical substitution. It is about how wording changes a reviewer's intuition about whether the work is a real contribution.
 
+## Implementation Identifiers Stay Out of the Main Body
+
+The main body is read by reviewers who do not have your codebase open. Code-shaped identifiers — variable names, CLI flags, environment-specific file paths, project-internal proper nouns, internal metric keys — leak implementation context into a venue that expects conceptual language. They cost the reviewer attention, they age badly (a renamed flag invalidates the prose), and they signal that the framing has not converged from "thing I built" to "thing the field should know about." Push all such identifiers to the appendix, supplementary code release, or footnote, and substitute the conceptual term in the main body.
+
+### What Counts as a Code-Shaped Identifier
+
+The discipline applies to all of:
+
+- **Variable, parameter, and column names** as they appear in source code — including ones the reader is meant to read literally (e.g. fields of a struct, columns of a data frame, attribute access). Write the conceptual quantity instead.
+- **Command-line flags and shell invocations** — any token that begins with `-` or `--`, any `script.py arg1 arg2` form, anything that reads like a recipe to re-run a job.
+- **Configuration / metric keys** — dotted accessors and dictionary-key strings used inside the codebase to look something up (logging keys, JSON paths into result files, config-namespace identifiers). Rename to the human concept.
+- **Project-internal identifiers and dataset slugs** — internal task / dataset / experiment codenames, snapshot tags, and any branch / build identifiers that only mean something inside the team.
+- **File paths and module names** — repository-relative paths, package or module references, and config filenames. Reviewers cannot resolve these.
+- **Model / framework / API switches as literal flags** — model name plus the literal flag that selected it. The reader needs the model name; the flag is appendix material.
+
+### The Substitution Pattern
+
+For each offending token, ask: *what concept does this stand for, in language a reader who has never seen my codebase would understand?* Substitute the concept in the main body; preserve the literal token in the appendix, methods reproducibility section, or supplementary code release. The literal token is not deleted — it is **relocated** to the audience that needs it.
+
+| Offender | Main-body replacement | Where the literal token belongs |
+|----------|----------------------|---------------------------------|
+| `target_euler_xyz_deg[pitch]` | "the pitch component of the target end-effector orientation" | Appendix table: column-to-concept mapping |
+| `--max_env 7 --max_attempt_chain 3` | "capped at seven environment instances and three attempt chains per group" | Appendix: evaluation protocol / reproducibility |
+| `--platform cch --model gpt-5.5 --openai_reasoning_effort xhigh` | "GPT-5.5 at maximum reasoning effort" | Appendix: exact invocation |
+| `overall.chain.accuracy` | "chain accuracy" (or whatever the metric is conceptually) | Appendix: metric definition + source key |
+| `language_template.json` | "the task-keyed prompt template" | Appendix: code release path |
+| `ada_manip: safe clock0.667` | "the safe task at the 0.667 clock setting in the simulator suite" | Appendix: dataset identifiers |
+| `--test_fraction 0.2` | "a 20\% held-out split" | Appendix: split protocol |
+| `scripts/run_group_gated_eval.py` | "the gated-evaluation driver" | Appendix / supplementary code release |
+| `experiments/E03-supervised-baselines/results.md` | "the supervised-baselines results file" | Footnote / supplementary materials index |
+
+### The Appendix Is Where the Literal Token Lives
+
+A short appendix paragraph titled something like "Notation, identifiers, and reproducibility" can host:
+
+- a small **concept-to-identifier table** mapping each concept named in the main body to the literal column / flag / file path,
+- the **exact command-line invocation(s)** used to produce the headline numbers,
+- the **dataset slugs**, **config filenames**, and **internal task codenames**.
+
+The reviewer who wants to reproduce reaches the appendix; the reviewer who wants to evaluate the claim never has to.
+
+### Exceptions
+
+Three narrow cases where a literal identifier may stay in the main body:
+
+1. **The identifier *is* the concept.** Common-knowledge symbols (`ReLU`, `softmax`, `argmax`, standard dataset names like `ImageNet` / `COCO`) carry meaning across the field. Keep them.
+2. **The paper's contribution is precisely a name or a key.** If you are proposing a new metric, the metric's name belongs in the main body.
+3. **A short, locally-defined symbol used once for clarity.** If you spell out the concept and then introduce a notation in parentheses (e.g. "the target end-effector pitch, denoted $\theta_p$"), the notation can be used freely afterwards. This is not the same as importing a code identifier — it is defining a paper-internal symbol.
+
+### How to Audit a Draft
+
+A quick mechanical pass:
+
+- grep the draft for `\texttt{...--...}` and any `--word` patterns — every hit is a command-line flag candidate for relocation,
+- grep for `\texttt{...}` blocks containing `.` (dotted accessors), `/` (paths), `_` followed by lowercase (likely a code identifier), and underscores between words — each is a candidate,
+- grep for filename suffixes (`.py`, `.json`, `.zarr`, `.csv`, `.md`) in the main body — relocate the path, keep the concept,
+- read the offending sentence aloud: if it sounds like a README, rewrite it as prose.
+
+A sentence the reader cannot parse without your codebase is a sentence the reader will skip.
+
 ## Mathematical Writing
 
 ### Core Principle
@@ -471,6 +532,7 @@ Do:
 | Inconsistent terminology | Keep one name per concept |
 | Too much passive voice | Prefer active constructions |
 | Hedging everywhere | Keep hedging only where uncertainty is real |
+| Code identifiers, CLI flags, file paths, internal slugs in the main body | Substitute the concept; relocate the literal token to an appendix table |
 
 ### Figure Mistakes
 
@@ -512,6 +574,7 @@ Do:
 - [ ] There are no generic field-background openings.
 - [ ] Unnecessary hedging has been removed.
 - [ ] All key figures have self-contained captions.
+- [ ] No code identifiers, CLI flags, file paths, dotted metric keys, or internal dataset slugs remain in the main body; literal tokens live in an appendix table.
 
 ### Technical
 
