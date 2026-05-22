@@ -15,6 +15,7 @@ This is the expanded English counterpart to the detailed Chinese version. It is 
 - [Micro-Level Writing Tactics](#micro-level-writing-tactics)
 - [Word Choice and Precision](#word-choice-and-precision)
 - [Implementation Identifiers Stay Out of the Main Body](#implementation-identifiers-stay-out-of-the-main-body)
+- [Method-Level Claims Stay Above the Experimental Choices](#method-level-claims-stay-above-the-experimental-choices)
 - [Mathematical Writing](#mathematical-writing)
 - [Figure Design](#figure-design)
 - [Common Mistakes](#common-mistakes)
@@ -189,6 +190,16 @@ Bad:
 - We make several contributions to the field.
 
 The problem with the “bad” bullets is not grammar. It is that a reviewer cannot cleanly agree, disagree, or challenge them.
+
+### Hard Cap: At Most Four Bullets
+
+The 2-4 bound is not a soft suggestion. If you find yourself writing a fifth bullet, **stop and merge**. Five bullets almost always means one of:
+
+- two bullets describe the same evidence type and should be merged (e.g. "headline metric on benchmark X" + "ablation that explains why" → one "empirical evidence" bullet);
+- one bullet describes the benchmark / dataset rather than the contribution; fold it into §Experiments and let the bullets describe what you *did with* the benchmark;
+- one bullet describes an implementation detail (a baseline you also tried, a setup choice) that belongs in §Setup or appendix, not in the framing.
+
+If you cannot drop or merge to four, the paper is probably trying to claim too many things. The reviewer will pick the weakest bullet and reject on it. Better four claims you can defend than five with a weak one in the mix.
 
 ## Sentence-Level Clarity
 
@@ -396,15 +407,15 @@ For each offending token, ask: *what concept does this stand for, in language a 
 
 | Offender | Main-body replacement | Where the literal token belongs |
 |----------|----------------------|---------------------------------|
-| `target_euler_xyz_deg[pitch]` | "the pitch component of the target end-effector orientation" | Appendix table: column-to-concept mapping |
-| `--max_env 7 --max_attempt_chain 3` | "capped at seven environment instances and three attempt chains per group" | Appendix: evaluation protocol / reproducibility |
-| `--platform cch --model gpt-5.5 --openai_reasoning_effort xhigh` | "GPT-5.5 at maximum reasoning effort" | Appendix: exact invocation |
-| `overall.chain.accuracy` | "chain accuracy" (or whatever the metric is conceptually) | Appendix: metric definition + source key |
-| `language_template.json` | "the task-keyed prompt template" | Appendix: code release path |
-| `ada_manip: safe clock0.667` | "the safe task at the 0.667 clock setting in the simulator suite" | Appendix: dataset identifiers |
+| `state_vector[i].angle_deg` | "the relevant angular component of the state vector" | Appendix table: column-to-concept mapping |
+| `--max_envs 7 --max_chains 3` | "capped at seven environments and three chains per group" | Appendix: evaluation protocol / reproducibility |
+| `--platform $P --model $M --reasoning $R` | "$M at the chosen reasoning level" | Appendix: exact invocation |
+| `metrics.group.accuracy` | "group accuracy" (or whatever the metric is conceptually) | Appendix: metric definition + source key |
+| `prompt_template.json` | "the task-keyed prompt template" | Appendix: code release path |
+| `benchmark_suite: task_v3` | "the v3 release of the benchmark suite" | Appendix: dataset identifiers |
 | `--test_fraction 0.2` | "a 20\% held-out split" | Appendix: split protocol |
-| `scripts/run_group_gated_eval.py` | "the gated-evaluation driver" | Appendix / supplementary code release |
-| `experiments/E03-supervised-baselines/results.md` | "the supervised-baselines results file" | Footnote / supplementary materials index |
+| `scripts/run_gated_eval.py` | "the gated-evaluation driver" | Appendix / supplementary code release |
+| `experiments/E0X-some-baselines/results.md` | "the baseline results file" | Footnote / supplementary materials index |
 
 ### The Appendix Is Where the Literal Token Lives
 
@@ -426,11 +437,11 @@ Three narrow cases where a literal identifier may stay in the main body:
 
 ### Figures, Schematics, and In-Image Text Are Part of the Main Body
 
-The discipline above applies to every visible artifact, not just to prose. A reviewer who sees `additional_prompt entry in language_template.json` inside Figure 1 has been handed the same code-shaped identifier the main-body prose was supposed to suppress, and the figure is harder to undo because it is rendered, not typeset. Audit and rewrite the in-figure text the same way:
+The discipline above applies to every visible artifact, not just to prose. A reviewer who sees a literal `config_field.subkey` inside Figure 1 has been handed the same code-shaped identifier the main-body prose was supposed to suppress, and the figure is harder to undo because it is rendered, not typeset. Audit and rewrite the in-figure text the same way:
 
-- **Schematic boxes, arrow labels, and legends** — anything inside the figure that the reader can read — must use the conceptual term, not the code identifier. "task-keyed prompt template" inside the box, not the JSON path; "chain accuracy ≥ 0.85" on the gate arrow, not the dotted metric key; "evidence package" on the input arrow, not the column-name list.
-- **Heatmap / table column headers and row labels** — substitute the concept (e.g. `proprio` is fine as a modality name, but `target_euler_xyz_deg` is not — write "end-effector orientation"). Numeric cells stay as numbers.
-- **Source-of-truth pointers rendered inside the figure** ("rule from `raw_data/.../*.json` :: tasks.cabinet.additional\_prompt") belong in the caption or appendix, not in the figure itself.
+- **Schematic boxes, arrow labels, and legends** — anything inside the figure that the reader can read — must use the conceptual term, not the code identifier. The concept name inside the box, not the JSON path; the human metric ("accuracy ≥ 0.85") on the gate arrow, not the dotted metric key; the evidence concept on the input arrow, not the column-name list.
+- **Heatmap / table column headers and row labels** — substitute the concept (a short conceptual label is fine; a literal column accessor is not). Numeric cells stay as numbers.
+- **Source-of-truth pointers rendered inside the figure** (`rule from <path>::<key>` style annotations) belong in the caption or appendix, not in the figure itself.
 - **Caption copy** — captions are read with the figure, so the same substitution rules apply: no flag tokens, no dotted accessors, no project-internal slugs.
 
 When the literal identifier is essential for reproducibility — e.g. the exact column being read — put it in the appendix's concept-to-identifier table, then reference the concept in the figure and let the appendix carry the literal token.
@@ -454,6 +465,65 @@ And a parallel pass on the figures themselves (the part grep cannot see):
 - if the figure was rendered from a notebook or a generation prompt, fix the source so the next regeneration does not reintroduce the identifiers.
 
 A sentence the reader cannot parse without your codebase is a sentence the reader will skip. A figure label the reader cannot parse without your codebase is a figure the reader will mistrust.
+
+## Method-Level Claims Stay Above the Experimental Choices
+
+A method-level claim states *what the paper is contributing*. An experimental choice records *how the contribution was tested*. When the two are confused — when the abstract, introduction, or method-claim is bound to a specific model name (`$MODEL_NAME` / `$VENDOR-$VERSION`), a specific hyperparameter (`K=$k`, threshold = `$T`), or a specific dataset tag (`$dataset_v3`, `setting=$s`) — the contribution reads as if it only works with that exact recipe. Reviewers cannot tell whether the method generalizes; the framing has not separated "the thing we built" from "the way we happened to evaluate it."
+
+A useful self-check: when you read your abstract aloud, can you swap a specific model name for "a sufficiently capable model of that class," or a literal hyperparameter `$K=k_0$` for "a small `$K`," without changing the claim? If yes, the conceptual phrasing is already available — the specific value is appendix or experimental-setup material, not framing. If no, the claim is over-bound to the recipe and should be relaxed.
+
+This is a separate discipline from the implementation-identifier rule above. That rule prevented things like `--some_flag` and `config_file.json` from leaking into the main body. This rule prevents *legitimately-named* concepts — the model, the gate, the cap — from being repeated in their specific form (`$MODEL`, `K=$k`, `n=$N`) across every framing sentence. The literal value is fine; the *repetition* and the *placement in claim sentences* is what makes the contribution look brittle.
+
+### What to Promote to Conceptual Phrasing
+
+- **Specific model names** in abstract / intro / method-claim → "a frozen base $CLASS-of-model", "a recent frontier model", or the model family. The model name belongs in §Experiments / §Setup ("we instantiate the frozen base model with `$MODEL` at the chosen reasoning level").
+- **Specific hyperparameter values** (`K=$k`, gate threshold `= $T`, `n=$N` per group) → "a small `$K`", "a held-out accuracy gate", "an evaluation cap". The literal numbers belong in §Setup.
+- **Dataset version stamps and difficulty tags** (`"the $v setting"`, `"$dataset_v3 split"`) → the task / dataset name alone, or a difficulty descriptor. Version tags belong in the appendix.
+- **Tooling / framework / library choices** (specific library names + versions) → the role the tool plays, not the tool itself. Names go in the supplementary code release.
+- **Random seeds, batch sizes, learning rates, GPU counts** → §Implementation Details / appendix.
+
+### Where the Specific Values Belong
+
+One Experimental Setup paragraph collects every concrete choice in one place:
+
+> "We instantiate the frozen base model with `$MODEL` at the chosen reasoning level; the held-out gate passes after `K=$k` consecutive training groups each clear accuracy `≥ $T`; evaluation is capped at `$E` environments × `$C` chains per group on a `$f` held-out split."
+
+Everywhere else in the paper, write about the method, not the recipe. Repeating the recipe values across abstract, intro, and method-claim makes the contribution sound like a specific tuning rather than a general technique.
+
+### The Substitution Pattern
+
+| Claim that over-binds to the recipe | Conceptual rewrite | Where the specific value lives |
+|---|---|---|
+| "`$MODEL` with our discovered prompt lifts accuracy from `$x` to `$y`." | "A frozen base model with the discovered prompt lifts accuracy from `$x` to `$y`." | §Setup: model choice |
+| "Our `K=$k` gated iteration discovers..." | "Our held-out-gated iteration discovers..." (define `$K` once in §Setup) | §Setup: `$K` value |
+| "Our `K=$k` train + held-out aggregates of `$a`, `$b`, `$c`..." | "Our train + held-out aggregates of `$a`, `$b`, `$c`..." | §Setup: `$K` and split definition |
+| "Trained on `$dataset_v3` data..." | "Trained on the `$task` task (the regime where the prior fails)..." | §Setup / appendix: dataset tag |
+| "We use `$MODEL` at `$reasoning_level` throughout." | "We use a frozen frontier model throughout (`$MODEL` at `$reasoning_level` — §Setup)." | §Setup: model + reasoning level |
+| "`$task`'s `$MODEL` row hits `$x`..." | "The `$task` reference saturates at `$x` under the frozen base model..." | §Setup / appendix: model row label |
+
+### Where the Specific Values Are Welcome
+
+The discipline only applies *outside* the experimental setup. Inside §Setup / §Implementation Details / §Experiments, the specific values are exactly what the reader is reading that section for. The same holds for ablation captions that explicitly contrast values (`"$K=k_1$ vs. $K=k_2$"`, `"$MODEL_A vs. $MODEL_B"`). Don't strip names from sections that exist to talk about names.
+
+### Reviewer-Side Test
+
+For each method-level claim, ask: *would the contribution still be interesting if the specific value changed?* If yes, abstract over the value. If no, the contribution is the recipe itself, and the paper should declare that explicitly — naming the specific value as the contribution rather than smuggling it into the framing.
+
+### Exceptions
+
+A model / parameter / dataset tag may legitimately appear in the main body in three narrow cases:
+
+1. **The contribution is about the specific artifact.** A paper whose contribution is "we evaluate `$MODEL` on `$BENCHMARK`" needs `$MODEL` in the framing.
+2. **The value is the headline result.** A specific number that is *the* result stays — the headline metric is not a recipe knob.
+3. **The framing claim is about robustness across a value.** "`$K=k_1$` vs. `$K=k_2$` ablation shows the method is insensitive to `$K`" legitimately uses both because the contrast is the point.
+
+### How to Audit a Draft
+
+A few mechanical passes:
+
+- Count appearances of every specific model name across abstract + introduction + method (not §Setup / §Experiments). More than two is a sign the framing is leaning on the model name; rewrite each occurrence to "the frozen base model" / equivalent and leave one definition pointer to §Setup.
+- Count appearances of every literal hyperparameter (`K=$k`, threshold values, evaluation caps) in claim sentences. Promote each repeat to its conceptual name; leave one literal mention in §Setup.
+- Read each method-claim sentence and substitute a different model name / value in your head. If the sentence breaks, the claim is over-bound — and is probably less general than the paper means to imply.
 
 ## Mathematical Writing
 
@@ -597,6 +667,8 @@ Do:
 - [ ] All key figures have self-contained captions.
 - [ ] No code identifiers, CLI flags, file paths, dotted metric keys, or internal dataset slugs remain in the main body; literal tokens live in an appendix table.
 - [ ] Every figure has been opened and visually inspected: no schematic box, arrow label, axis title, or in-image annotation contains a code-shaped identifier; figure captions follow the same rule.
+- [ ] No method-level claim is bound to a specific model name, hyperparameter value, or dataset tag outside §Setup / §Experiments; the recipe is defined once and referenced conceptually elsewhere.
+- [ ] The Introduction has exactly 2-4 contribution bullets — not five. Bullets that describe an experiment or a benchmark have been folded into §Experiments / §Setup.
 
 ### Technical
 
