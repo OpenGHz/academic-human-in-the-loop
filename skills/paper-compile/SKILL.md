@@ -191,10 +191,11 @@ for i, page in enumerate(pages):
 
 If Conclusion ends mid-page and References start on the same page, the main body is that page number (e.g., if both are on page 9, main body = ~8.5 pages, which is fine for a 9-page limit since it leaves room for the References header).
 
-If over limit:
-- Identify which sections are longest
-- Suggest specific cuts (move proofs to appendix, compress tables, tighten writing)
-- Report: "Main body is X pages (limit: MAX_PAGES). Suggestion: move [specific content] to appendix."
+If over limit, apply the ordered remediation in [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md). Don't paraphrase the steps here — the shared doc owns the protocol so all skills cut in the same order. Report the overflow as:
+
+> "Main body is X pages (limit: MAX_PAGES). Apply shared-references/page-shrink-heuristic.md — start at step 1 (compress conclusion) and stop as soon as the count drops to ≤ MAX_PAGES."
+
+If after step 5 the paper still overflows, surface `verdict: BLOCKED, reason_code: page_shrink_failed_under_constraints` to the user per the failure-mode section of the shared doc.
 
 ### Step 6.5: Stale File Detection
 
