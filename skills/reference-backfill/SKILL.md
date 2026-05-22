@@ -34,6 +34,13 @@ Skip this skill if the floor is already met — adding citations for the sake of
   - Experiments (per baseline) ≥ 1
 - **DBLP_BIBTEX = true** — Inherited from `/paper-write`. New entries must come from DBLP/CrossRef/arXiv real records; never LLM-generated bib.
 - **REAL_CITE_REQUIRED = true** — Every new bib entry MUST be referenced by at least one `\cite{}` in the body before this skill declares done. Bare bib entries don't count toward the floor and will be pruned by `--uncited`.
+- **PAPER_LIBRARY** — Local path(s) for paper retrieval. Resolution order (first non-empty wins):
+  1. `— paper-library: <path>` CLI override (comma-separated paths accepted).
+  2. `## Paper Library` section in `CLAUDE.md` (project- or user-level).
+  3. `papers/` or `literature/` under the paper directory.
+  4. None — skip the local phase entirely and go straight to web.
+- **SEARCH_STRATEGY = `local_first`** — Two-pass routing: pass 1 hits Zotero / Obsidian / local PDFs only; pass 2 hits the web only for topics where pass 1 returned fewer than `LOCAL_HITS_THRESHOLD` usable candidates. Override with `— strategy: web_only` (skip local) or `— strategy: parallel` (run both passes concurrently — faster but burns more web quota and risks redundant hits).
+- **LOCAL_HITS_THRESHOLD = `3`** — Per-topic minimum from the local pass before the web pass is skipped for that topic. Set per topic, not globally — a topic with 4 strong local hits skips the web; a sibling topic with 0 local hits still gets the web pass.
 
 ## Inputs
 
@@ -113,28 +120,74 @@ Eyeball the matches — the goal is **a sentence that is currently making an uns
 
 Record the (file, line, claim) triples in `plan.md` under "Citation magnets".
 
-### Phase 3: Search — Pick the Right Backend per Topic
+### Phase 3: Search — Local-First, Web for the Gaps
 
-Each topic gets routed to one or more of these search skills via the `Skill` tool. Pick by domain, not habit:
+Default strategy (`SEARCH_STRATEGY = local_first`) is a two-pass routing: **pass 1** exhausts the user's existing materials (Zotero, Obsidian, local PDFs); **pass 2** hits the web only for topics that pass 1 couldn't satisfy. Reason: papers the user already has on disk are almost always more relevant than fresh web hits — they were curated for a reason — and they cost nothing in quota or latency.
+
+Skip directly to pass 2 only if `— strategy: web_only` was passed or if `PAPER_LIBRARY` resolved to nothing AND no Zotero/Obsidian MCP is available.
+
+#### Pass 1 — Local sources (Zotero / Obsidian / on-disk PDFs)
+
+Drive this through `/research-lit` with `— sources: zotero, obsidian, local` (or the `comm-lit-review` equivalent for communications topics). These skills already handle the local plumbing — MCP availability detection, PDF text extraction, BibTeX export — so don't re-implement it here. Pass `PAPER_LIBRARY` explicitly so the search skill knows which directory to scan.
+
+**Pass 1 prompt template:**
+
+```
+Topic: <topic>
+Need: <deficit> candidate papers, ranked by relevance.
+Local only — skip web sources. Use Zotero, Obsidian, and local PDFs at:
+  <PAPER_LIBRARY>
+For each: title, venue, year, BibTeX key (if already in Zotero/local bib), AND a
+1-sentence summary of what the paper ACTUALLY argues (so we don't cite it for a
+claim it doesn't make).
+```
+
+Invoked via `Skill` tool with `args: <topic> — sources: zotero, obsidian, local — paper library: <PAPER_LIBRARY>`.
+
+**Why these candidates are especially valuable:** if a paper is already in Zotero, it likely already has a BibTeX key the user maintains — reuse that key instead of generating a new one (avoids `wrong_context` from author-name mismatches and keeps the user's bib ecosystem consistent). Annotations and Obsidian notes also tell you *how the user thinks about this paper*, which makes Phase 6 sentence rewrites much more accurate.
+
+Record per-topic results in `plan.md` as `local_hits`:
+
+```markdown
+- Topic: "cross-model review for hallucination detection"
+  - local_hits: 4 (3 from Zotero, 1 from papers/ dir)
+  - web pass needed: no (≥ LOCAL_HITS_THRESHOLD)
+```
+
+#### Pass 2 — Web sources (only for under-covered topics)
+
+For each topic where `local_hits < LOCAL_HITS_THRESHOLD`, run a web search. Route by domain — habit-pick is a common source of low-quality coverage:
 
 | Topic domain | Skill | Why |
 |---|---|---|
-| ML / NLP / CV / RL — generic | `/research-lit "<topic>"` | Default. arXiv + Semantic Scholar coverage, fast. |
-| Communications / wireless / networking / NTN / Wi-Fi / cellular / MAC/PHY | `/comm-lit-review "<topic>"` | Routes to IEEE Xplore / ScienceDirect / ACM DL first — much higher hit rate than arXiv-only sources. |
+| ML / NLP / CV / RL — generic | `/research-lit "<topic>" — sources: web` | arXiv + Semantic Scholar coverage, fast. |
+| Communications / wireless / networking / NTN / Wi-Fi / cellular / MAC/PHY | `/comm-lit-review "<topic>"` | Routes to IEEE Xplore / ScienceDirect / ACM DL first — much higher hit rate than arXiv-only sources for these fields. |
 | Citation graph, institutional affiliations, funding, recent works missing from arXiv | `/openalex "<topic>"` | OpenAlex covers a wider corpus than arXiv. |
-| Web-fresh / hard-to-find / cross-disciplinary | `/gemini-search "<topic>"` | Use as a backstop when the above leave the topic under-covered. |
+| Web-fresh / hard-to-find / cross-disciplinary | `/gemini-search "<topic>"` | Backstop when the above leave the topic under-covered. |
 | Single arXiv ID you want to vet before citing | `/alphaxiv <id>` | Single-paper deep-dive; NOT a discovery tool. |
 
-Run searches **in parallel** when topics are independent — multiple `Skill` calls in one message, not serial. For each topic, ask the search skill for ~5–10 candidates with title + venue + year + 1-line "what this paper actually argues" — that last field is what lets you avoid `wrong_context` citations.
+Run pass 2 searches **in parallel** when topics are independent — multiple `Skill` calls in one message, not serial.
 
-**Search prompt template** (passed as `args` to the search skill):
+**Pass 2 prompt template** (passed as `args`):
 
 ```
-Topic: <topic, e.g., "cross-model review for hallucination detection in LLM reasoning">
-Need: <N> candidate papers, ranked by relevance.
+Topic: <topic>
+Need: <deficit_for_this_topic> candidate papers, ranked by relevance.
 For each: title, venue, year, arXiv/DOI, AND a 1-sentence summary of what the paper ACTUALLY argues (so we don't cite it for a claim it doesn't make).
 Prefer: published versions over preprints; recent (last 3 years) where the field is active.
+Already-cited (skip these): <list keys already in our bib>
 ```
+
+The "already-cited" list is essential — otherwise the web pass keeps surfacing papers you already have, wasting candidates that don't lift the unique-key count.
+
+#### Strategy overrides
+
+| Flag | Behavior | When to use |
+|---|---|---|
+| `— strategy: local_first` (default) | Pass 1 then pass 2 only for gaps | Routine backfill; minimizes quota |
+| `— strategy: web_only` | Skip pass 1 | When the user explicitly wants fresh literature, or `PAPER_LIBRARY` is empty |
+| `— strategy: parallel` | Both passes concurrently | Time-critical (e.g., submission deadline) — accept the redundancy cost |
+| `— strategy: local_only` | Pass 1 only, fail the phase if deficit unmet | Air-gapped or no-web environments — surfaces explicitly that the user needs to expand their local library |
 
 ### Phase 4: Select Candidates (the gating step)
 
@@ -150,6 +203,8 @@ Keep the survivors. If after filtering you have fewer than the deficit, run more
 ### Phase 5: Fetch Real BibTeX
 
 For each surviving candidate, fetch the real entry from DBLP or CrossRef. **Never LLM-generate bib entries** — citation-audit will flag hallucinated authors/years.
+
+**Local-pass candidates** typically come pre-keyed (Zotero exports a BibTeX entry; on-disk PDFs often live next to a `.bib`). Reuse the existing key verbatim — making up a new key for a paper the user already maintains in Zotero creates two records for one paper and breaks downstream syncs. Only fall through to DBLP/CrossRef for candidates that **don't** already have a key in the user's ecosystem.
 
 ```bash
 # DBLP (preferred for CS venues)
@@ -257,7 +312,8 @@ This manifest is what `/citation-audit` and the improvement loop will consult la
 ## Key Rules
 
 - **Diagnose before searching.** Phase 1's density map tells you where to add. Without it, you're guessing.
-- **Searches run in parallel.** Multiple `Skill` calls in one message — independent topics shouldn't be serial.
+- **Local before web.** Pass 1 (Zotero / Obsidian / on-disk PDFs) runs first; pass 2 (web) runs only for topics under `LOCAL_HITS_THRESHOLD`. Local hits are higher quality (the user already curated them) and free.
+- **Searches run in parallel within a pass.** Multiple `Skill` calls in one message — independent topics shouldn't be serial.
 - **Every new bib entry needs a real `\cite{}` and a sentence that does work.** A citation that doesn't earn its place is worse than no citation.
 - **Re-verify the originating gate, not just the count.** Different gates have different decision tables (e.g., `citation-audit` blends count with `wrong_context` and `metadata_drift`).
 - **Idempotent.** Re-running this skill after a partial pass should pick up from the current state — read `MANIFEST.md` if it exists and skip work already done.
