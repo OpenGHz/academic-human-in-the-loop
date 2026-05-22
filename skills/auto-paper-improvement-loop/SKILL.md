@@ -192,6 +192,9 @@ Without a whitelist, the loop's reviewer-driven fix step is free to add citation
 
 1. **Compiled paper** — `paper/main.pdf` + LaTeX source files
 2. **All section `.tex` files** — concatenated for review prompt
+3. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — per-paper standing orders. Read at the top of **each round** (Round 1 and Round 2) before the fix-implementation step, so bullets that the user pinned mid-loop apply to the next round. Bullets in `## Hard don'ts` block fix proposals that violate them (e.g., a reviewer suggestion to move Theorem 1 to appendix is rejected if `## Hard don'ts` says "Do not move Theorem 1"); cite the bullet in `PAPER_IMPROVEMENT_LOG.md` when applying or overriding. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty; do not error.
+
+   **Reviewer independence**: do NOT pass `PAPER_PREFERENCES.md` contents to the GPT-5.5 reviewer sub-agent. The reviewer sees only the paper; preferences are author-side context that gates *which fixes get applied*, not what the reviewer sees. This is the same invariant as `— style-ref` (see Reviewer Independence Protocol).
 
 ## State Persistence (Compact Recovery)
 
@@ -311,6 +314,24 @@ Reply "go" to implement all fixes, give custom instructions, "skip 2" to skip sp
 ```
 
 Parse user response same as `/auto-review-loop`: approve / custom instructions / skip / stop.
+
+**Persistence prompt — when the user's reply contains general-for-this-paper feedback** (not just a one-off fix to a single sentence), propose pinning it to `PAPER_PREFERENCES.md` before proceeding. Heuristic: the user uses "always", "never", "in this paper", "every time", names a notation/terminology convention, or is correcting a recurring pattern.
+
+Example:
+
+> User reply: "go, but never use 'novel' — reviewer killed us on it last round, and π_θ is the policy not the agent"
+>
+> Agent: "Pinning two standing orders before proceeding. Proposing to append to PAPER_PREFERENCES.md:
+> ```
+> ## Style / tone
+> - Never use "novel" / "we propose a novel". Reason: prior reviewer flagged it. Replace with concrete verb (develop, design, introduce).
+>
+> ## Notation
+> - π_θ is the **policy**, not "model" or "agent". Keep terminology consistent throughout.
+> ```
+> Approve? (y / edit / skip — fixes proceed either way)"
+
+Show the diff; always ask before writing. See [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md) Write Protocol for when to propose vs. apply as one-off. Do NOT block fix-implementation on the preferences-append answer — proceed in parallel.
 
 ### Step 3: Implement Round 1 Fixes
 
@@ -508,7 +529,7 @@ If `/kill-argument` returns `verdict: NOT_APPLICABLE` (paper isn't theory- or sc
 
 ### Step 5b: Human Checkpoint (if enabled)
 
-**Skip if `HUMAN_CHECKPOINT = false`.** Same as Step 2b — present Round 2 review, wait for user input.
+**Skip if `HUMAN_CHECKPOINT = false`.** Same as Step 2b — present Round 2 review, wait for user input. Same persistence prompt applies: if the user's reply contains general-for-this-paper feedback, propose appending to `PAPER_PREFERENCES.md` before Round 2 fix-implementation.
 
 ### Step 6: Implement Round 2 Fixes
 

@@ -64,6 +64,7 @@ This skill resolves all data sources **from references inside NARRATIVE_REPORT.m
 |---|---|
 | `NARRATIVE_REPORT.md` § Figures | Authoritative figure / table spec: id, type, description, data-source hints, pattern hint |
 | `NARRATIVE_REPORT.md` body (Experiments, Claims) | Secondary source-path mentions when the Figures entry is terse (e.g. "Source: E01 results.md") |
+| `<paper-dir>/PAPER_PREFERENCES.md` (if present) | Per-paper standing orders. Read for `## Notation` (terminology in axis labels / legends) and `## Hard don'ts` (figure constraints). Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty. |
 | Any path referenced by the above | Read as-is — `.md`, `.json`, `.csv`, `.log`, directory listings, even template-style references |
 
 The skill does not assume `experiments/`, `raw_data/`, `results/`, or any other directory exists. If NARRATIVE points to `weird/path/x.parquet`, the skill reads that path.

@@ -50,6 +50,10 @@ Three mandatory inputs:
 2. **`— target-venue: <name>`** — one of: `iclr`, `icml`, `neurips`, `aaai`, `ijcai`, `colm`, `tmlr`, `uai`, or `other`. The skill expects venue style files at `<paper-base-dir>/templates/<venue>.{sty,tex,bst}` or in a recognized template directory. If `other`, the user passes `— target-style-dir: <path>`.
 3. **`— review-corpus: <path>`** — directory containing prior venue's reviewer reports as `.txt` or `.md` files (one per reviewer, ideally). If `--review-corpus` is omitted, the skill emits `BLOCKED` with `reason_code: missing_review_corpus` because the whole point of resubmit is absorbing those concerns.
 
+Per-paper standing orders:
+
+- **`<paper-base-dir>/PAPER_PREFERENCES.md`** (if present) — read at Phase 0 startup. Bullets in `## Hard don'ts` compose with the resubmit edit whitelist (Phase 2) — both are constraints the loop must honor. E.g., if Hard don'ts says "Do not move Theorem 1 to appendix" and a reviewer concern would push toward that move, halt and surface to the user. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty.
+
 Optional:
 
 - **`— reviewer-model: gpt-5.4`** — override the default reviewer (`gpt-5.6-sol`); use this for legacy reproducibility or to consume the older quota tier.
