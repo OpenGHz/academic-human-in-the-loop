@@ -424,16 +424,36 @@ Three narrow cases where a literal identifier may stay in the main body:
 2. **The paper's contribution is precisely a name or a key.** If you are proposing a new metric, the metric's name belongs in the main body.
 3. **A short, locally-defined symbol used once for clarity.** If you spell out the concept and then introduce a notation in parentheses (e.g. "the target end-effector pitch, denoted $\theta_p$"), the notation can be used freely afterwards. This is not the same as importing a code identifier — it is defining a paper-internal symbol.
 
+### Figures, Schematics, and In-Image Text Are Part of the Main Body
+
+The discipline above applies to every visible artifact, not just to prose. A reviewer who sees `additional_prompt entry in language_template.json` inside Figure 1 has been handed the same code-shaped identifier the main-body prose was supposed to suppress, and the figure is harder to undo because it is rendered, not typeset. Audit and rewrite the in-figure text the same way:
+
+- **Schematic boxes, arrow labels, and legends** — anything inside the figure that the reader can read — must use the conceptual term, not the code identifier. "task-keyed prompt template" inside the box, not the JSON path; "chain accuracy ≥ 0.85" on the gate arrow, not the dotted metric key; "evidence package" on the input arrow, not the column-name list.
+- **Heatmap / table column headers and row labels** — substitute the concept (e.g. `proprio` is fine as a modality name, but `target_euler_xyz_deg` is not — write "end-effector orientation"). Numeric cells stay as numbers.
+- **Source-of-truth pointers rendered inside the figure** ("rule from `raw_data/.../*.json` :: tasks.cabinet.additional\_prompt") belong in the caption or appendix, not in the figure itself.
+- **Caption copy** — captions are read with the figure, so the same substitution rules apply: no flag tokens, no dotted accessors, no project-internal slugs.
+
+When the literal identifier is essential for reproducibility — e.g. the exact column being read — put it in the appendix's concept-to-identifier table, then reference the concept in the figure and let the appendix carry the literal token.
+
+For Matplotlib / TikZ / draw.io figures the practical workflow is: (a) keep the source file alongside the rendered PDF in `figures/`, (b) edit the source to replace literal identifiers with conceptual labels, (c) re-render. For Codex-generated illustrations, the same edit happens in the regeneration prompt — explicitly enumerate the conceptual labels the figure should use and forbid the code identifiers.
+
 ### How to Audit a Draft
 
-A quick mechanical pass:
+A quick mechanical pass on the LaTeX sources:
 
 - grep the draft for `\texttt{...--...}` and any `--word` patterns — every hit is a command-line flag candidate for relocation,
 - grep for `\texttt{...}` blocks containing `.` (dotted accessors), `/` (paths), `_` followed by lowercase (likely a code identifier), and underscores between words — each is a candidate,
 - grep for filename suffixes (`.py`, `.json`, `.zarr`, `.csv`, `.md`) in the main body — relocate the path, keep the concept,
 - read the offending sentence aloud: if it sounds like a README, rewrite it as prose.
 
-A sentence the reader cannot parse without your codebase is a sentence the reader will skip.
+And a parallel pass on the figures themselves (the part grep cannot see):
+
+- open every figure PDF / PNG referenced from the main body and read every visible text label — schematic boxes, arrows, legends, axis titles, in-image annotations, footers,
+- for each label, ask the same substitution question as for prose: would a reviewer who has never seen the codebase parse this? If not, edit the figure source and re-render,
+- check the figure captions in the same pass — captions are prose and inherit every prose rule,
+- if the figure was rendered from a notebook or a generation prompt, fix the source so the next regeneration does not reintroduce the identifiers.
+
+A sentence the reader cannot parse without your codebase is a sentence the reader will skip. A figure label the reader cannot parse without your codebase is a figure the reader will mistrust.
 
 ## Mathematical Writing
 
@@ -542,6 +562,7 @@ Do:
 | Red-green color schemes | Switch to colorblind-safe palettes |
 | Titles inside figures | Move the title into the caption |
 | Captions that require the main text | Rewrite them to be self-contained |
+| Code identifiers, file paths, or CLI flags rendered inside the figure (schematic boxes, axis labels, in-image annotations) | Edit the figure source, rename labels to conceptual terms, re-render; relocate the literal token to an appendix table |
 
 ### Citation Mistakes
 
@@ -575,6 +596,7 @@ Do:
 - [ ] Unnecessary hedging has been removed.
 - [ ] All key figures have self-contained captions.
 - [ ] No code identifiers, CLI flags, file paths, dotted metric keys, or internal dataset slugs remain in the main body; literal tokens live in an appendix table.
+- [ ] Every figure has been opened and visually inspected: no schematic box, arrow label, axis title, or in-image annotation contains a code-shaped identifier; figure captions follow the same rule.
 
 ### Technical
 
