@@ -595,24 +595,36 @@ def run_codex_image(
                 final_message = candidate.strip()
                 break
         stderr_text = result.stderr.strip()
+        # Broadened fallback: ANY time Codex did not emit an imageGeneration
+        # item, try the REST path. Covers the explicit NATIVE_IMAGE_UNAVAILABLE
+        # sentinel AND the common case where the model returned text only
+        # (provider routes coding-model traffic on `responses` but exposes
+        # image generation only on the sibling `images/generations` endpoint).
+        debug_log(
+            "REST_FALLBACK triggered by empty image_items; "
+            f"final_message={final_message!r}"
+        )
+        fallback_payload, fallback_error = _try_rest_fallback(
+            prompt=prompt,
+            system=system,
+            output_path=output_path,
+            model=model,
+        )
+        if fallback_payload is not None:
+            return fallback_payload, None
         if final_message == "NATIVE_IMAGE_UNAVAILABLE":
-            fallback_payload, fallback_error = _try_rest_fallback(
-                prompt=prompt,
-                system=system,
-                output_path=output_path,
-                model=model,
-            )
-            if fallback_payload is not None:
-                return fallback_payload, None
             base_msg = "Codex app-server reported that native image generation is unavailable in this session."
             if fallback_error:
                 return None, f"{base_msg} REST fallback also failed: {fallback_error}"
             return None, base_msg
         if final_message:
-            return None, f"Codex did not emit an imageGeneration item. Final message: {final_message}"
+            base = f"Codex did not emit an imageGeneration item. Final message: {final_message}"
+            return None, f"{base} REST fallback also failed: {fallback_error}" if fallback_error else base
         if stderr_text:
-            return None, f"Codex did not emit an imageGeneration item. stderr: {stderr_text}"
-        return None, "Codex did not emit an imageGeneration item."
+            base = f"Codex did not emit an imageGeneration item. stderr: {stderr_text}"
+            return None, f"{base} REST fallback also failed: {fallback_error}" if fallback_error else base
+        base = "Codex did not emit an imageGeneration item."
+        return None, f"{base} REST fallback also failed: {fallback_error}" if fallback_error else base
 
     image_item = image_items[-1]
     generated_output, source_saved_path, revised_prompt, materialize_error = materialize_generated_image(
