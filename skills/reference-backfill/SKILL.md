@@ -119,6 +119,10 @@ Write a short plan to `paper/.aris/reference-backfill/plan.md`:
 
 ### Phase 2: Extract Load-Bearing Claims (Where Each Citation Will Land)
 
+Run **both** sub-phases below. Sub-phase 2a is the verb-magnet scan that catches generic unsupported claims; sub-phase 2b is the named-system scan that catches a higher-priority failure mode the verb scan misses.
+
+#### Sub-phase 2a — Verb-magnet scan (unsupported claims)
+
 For each target section, pull the sentences that **make a claim about prior work** but don't yet cite anything. These are the "citation magnets" — the legitimate spots a new reference can attach to.
 
 ```bash
@@ -129,7 +133,71 @@ grep -nE '\b(prior work|previous|existing|established|recent|standard|well[- ]kn
 
 Eyeball the matches — the goal is **a sentence that is currently making an unsupported empirical or attributive claim**. These are where new citations belong. If a section has no such sentences, adding citations there is filler — go back to Phase 1 and pick a different section, or rewrite the section to actually engage with prior work.
 
-Record the (file, line, claim) triples in `plan.md` under "Citation magnets".
+Record the (file, line, claim) triples in `plan.md` under "Citation magnets (verb scan)".
+
+#### Sub-phase 2b — Named-system scan (uncited proper-noun gaps — highest priority)
+
+Verb-magnet scanning misses a more reviewer-visible failure mode: a paper **names a specific model / benchmark / dataset / system** (e.g., `LLaMA-3-8B`, `GPT-4o`, `ResNet50`, `MuJoCo`, `MMLU`) and forgets the cite at first mention. These gaps are higher priority than verb-magnet gaps because:
+
+1. A proper noun is itself an attribution — naming the system asserts it exists and behaves as described, so the reader expects a pointer.
+2. Reviewers spot uncited named systems on the first read; verb-magnet omissions are forgivable, named-system omissions are not.
+3. Named systems are almost always comparators, baselines, datasets, or infrastructure — exactly the load-bearing contexts `/citation-audit` examines.
+
+**Detection — extract candidate names, then check whether each first mention has a co-located `\cite{}`:**
+
+```bash
+# Candidate name patterns: CamelCase-with-digit ("ResNet50"), hyphenated-versioned
+# ("LLaMA-3-8B", "GPT-4o", "T5-XXL"), and ALL-CAPS-acronyms-with-digits
+# ("BERT", "GLUE") that look like systems rather than units.
+grep -rhoE '\b([A-Z][A-Za-z]*[0-9]+[A-Za-z]*|[A-Z][A-Za-z]+(-[A-Z0-9][A-Za-z0-9.]*)+|[A-Z]{2,}-[A-Za-z0-9.-]+)\b' \
+    paper/sections/*.tex paper/main.tex \
+  | sort -u > /tmp/named_candidates.txt
+
+# Filter out obvious non-systems (venues, units, section labels). Keep
+# CoRL/ICLR/etc. on the deny-list; venue names should not be cited as systems.
+grep -vE '^(CoRL|ICLR|NeurIPS|ICML|CVPR|ICCV|ECCV|ICRA|IROS|JMLR|TPAMI|MIT|IEEE|ACM|USA|UK|GPU|CPU|RAM|SSD|RGB-D|6-DoF|3-D|2-D|H100|H200|A100|V100|H800)$' \
+    /tmp/named_candidates.txt > /tmp/named_systems.txt
+```
+
+For each candidate name, locate its first occurrence and check whether the same paragraph contains a `\cite{}` co-located with that token:
+
+```bash
+while read NAME; do
+  # Find every line where the name appears
+  HITS=$(grep -nE "\\b${NAME//./\\.}\\b" paper/sections/*.tex paper/main.tex)
+  [ -z "$HITS" ] && continue
+  FIRST_LINE=$(echo "$HITS" | head -1)
+  FILE=$(echo "$FIRST_LINE" | cut -d: -f1)
+  LINENO=$(echo "$FIRST_LINE" | cut -d: -f2)
+  # Look at a 2-line window around the first mention for a co-located \cite
+  WINDOW=$(sed -n "$((LINENO-1)),$((LINENO+1))p" "$FILE" 2>/dev/null)
+  if ! echo "$WINDOW" | grep -qE "${NAME//./\\.}[^.]*\\\\(cite|citep|citet)"; then
+    echo "GAP  $FILE:$LINENO  $NAME"
+  fi
+done < /tmp/named_systems.txt
+```
+
+Now triage every `GAP` line:
+
+- **Author's own system** (introduced via "our", "we propose", "this paper", a new acronym defined in the abstract). Drop — the paper is its own reference. Often shows up as the paper's own method name.
+- **Closed/anonymized frontier model with no canonical reference** (e.g., `GPT-4o`, internal proprietary variants). Document under `## Named systems with no public reference` in `plan.md` so future audits don't re-flag the gap. Common cases: closed OpenAI/Anthropic models, in-house variants under blind submission.
+- **Cited at a later mention but not the first** — fixable by moving or adding a `\cite{}` to the first mention; do not need a new bib entry.
+- **Uncited proper-noun gap** — promote to **the top of the search queue** in Phase 3. Search target is the system's tech report / model card / canonical paper (e.g., for a named LLM variant, look for the model's tech-report arXiv ID; for a simulator engine, look for its published paper; for a benchmark, look for the benchmark-introducing paper).
+
+Record the results in `plan.md` under a dedicated heading so they jump above verb-magnet topics:
+
+```markdown
+## Named-system citation gaps (highest priority)
+
+- **MyModel-Vision-7B** — sections/4_results.tex:12 introduces as "a recent multimodal foundation model run as a no-iteration reference"; uncited at first mention and at three later mentions. Search target: official tech report / model card.
+- **PhysSim** — sections/A_appendix.tex:35 names the simulator engine; uncited. Search target: simulator engine's published paper.
+
+## Named systems with no public reference (documented, not re-flagged)
+
+- **GPT-4o** — frontier closed model used as base VLM; OpenAI has not published a formal paper for this release. Cite the model card if one is publicly linked, else leave uncited and add a footnote stating the closed-model status.
+```
+
+**Why this sub-phase exists.** In one production run of this skill, sub-phase 2a surfaced 17 generic-verb gaps but a named comparator system — appearing in the introduction, main results setup, ablations, and appendix throughout the paper — was never flagged. The user caught it on review. Verb-magnet detection works on weakly-attributed prose; it does not work on prose where a named system *is itself* the attribution. The two scans are complementary, not redundant.
 
 ### Phase 3: Search — Local-First, Web for the Gaps
 
@@ -348,6 +416,7 @@ This manifest is what `/citation-audit` and the improvement loop will consult la
 - ❌ **Skipping Phase 8.** If you don't re-verify, the originating gate will just re-fire and you'll have churned the bib for nothing.
 - ❌ **Using `WebFetch` on `arxiv.org` / `dblp.org` / `crossref.org` / `openreview.net` in Phase 5.** It hits Anthropic-side domain safety verification and returns `Unable to verify if domain X is safe to fetch` — a server-side block that a local proxy cannot bypass. It also returns HTML prose, not structured BibTeX. Use `Bash` + `curl` against the API endpoints in Phase 5 instead. `WebFetch` is fine for arbitrary lab/blog/news URLs where you genuinely need an HTML page summarized, but it is the wrong tool for bib metadata.
 - ❌ **Citing the arXiv preprint when DBLP shows a published version.** DBLP's response often returns both records for the same paper (e.g., `conf/iclr/...` and `journals/corr/abs-XXXX.YYYYY`). Phase 4 mandates the published key; the preprint record only exists to confirm identity.
+- ❌ **Relying on verb-magnet detection alone to find gaps.** Verb-magnets ("prior work", "existing", "recent") miss the case where a paper *names* a system (a specific model variant, benchmark, simulator engine, or dataset) without citing it — a proper-noun *is* an attribution, and reviewers flag uncited named systems on the first read. Phase 2b (named-system scan) is mandatory, not optional; running only Phase 2a is how reviewer-visible gaps slip past this skill.
 
 ## Key Rules
 
