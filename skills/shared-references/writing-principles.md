@@ -14,6 +14,7 @@ This is the expanded English counterpart to the detailed Chinese version. It is 
 - [Sentence-Level Clarity](#sentence-level-clarity)
 - [Micro-Level Writing Tactics](#micro-level-writing-tactics)
 - [Word Choice and Precision](#word-choice-and-precision)
+- [Acronyms and Domain Shorthand: Expand at First Use](#acronyms-and-domain-shorthand-expand-at-first-use)
 - [Implementation Identifiers Stay Out of the Main Body](#implementation-identifiers-stay-out-of-the-main-body)
 - [Method-Level Claims Stay Above the Experimental Choices](#method-level-claims-stay-above-the-experimental-choices)
 - [Mathematical Writing](#mathematical-writing)
@@ -404,6 +405,59 @@ Stronger alternatives are often:
 
 This is not about mechanical substitution. It is about how wording changes a reviewer's intuition about whether the work is a real contribution.
 
+## Acronyms and Domain Shorthand: Expand at First Use
+
+Every acronym, initialism, or domain-internal shorthand must be expanded at its first occurrence in the paper, with the expansion in full first and the abbreviation following in parentheses. The expansion belongs at the *first* mention regardless of where that mention falls (Abstract, Introduction, Method, figure caption, table label). After that point the short form is fine. The rule applies even when the abbreviation feels universal inside the subfield: reviewers cross disciplines, and "obvious" varies.
+
+### What Counts as Needing Expansion
+
+- **Field acronyms** common in ML, vision, NLP, robotics, etc. — even ones that feel ubiquitous (`LLM`, `VLM`, `VLA`, `MLLM`, `VQA`, `RL`, `CNN`, `RNN`, `MLP`, `BLEU`, `IoU`, `mAP`). Expand once.
+- **Direction / orientation shorthand** specific to a domain (`CCW`, `CW`, `LHS`/`RHS`, `NE`/`SW`). Expand the first time it appears in prose; figure-internal one-letter labels can stay short *if* the caption defines them.
+- **Method and benchmark abbreviations** used in the paper's own framing (`SOTA`, `OOD`, `IID`, `KL`, `ELBO`). Expand once.
+- **Internal compound shorthand** the paper introduces itself ("the procedural-QA chain", "the chain-prompt prior") — define the phrase explicitly the first time, then reuse.
+- **Greek-letter or symbol shorthand** when it stands for a named quantity (`$\Delta$ accuracy`, `$\theta_p$`). Spell out what the symbol refers to at first use.
+
+### What Does Not Need Expansion
+
+- Universal symbols and math notation (`$x$`, `$f(\cdot)$`, `=`, `\arg\max`).
+- Standard units and SI prefixes (`ms`, `Hz`, `cm`, `GB`).
+- Dataset / model names that are themselves the proper noun (`ImageNet`, `COCO`, `MS-MARCO`, `Llama`, `GPT-4`) — these are names, not abbreviations of expandable phrases.
+- Common-English abbreviations (`e.g.`, `i.e.`, `etc.`, `vs.`).
+
+### The Substitution Pattern
+
+| First-use form to fix | Correct first-use form |
+|---|---|
+| "a frozen VLM does X" | "a frozen vision-language model (VLM) does X" |
+| "trained VLA stacks" | "trained vision-language-action (VLA) stacks" |
+| "VQA-style construction" | "visual-question-answering (VQA) construction" |
+| "MLLM planning" | "multimodal large language model (MLLM) planning" |
+| "[CCW, pull]" (no prior definition) | "counter-clockwise (CCW) ... [CCW, pull]" (define on first prose mention; reuse after) |
+| "$+0.47$ $\Delta$ chain accuracy" (no $\Delta$ definition) | "an increase ($\Delta$) of $+0.47$ in chain accuracy" |
+
+### Where Expansion Belongs
+
+- **Abstract**: expand the abbreviation that the abstract *uses*. Do not expand abbreviations the abstract does not need; that's noise.
+- **Introduction**: expand every abbreviation the intro uses, even if the abstract already expanded it (the reader may skim the abstract). Reviewers who jump straight to the intro should not face an undefined token.
+- **Method / Experiments**: if a new abbreviation is introduced here (e.g. an evaluation metric), expand it on its first appearance in this section.
+- **Figure captions and table notes**: captions are read independently of body text. Expand the first time an abbreviation appears *in a caption*, or define it in the caption with a one-line gloss. Do not assume the reader read the body first.
+- **Figure-internal labels** (axis tick labels, schematic boxes, legend entries) can stay short *only* when the caption defines them on the same page. A bare `CCW` on a chart with no caption gloss is a defect.
+
+### Exceptions (Rare)
+
+- The abbreviation is part of a proper-noun benchmark or model name (`BERT`, `T5`, `GPT-N`). The abbreviation *is* the name; do not invent a fake expansion.
+- The abbreviation has multiple competing expansions in the field and the paper deliberately stays neutral. In that case, footnote the choice and proceed.
+
+### How to Audit a Draft
+
+A two-pass check:
+
+1. **Mechanical grep.** Search the main body and figure files for runs of `[A-Z]{2,}` (two or more consecutive capitals). For each hit, locate the *first* occurrence in document reading order (abstract → intro → method → results → ablations → limitations → conclusion → captions → tables); verify the expansion is present. Hits that are part of a proper-noun model/dataset name or a standard unit are exempt.
+- A LaTeX-aware command: `grep -nE '\b[A-Z]{2,}\b' sections/*.tex figures/*.tex` and walk down the list.
+1. **Read aloud the first page.** Anything that sounds like an acronym you would need to recall from earlier ("VLA," "MLLM," "CCW") and is not expanded inline is a defect to fix.
+
+Maintain the expansion discipline incrementally: every time you introduce a new abbreviation in a draft, add the expansion at first use *immediately*. Acronym drift accumulates faster than any audit pass can catch.
+
 ## Implementation Identifiers Stay Out of the Main Body
 
 The main body is read by reviewers who do not have your codebase open. Code-shaped identifiers — variable names, CLI flags, environment-specific file paths, project-internal proper nouns, internal metric keys — leak implementation context into a venue that expects conceptual language. They cost the reviewer attention, they age badly (a renamed flag invalidates the prose), and they signal that the framing has not converged from "thing I built" to "thing the field should know about." Push all such identifiers to the appendix, supplementary code release, or footnote, and substitute the conceptual term in the main body.
@@ -689,6 +743,7 @@ Do:
 - [ ] No method-level claim is bound to a specific model name, hyperparameter value, or dataset tag outside §Setup / §Experiments; the recipe is defined once and referenced conceptually elsewhere.
 - [ ] The Introduction has 2-4 contribution bullets, not five. Bullets that describe an experiment or a benchmark have been folded into §Experiments / §Setup.
 - [ ] At most two em-dashes (`—`) in the entire main body (figure captions and table notes included). Hyphens and en-dashes are not counted.
+- [ ] Every acronym, initialism, and domain-shorthand token (e.g. `VLM`, `VLA`, `VQA`, `MLLM`, `LLM`, `CCW`, `CW`, `SOTA`, `OOD`) is expanded at its first occurrence in the paper (and at first occurrence in figure captions, which are read independently). Proper-noun model/dataset names are exempt.
 
 ### Technical
 
