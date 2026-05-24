@@ -66,22 +66,24 @@ Final-check implications:
 
 Planning implications:
 
+- **DESK-REJECT GATE — robotics focus is mandatory.** CoRL's CFP explicitly states: *"submissions should focus on a core robotics problem and demonstrate the relevance of proposed models, algorithms, datasets, and benchmarks to robotics. Submissions without a robotics focus will be returned without review."* This is a desk-reject filter applied before peer review — not a reviewer preference. The paper must (a) be motivated by a core robotics problem, and (b) explicitly demonstrate why the proposed method / dataset / benchmark matters *for robotics specifically*. Generic ML with a robot demo bolted on at the end does not pass this gate. **If the planned contribution is not clearly robotics-grounded, switch venues at plan time — do not try to repackage during writing.** Paper-plan should surface this risk early (e.g., as a `BLOCKED` precondition).
 - Use `\documentclass{article}` with `\usepackage{corl_2026}` (anonymous initial submission, double-blind by default). For camera-ready use `[final]`; for arXiv preprint use `[preprint]`.
 - Citation style is `natbib` (`\citep{}` / `\citet{}`). Bibliography style is auto-set to `corlabbrvnat` by the package — do NOT add a manual `\bibliographystyle{}`.
 - Abstract is **strictly 4-6 sentences in a single paragraph**. Gross violations are corrected at camera-ready.
 - `\keywords{...}` with 2-3 keywords is **mandatory**, placed immediately after the abstract.
 - **Page budget (initial submission): 8 pages main text.** Acknowledgments, References, and Appendix do NOT count. Camera-ready gets one extra page (9 pages main text) to accommodate review feedback.
-- **`\section{Limitations}` is MANDATORY** and counts toward the 8-page limit. It must explicitly cover limiting assumptions, failure modes, and how these could be addressed in future work. Reviewers may reject papers that omit it.
+- **`\section{Limitations}` is MANDATORY** and counts toward the 8-page limit. The CFP requires it to "explicitly describe limiting assumptions, failure modes, and other limitations of the results and experiments and how these might be addressed in the future." A single sentence does not satisfy this — plan a substantive paragraph (or two) addressing each axis explicitly. Reviewers may reject papers that omit it.
 - The Appendix is optional but, when present, should be at the end of the camera-ready PDF — NOT a separate supplementary file. Reviewers are not obligated to read the Appendix; put load-bearing claims in the main paper.
 - CoRL strongly encourages **enough detail in main paper + appendix to let future researchers reproduce the work** — hyperparameters, data, hardware setup, training procedure all explicit.
-- CoRL reviewers strongly prefer **real-robot experiments** or rigorous sim-to-real validation; sim-only work has a high bar and should justify the sim setup. Plan a multi-task or generalization story rather than single-task SOTA.
+- CoRL reviewers strongly prefer **real-robot experiments** or rigorous sim-to-real validation; sim-only work has a high bar and should justify the sim setup. Plan a multi-task or generalization story rather than single-task SOTA. (Note: this is the *experimental* form of the robotics-focus gate above — passing both gates is required.)
 - **Video supplementary is critical at CoRL** — reviewers expect demonstration videos. Plan a 2-3 minute video early in the writing phase, not as an afterthought. Use `/paper-video` to assemble + gate-check the video (250 MB / 180 s hard limits, h264 + faststart enforced).
 
 Final-check implications:
 
+- **Verify robotics-focus gate.** Confirm the paper's Title, Abstract, and Introduction all frame the contribution as a robotics problem (not "general method, applied to a robot"). The relevance of the proposed method / dataset / benchmark to robotics must be explicit in §1, not buried in §5. If the Abstract could be retitled for a non-robotics ML venue with no content changes, the gate is at risk — flag for the user before submission.
 - Verify abstract is 4-6 sentences and a single paragraph.
 - Verify `\keywords{}` is present and has 2-3 entries.
-- **Verify `\section{Limitations}` exists in the main paper and is substantive (not a sentence).**
+- **Verify `\section{Limitations}` exists in the main paper and is substantive** — must explicitly cover limiting **assumptions**, **failure modes**, and **future mitigations** (the three axes the CFP names). A one-sentence Limitations section fails this gate; flag it as `BLOCKED` rather than warning.
 - Confirm no manual `\bibliographystyle{}` is set (the corl_2026 package handles it).
 - Verify all citations use `\citep` / `\citet`, not `\cite`.
 - Initial submission: `corl_2026` loaded WITHOUT `[final]` / `[preprint]` (anonymous); page count of main text (Title through end of Conclusion or Limitations, whichever is last) ≤ 8.

@@ -17,6 +17,8 @@ This is the expanded English counterpart to the detailed Chinese version. It is 
 - [Acronyms and Domain Shorthand: Expand at First Use](#acronyms-and-domain-shorthand-expand-at-first-use)
 - [Implementation Identifiers Stay Out of the Main Body](#implementation-identifiers-stay-out-of-the-main-body)
 - [Method-Level Claims Stay Above the Experimental Choices](#method-level-claims-stay-above-the-experimental-choices)
+- [The Paper Is Not a Tech Report](#the-paper-is-not-a-tech-report)
+- [Hide Weaknesses: Limitations Are Framework-Level, Not Experiment-Defect Lists](#hide-weaknesses-limitations-are-framework-level-not-experiment-defect-lists)
 - [Mathematical Writing](#mathematical-writing)
 - [Figure Design](#figure-design)
 - [Common Mistakes](#common-mistakes)
@@ -597,6 +599,115 @@ A few mechanical passes:
 - Count appearances of every literal hyperparameter (`K=$k`, threshold values, evaluation caps) in claim sentences. Promote each repeat to its conceptual name; leave one literal mention in §Setup.
 - Read each method-claim sentence and substitute a different model name / value in your head. If the sentence breaks, the claim is over-bound — and is probably less general than the paper means to imply.
 
+## The Paper Is Not a Tech Report
+
+A paper presents a contribution; a tech report or project status document presents *the state of a body of work* (what has run, what has not, what was tried and dropped, what is queued for next quarter). The two have different readers and different success criteria. A reviewer reads a paper to evaluate a contribution against the field, not to track the team's experimental backlog. When status-report content leaks into the main body, the reviewer reads it as either an admission of incompleteness or a confession of unfocus — both push the paper toward rejection. Strip status-report content out, keep paper content in.
+
+### What Counts as Status-Report Content
+
+Move the following out of the main body — to the appendix only when the reproducibility audience genuinely needs it, otherwise delete entirely:
+
+- **Rerun queues and deferred work.** "Baseline X was not re-run on split Y" / "future revisions should run Z" / "matched W baselines are the next most important experiment" / "we plan to compare against V in the next revision." None of this is information the reviewer is meant to grade; all of it tells the reviewer the paper is not yet finished. If a comparison is missing, either (a) the missing comparison is genuinely out-of-scope and the framing should make that scope explicit, or (b) the comparison is in-scope and the paper is not ready to submit.
+- **Why-we-chose-these-tasks rationale.** A paragraph explaining the selection process — "we considered tasks A, B, C, then narrowed to X, Y, Z because of constraint Q" — is project journal, not paper content. The paper presents the tasks that *are* in the contribution; the selection narrative belongs in a tech report or a methods supplement.
+- **Intermediate-attempt narrative.** "We first tried approach P, found it failed because of R, then moved to S which also failed, finally arrived at T." The dropped attempts are not part of the contribution; presenting them invites the reviewer to grade the dropped attempts. Lead with T; let the discarded P / S live in an internal log, not in §Method.
+- **Deprecated experimental rows / superseded results.** Once an experimental row is dropped from the contribution (whether because the protocol changed, the row was flawed, or it was superseded by a stronger version), it stays dropped. The paper does not present the dropped row "for completeness" and does not footnote it as deprecated. A footnote that says "deprecated row $K$ shows $X$" tells the reviewer there *was* a row $K$ that someone (you) judged unfit to present, and now invites them to ask why.
+- **Internal milestone language.** "Round-2 prompt template", "v3 of the protocol", "the post-Q4 evaluation cap." Version stamps make sense in a changelog, not in a method section. Pick the version that is in the contribution and present it as *the* method.
+- **Pipeline status flags.** "This experiment is in progress" / "raw data archives are not yet local for $TASK$" / "the cluster scheduler is being migrated." Operational state is invisible to the reviewer and should stay that way.
+- **"Saturated reference" or "excluded from headline" callouts.** If a task or row is excluded from the headline, it is not in the headline; it should not be footnoted into the headline by another route. Including a row only to footnote it as "saturated" or "excluded" reintroduces the dropped content in a way the reviewer has to parse.
+
+### The Boundary Test
+
+For each paragraph in the main body, ask: *if a reviewer reads only this paragraph, does it describe the contribution, or the project that produced the contribution?* If it describes the project — what has been done, what is left, what was tried and abandoned, what the queue looks like — it does not belong in the main body. Either delete it, or relocate the genuinely reproducibility-relevant part (an exact invocation, a split definition, a code-release pointer) to an appendix where the reproducibility audience can find it.
+
+### What This Rule Does *Not* Mean
+
+This rule does not forbid honest scope statements, and it does not forbid an appendix. It targets a specific failure mode where status content leaks into framing prose. The following are still allowed:
+
+- **Scope declarations in framing.** "This paper targets $X$; head-to-head numbers against the $Y$ family are out of scope." That is a framing statement about what the contribution is *about*, not an admission that the comparison was queued and dropped.
+- **Reproducibility appendices.** Exact invocations, dataset slugs, split definitions, evaluation caps, model identifiers — these live in an appendix that the reproducibility audience opens. The main body should not duplicate them.
+- **A single Limitations section.** See the next principle for what belongs in Limitations and what does not.
+
+### The Substitution Pattern
+
+| Status-report sentence | Paper substitute | Where the literal info goes |
+|---|---|---|
+| "Held-out no-prompt baselines were not re-run; future revisions should rerun them." | (Delete. If the held-out result is weaker without the baseline, either compute it or rescope the claim.) | Internal status log, not the paper |
+| "Matched $TASK$ baselines are the most important next experiment." | (Delete. The framing should already say what is in scope.) | Internal status log, not the paper |
+| "We first tried approach $P$, then $S$, before arriving at $T$." | "We $T$." | Tech report / methods supplement |
+| "Deprecated row $K$ falls to $X$, entirely on chain $C$ (Appendix~$Z$)." | (Delete the row and the footnote. If the deprecation argument is itself the point, the surviving row should carry it without naming the deprecated one.) | Internal experimental log |
+| "Task $W$ saturates at $X$ and is excluded from the headline." | (Delete the row entirely. If it is excluded from the headline, it is not in the paper.) | Internal log; explicit scope statement in §Setup if the absence matters |
+| "Round-2 of the prompt template tightened the gate." | "The prompt template uses a held-out training-group gate at $T$." | (No relocation; pick the in-paper version and present it once) |
+| "Raw $DATASET$ archives are not yet local, so $BASELINE$ is deferred." | (Delete. Either run the baseline or scope it out explicitly.) | Status log |
+
+### How to Audit a Draft
+
+- Grep the body for status verbs: "not re-run", "deferred", "future revision", "next experiment", "is in progress", "to be done", "we plan to", "remains to be", "yet to". Each hit is a candidate.
+- Grep the body for deprecation markers: "deprecated", "superseded", "legacy", "row $K$" / "old setting", "earlier version". Each hit is a candidate.
+- Grep the body for selection narrative: "we first tried", "we initially", "we considered", "we narrowed". Each hit is a candidate.
+- Read every footnote in the main body. Footnotes that introduce a row only to flag it as excluded / saturated / deprecated should be deleted along with the row.
+
+A paper presents the contribution that exists. The contribution that does not yet exist is not part of the paper.
+
+## Hide Weaknesses: Limitations Are Framework-Level, Not Experiment-Defect Lists
+
+Most venues require a Limitations section. The required section is not a confession booth. Its purpose is to delimit the scope of the contribution — to tell the reviewer what claim the paper is making and what claim it is *not* making — so that the reviewer evaluates the contribution at its actual scope, not at an inflated one. A well-written Limitations section makes the contribution easier to accept, not easier to reject. A poorly written one enumerates every defect the authors are aware of and hands the reviewer a ready-made list of rejection reasons.
+
+The discipline is sometimes phrased as *藏拙*: hide what you cannot defend; foreground what you can. This is not dishonest framing. The reviewer is grading the contribution against the field's standard scope, not against the team's internal punch list. A scope declaration that says "this paper targets the narrow problem of $X$" is honest; an enumeration that says "we ran into defect $D_1$ on experiment $E_1$, defect $D_2$ on experiment $E_2$, and need to rerun $E_3$" is needlessly self-damaging and is not what the section is for.
+
+### What Belongs in Limitations
+
+Only two categories belong here:
+
+1. **Framework-intrinsic scope boundaries.** Constraints baked into the assumptions of the approach itself: what task structures the method assumes, what labels it requires at training time, what input modalities it depends on, what kind of generalization claim is in scope vs. out of scope. Examples (phrased as scope declarations, not defects): "the method assumes the procedural answer is readable from a one-line rule over the available signal class," "the training-time loop assumes ground-truth chain labels," "the contribution is demonstrated on a single robot embodiment and is not claimed to be platform-agnostic."
+
+2. **Whole-paper baseline coverage scoped as framing, not as defect.** If the contribution does *not* present head-to-head numbers against a competing family, state that as part of the scope of the contribution ("we contrast against same-backbone no-iteration rows; head-to-head numbers against the $Y$ family of methods are not the scope of this paper"). This frames the absence as a deliberate scope choice, not as an experimental task the team failed to complete.
+
+### What Does Not Belong in Limitations
+
+- **Per-experiment defects.** "Held-out no-prompt baseline on $g_2$ was not re-run." "Cabinet bottle held-out columns are iteration accuracies, not $\Delta$s." These are operational details. If the defect is real and material, fix it before submitting. If it is real but not material, do not mention it. If it is not real, do not mention it.
+- **Rerun queues.** "Future revisions should rerun $X$." Future revisions are not the reviewer's concern.
+- **"Most important next experiment" language.** This is roadmap, not limitation. It tells the reviewer that the experiment that *would* have closed the case is not in the paper.
+- **Internal admissions of incompleteness.** "Raw trajectory archives for $TASK$ are not local." "$BASELINE$ reproductions are deferred." Operational state.
+- **Cost / scale apologetics outside of framing.** "Our method requires $N$ rounds of iteration, which is expensive." Either the cost is in scope (state it once as a framing constraint with the actual number) or it is not (do not preemptively raise it).
+
+### The Reframe Pattern
+
+For each draft limitation, ask: *is this a scope of the framework, or is it a defect of an experiment in this paper?*
+
+| Draft sentence (defect-shaped) | Reframed (scope-shaped) | What changed |
+|---|---|---|
+| "Baseline $B$ was not re-run on split $S$; the held-out column is iteration accuracy, not $\Delta$." | (Either delete, or fold into §Setup: "Headline $\Delta$s are reported on training groups; held-out columns report iteration accuracy alone.") | Status fact moved to setup, no longer named as limitation |
+| "Head-to-head numbers against the $Y$ family are not run." | "The contribution contrasts against same-backbone no-iteration rows; positioning against the $Y$ family of methods is outside the scope of this paper." | Defect reframed as scope of the contribution |
+| "We did not evaluate on $PLATFORM_2$." | "The contribution is demonstrated on a single embodiment; cross-platform transfer is a question we do not claim to answer here." | Defect reframed as scope of the generalization claim |
+| "Matched $TASK$ baselines are the most important next experiments." | (Delete. If the matched baseline is genuinely missing in scope, address in scope statement above; if it is missing operationally, do not write the paper around it.) | Roadmap content removed entirely |
+| "Our method needs ground-truth chain labels in Stage 1; this is expensive and a limitation." | "The contribution is a supervised rule-discovery procedure: it requires ground-truth labels during training and is not claimed to apply in the label-free regime." | Cost-of-recipe reframed as framework scope |
+| "Cabinet held-out is only 15 episodes; this is small." | (Either remove and let the reader read $n$ in the table, or fold into §Setup. Calling out sample sizes in Limitations invites the reviewer to demand more.) | Operational detail moved to setup |
+
+### Sentence-Level Forbidden Phrases
+
+These phrasings are almost always a sign that the section has drifted toward tech-report territory; rewrite or delete:
+
+- "$X$ was not re-run."
+- "Future revisions should ..."
+- "The most important next experiment is ..."
+- "We plan to ..." / "is deferred until ..."
+- "$X$ remains to be evaluated."
+- "Deprecated row $K$ ..."
+- "$\dots$ this is small / weak / partial / not yet $\dots$"
+
+A Limitations section written entirely in scope-declaration sentences will tend not to use any of these.
+
+### Length and Tone
+
+A Limitations section at a conference venue is typically short — a single paragraph or two, on the order of 5-10 sentences. If it grows past that, it is almost certainly enumerating defects. Tone: factual and scope-oriented, not apologetic. "The contribution targets $X$" is the right shape; "we acknowledge that we did not $Y$" is the wrong shape.
+
+### How to Audit a Draft
+
+- Read the draft Limitations section aloud. If any sentence sounds like a project-status update — anything a reviewer could quote in the rejection writeup as "the authors themselves acknowledge that $X$ is missing" — rewrite or remove it.
+- Grep for the forbidden phrases above.
+- For each remaining sentence, classify it as (a) framework-scope declaration, (b) whole-paper coverage scope, or (c) other. Anything in (c) should be either reframed into (a)/(b) or removed.
+- Cross-check against the rest of the paper: if a section earlier in the body admits a defect (e.g., "matched baselines were not re-run on the held-out groups"), that admission is now hosted in the wrong place and should be deleted there too — operational facts go in §Setup, scope goes in §Limitations, neither belong in §Results prose.
+
 ## Mathematical Writing
 
 ### Core Principle
@@ -696,6 +807,8 @@ Do:
 | Hedging everywhere | Keep hedging only where uncertainty is real |
 | Code identifiers, CLI flags, file paths, internal slugs in the main body | Substitute the concept; relocate the literal token to an appendix table |
 | Em-dashes (`—`) scattered through the prose (more than two in the whole main body) | Replace with comma, colon, semicolon, or split sentence — see [Punctuation: Cap the Em-Dash](#punctuation-cap-the-em-dash) |
+| Status-report content in main body (deferred work, rerun queues, deprecated rows, why-we-chose-these-tasks narrative) | Delete from main body; relocate genuine reproducibility info to appendix — see [The Paper Is Not a Tech Report](#the-paper-is-not-a-tech-report) |
+| Limitations section enumerates per-experiment defects ("$X$ was not re-run", "matched $Y$ baselines are the next experiment") | Reframe as framework-scope declarations and whole-paper coverage scope — see [Hide Weaknesses](#hide-weaknesses-limitations-are-framework-level-not-experiment-defect-lists) |
 
 ### Figure Mistakes
 
@@ -744,6 +857,8 @@ Do:
 - [ ] The Introduction has 2-4 contribution bullets, not five. Bullets that describe an experiment or a benchmark have been folded into §Experiments / §Setup.
 - [ ] At most two em-dashes (`—`) in the entire main body (figure captions and table notes included). Hyphens and en-dashes are not counted.
 - [ ] Every acronym, initialism, and domain-shorthand token (e.g. `VLM`, `VLA`, `VQA`, `MLLM`, `LLM`, `CCW`, `CW`, `SOTA`, `OOD`) is expanded at its first occurrence in the paper (and at first occurrence in figure captions, which are read independently). Proper-noun model/dataset names are exempt.
+- [ ] No status-report content in the main body: no "$X$ was not re-run", no "future revisions should ...", no "the next most important experiment is ...", no "deprecated row $K$" footnotes, no "we first tried $P$ then $S$" selection narrative. Operational details live in §Setup or appendix; the contribution that does not yet exist is not in the paper.
+- [ ] Limitations section contains only (a) framework-intrinsic scope declarations (what the method assumes, what regime it targets, what generalization claim is in scope) and (b) whole-paper baseline coverage scoped as framing — *not* per-experiment defects, rerun queues, or "most important next experiment" language. Length is roughly 1-2 short paragraphs.
 
 ### Technical
 
