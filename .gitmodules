@@ -1,0 +1,3 @@
+[submodule "skills/embodied-ai-paper-writer"]
+	path = skills/embodied-ai-paper-writer
+	url = https://github.com/OpenGHz/embodied-ai-paper-writer.git
