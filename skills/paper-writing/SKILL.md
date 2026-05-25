@@ -52,6 +52,23 @@ Before Phase 1, resolve the effective venue **silently** using this priority:
 
 The only situation that warrants a confirmation prompt is an **explicit conflict** between the CLI arg and the NARRATIVE (e.g., user passes `— venue: NeurIPS` but NARRATIVE says CoRL 2026). In that case, ask once which to honor, then proceed.
 
+### Robotics / Embodied-AI routing
+
+After venue resolution, check whether this paper is a **robotics or embodied-AI** paper. Signals:
+
+- Resolved venue is `CORL`, or a robotics venue mentioned in NARRATIVE (RSS, ICRA, IROS, Science Robotics, Humanoids, ISRR, WAFR).
+- NARRATIVE_REPORT.md / topic mentions robot, manipulation, locomotion, navigation, sim2real, embodied agent, VLA / vision-language-action, real-robot experiments, teleoperation, dexterous grasping, mobile manipulation, etc.
+
+When the signal fires, **add `skills/embodied-ai-paper-writer/SKILL.md` as a writing-craft reference** that `paper-plan`, `paper-write`, `paper-figure`, and `auto-paper-improvement-loop` consult **in addition to** `shared-references/writing-principles.md`. The embodied-AI skill is a *coach* (vocabulary, sentence patterns, section construction, figure/table conventions distilled from 63 top robotics papers) — it does NOT replace `paper-write` (which is the LaTeX executor) or `paper-plan` (which is the outline producer). Read it as the domain-specific style guide.
+
+Print a one-line log:
+
+```
+🤖 Robotics/embodied-AI paper detected — adding skills/embodied-ai-paper-writer/SKILL.md to craft references
+```
+
+If the signal is ambiguous (e.g., venue is ICLR but the topic mentions "robot policy"), still add the reference — it never hurts to consult writing-craft guidance, and the user can ignore irrelevant sections. The cost is one extra read, not a workflow detour.
+
 ## Inputs
 
 This pipeline accepts one of:
