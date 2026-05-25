@@ -501,6 +501,48 @@ This skill never blocks by itself; `paper-writing` Phase 6 plus the
 verifier decide whether the verdict blocks finalization based on the
 `assurance` level.
 
+## Re-running After Writing-Level Edits
+
+After a writing-level pass on the paper (tightening prose, pluralizing
+a phrase, reordering paragraphs, etc.) the underlying `.tex` files change
+on disk and the `audited_input_hashes` recorded above go stale.
+`verify_paper_audits.sh` then reports `STALE` and the submission-level
+gate fails.
+
+If — and only if — the writing edit is **structurally invariant** under
+this audit (for citation-audit: no `\cite{...}` / `\citep{...}` /
+`\citet{...}` / `\citeauthor{...}` call site added or removed, no entry
+added to or removed from `references.bib`, no citation moved into a
+context category different from the one the audit verdicted), the hashes
+can be refreshed without re-running the reviewer. Use the batched helper
+rather than per-(file × JSON) Edit calls:
+
+```bash
+python3 tools/refresh_audit_hashes.py <paper-dir> \
+    sections/0_abstract.tex sections/2_related_work.tex
+# ...then:
+bash tools/verify_paper_audits.sh <paper-dir>
+```
+
+The helper updates the SHA-256 hex segments of matching keys across all
+four mandatory audit JSONs (`PROOF_AUDIT.json`, `PAPER_CLAIM_AUDIT.json`,
+`CITATION_AUDIT.json`, `KILL_ARGUMENT.json`) in a single pass while
+preserving every other byte (key ordering, indentation, any
+`hash_refresh_note_*` narrative blocks). Its full contract is in the
+script's module docstring.
+
+Hash refresh is **not** a substitute for re-running the audit when the
+edit could change the audit outcome. If the writing pass added/removed
+a citation, changed the context in which a cited work is described, or
+mutated `references.bib`, re-run the full audit instead.
+
+After refresh, append a one-line `hash_refresh_note_<date>[_vN]` field to
+the `details` block of this audit's JSON explaining why the refresh was
+safe — e.g. "Hashes refreshed 2026-05-25 after a writing-level
+pluralization pass; zero citation additions/removals; per-entry KEEP/FIX
+dispositions unchanged; references.bib hash unchanged." That note is the
+only record of why the hashes moved without a re-audit.
+
 ## See Also
 
 - `/paper-claim-audit` — sibling skill for numerical claim verification

@@ -435,3 +435,22 @@ After each `mcp__codex__codex` reviewer call, save the trace following `shared-r
 ## Notes
 
 This skill was extracted as a standalone primitive from `/auto-paper-improvement-loop` Step 5.5 in May 2026, after the protocol proved valuable in surfacing headline-vs-body scope gaps that score-based reviews missed.  The attack-then-defense pattern was kept exactly because of empirical evidence that asking one model to "write the rejection memo" produces qualitatively different feedback than asking it to "review and grade" — the former forces commitment, the latter encourages hedging.
+
+## Re-running After Writing-Level Edits
+
+After a writing-level pass on the paper (tightening prose, pluralizing a phrase, softening an overclaim that was the *position* the adjudicator already endorsed, etc.) the underlying `.tex` / `.pdf` files change on disk and the `audited_input_hashes` recorded in `KILL_ARGUMENT.json` go stale. `verify_paper_audits.sh` then reports `STALE` and the submission-level gate fails.
+
+If — and only if — the writing edit is **structurally invariant** under this audit (for kill-argument: no per-point verdict would flip — `answered_by_current_text` / `partially_answered` / `still_unresolved` — and no new attack surface is opened on a previously-resolved point), the hashes can be refreshed without re-running both Codex threads. Use the batched helper rather than per-(file × JSON) Edit calls:
+
+```bash
+python3 tools/refresh_audit_hashes.py <paper-dir> \
+    sections/0_abstract.tex sections/1_introduction.tex sections/7_conclusion.tex main.pdf
+# ...then:
+bash tools/verify_paper_audits.sh <paper-dir>
+```
+
+The helper updates the SHA-256 hex segments of matching keys across all four mandatory audit JSONs (`PROOF_AUDIT.json`, `PAPER_CLAIM_AUDIT.json`, `CITATION_AUDIT.json`, `KILL_ARGUMENT.json`) in a single pass while preserving every other byte (key ordering, indentation, any `hash_refresh_note_*` narrative blocks, the verbatim attack memo, per-point evidence). Its full contract is in the script's module docstring.
+
+Hash refresh is **not** a substitute for re-running the audit when the edit could change the kill-argument verdict. If the writing pass strengthened or weakened the headline scope, narrowed the title, added a new contribution claim the original attack did not address, or otherwise moved the paper across a per-point boundary, re-run the full skill (both fresh threads) instead.
+
+After refresh, append a one-line `hash_refresh_note_<date>[_vN]` field at the top level of this audit's JSON explaining why the refresh was safe — e.g. "Hashes refreshed 2026-05-25 after a writing-level pluralization pass; P_6 (headline scope) unaffected; P_5 (supervised baselines) further reinforced; per-point verdicts and counts unchanged." That note is the only record of why the hashes moved without a re-audit and is required by the `paper-writing` Phase 6 audit-trail expectations.
