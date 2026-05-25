@@ -346,3 +346,44 @@ The JSON is authoritative for `verify_paper_audits.sh`; the Markdown
 is for humans. The parent skill (`paper-writing` Phase 6) plus the verifier
 decide whether the verdict blocks finalization — this skill itself never
 blocks; it only emits.
+
+## Re-running After Writing-Level Edits
+
+After a writing-level pass on the paper (tightening prose, pluralizing
+a phrase, rewording a citation context, etc.) the underlying `.tex` / `.pdf`
+files change on disk and the `audited_input_hashes` recorded above go stale.
+`verify_paper_audits.sh` then reports `STALE` and the submission-level gate
+fails.
+
+If — and only if — the writing edit is **structurally invariant** under this
+audit (for paper-claim-audit: no numerical claim added, removed, or changed;
+all numerator/denominator values, CI bounds, and constants like K, n, gate
+threshold preserved), the hashes can be refreshed without re-running the
+reviewer. Use the batched helper rather than per-(file × JSON) Edit calls:
+
+```bash
+python3 tools/refresh_audit_hashes.py <paper-dir> \
+    sections/0_abstract.tex sections/4_main_results.tex main.pdf
+# ...then:
+bash tools/verify_paper_audits.sh <paper-dir>
+```
+
+The helper updates the SHA-256 hex segments of matching keys across all
+four mandatory audit JSONs (`PROOF_AUDIT.json`, `PAPER_CLAIM_AUDIT.json`,
+`CITATION_AUDIT.json`, `KILL_ARGUMENT.json`) in a single pass while
+preserving every other byte (key ordering, indentation, any
+`hash_refresh_note_*` narrative blocks). Its full contract is in the
+script's module docstring.
+
+Hash refresh is **not** a substitute for re-running the audit when the
+edit could change the audit outcome. If the writing pass touched any
+numerical claim, citation set, theorem environment, or other artifact
+this audit verdicts on, re-run the full audit instead.
+
+After refresh, append a one-line `hash_refresh_note_<date>[_vN]` field to
+the `details` block of this audit's JSON (and to any other audit JSONs
+that need the narrative) explaining why the refresh was safe — e.g.
+"Hashes refreshed 2026-05-25 after a writing-level pluralization pass;
+zero numerical-claim changes; verdict unchanged." That note is the only
+record of why the hashes moved without a re-audit and is required by
+the `paper-writing` Phase 6 audit-trail expectations.

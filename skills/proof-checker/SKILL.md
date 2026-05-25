@@ -854,6 +854,43 @@ This skill never blocks by itself; `paper-writing` Phase 6 plus the
 verifier decide whether the verdict blocks finalization based on the
 `assurance` level.
 
+## Re-running After Writing-Level Edits
+
+When the paper is edited *after* this audit was generated, `verify_paper_audits.sh` will mark `PROOF_AUDIT.json` as `STALE` because the recorded `audited_input_hashes` no longer match the live `.tex` files. Two distinct response paths exist; pick the right one.
+
+### When you may refresh hashes in-place (do NOT re-run the audit)
+
+If, and only if, the edit is structurally inert with respect to proof obligations:
+
+- No `\begin{theorem|lemma|proposition|corollary|proof}` environment added or removed
+- No theorem / lemma / proposition / corollary statement reworded in a way that could change a proof obligation (variable scope, quantifier order, assumption set, regime)
+- No new claim about a constant, asymptotic rate, or dependence parameter
+- No new invocation of an external lemma, concentration result, or generic-position argument
+- Bibliography (`references.bib`) untouched, since proof-checker relies on cited results
+
+Then it is safe to refresh the recorded hashes without re-spawning the reviewer thread. Use the batched helper:
+
+```bash
+python3 .aris/tools/refresh_audit_hashes.py <paper-dir> \
+  sections/<edited_1>.tex sections/<edited_2>.tex main.pdf
+```
+
+The helper updates every `sha256:<hex>` entry for the listed paper-relative paths across all four audit JSONs (`PROOF_AUDIT.json`, `PAPER_CLAIM_AUDIT.json`, `CITATION_AUDIT.json`, `KILL_ARGUMENT.json`) in a single pass, preserving the JSON byte-for-byte except for the hex segments. It exits non-zero if a listed file is referenced in zero audit JSONs (typo guard).
+
+Then append a one-line narrative note to `PROOF_AUDIT.json`'s `details` block at the top level (not inside `per_obligation`) so the audit trail records *why* the refresh was safe:
+
+```json
+"hash_refresh_note_<YYYY_MM_DD>[_vN]": "Hashes refreshed <date> after a writing-level pass touching <sections>. Verified: zero theorem/lemma/proposition/corollary/proof environments added or removed; zero theorem-statement rewordings affecting proof obligations; no new constants, asymptotic claims, or external lemma invocations. PASS/NOT_APPLICABLE verdict structurally invariant."
+```
+
+### When you must re-run the full audit
+
+If the edit changed *anything* on the bullet list above — including a single reworded hypothesis, a renamed constant, or a new lemma citation — refresh-in-place is unsound. Re-spawn a fresh `mcp__codex__codex` Phase 1 thread per the standard workflow and regenerate `PROOF_AUDIT.json` from scratch. Do not paste the prior verdict into the new thread's prompt; reviewer independence requires zero prior context.
+
+### Why this matters
+
+A hash refresh marks the audit "fresh" to the verifier without re-running the reviewer. That is the right call for cosmetic edits (pluralization, citation reformatting, narrative reshuffling) and the wrong call for anything that could move a proof obligation. When in doubt, re-run.
+
 ## Example Invocations
 
 ```
