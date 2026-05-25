@@ -117,6 +117,7 @@ Prefer a compact five-part abstract:
 - Be understandable without the main text.
 - Avoid undefined acronyms.
 - Avoid depending on citations to explain itself.
+- **Use zero em-dashes (`—` / `---`).** The body of the paper allows up to two; the abstract allows none. See [Punctuation: Cap the Em-Dash](#punctuation-cap-the-em-dash) for the reasoning and the grep check.
 
 ### A Good Abstract Sketch
 
@@ -338,7 +339,7 @@ Do not bury the key sentence in the middle.
 
 ### Punctuation: Cap the Em-Dash
 
-**Hard cap: at most two em-dashes (`—`) in the entire main body.** Em-dashes are aesthetically tempting and grammatically permissive, so drafts accumulate them quickly: a parenthetical mid-clause, an emphatic appositive, a trailing afterthought, a clause break that "feels right." A reader who hits the third em-dash starts noticing the punctuation instead of the content, and the prose acquires a recognizable AI-shaped rhythm.
+**Hard cap: at most two em-dashes (`—`) in the entire main body, and ZERO in the abstract.** Em-dashes are aesthetically tempting and grammatically permissive, so drafts accumulate them quickly: a parenthetical mid-clause, an emphatic appositive, a trailing afterthought, a clause break that "feels right." A reader who hits the third em-dash starts noticing the punctuation instead of the content, and the prose acquires a recognizable AI-shaped rhythm. The abstract gets a stricter rule because it is read first, often in isolation (search results, OpenReview tiles, social previews), so any AI-tell there does disproportionate damage to first impression.
 
 The cap forces a real edit. For each em-dash, pick the right replacement based on what the em-dash was doing:
 
@@ -350,9 +351,17 @@ The cap forces a real edit. For each em-dash, pick the right replacement based o
 | Trailing emphasis / afterthought | Colon, or just delete the dash and let the sentence end |
 | List-item gloss (`item — explanation`) | Colon, or restructure the list with explicit bullets |
 
-After the substitution pass, count remaining em-dashes across abstract + main body. If more than two remain, keep editing. The same applies to figure captions and table notes — captions are prose.
+After the substitution pass, count em-dashes in **two separate buckets**: (a) the abstract — must be exactly **0**; (b) main body — must be **≤ 2**. If either bucket fails, keep editing. The same body cap applies to figure captions and table notes — captions are prose. Final-check skills (`/paper-write` Step 8, `/paper-compile` Step 5, `/auto-paper-improvement-loop` Step 8) should grep the abstract explicitly:
 
-This rule does *not* target hyphens (`-`, in compounds like `state-of-the-art`) or en-dashes (`–`, in numeric ranges like `5–10`). Only the long em-dash (`—`) is capped.
+```bash
+# Extract abstract block and count em-dashes — must be 0.
+awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex \
+  | grep -oE "—|---" | wc -l
+```
+
+A non-zero count is a `BLOCKED` gate, not a warning: surface the offending sentences to the user before declaring write complete.
+
+This rule does *not* target hyphens (`-`, in compounds like `state-of-the-art`) or en-dashes (`–`, in numeric ranges like `5–10`). Only the long em-dash (`—`) is capped. **Note**: LaTeX `---` renders as an em-dash; the grep above catches both the Unicode `—` and the LaTeX `---` source form.
 
 ## Word Choice and Precision
 
