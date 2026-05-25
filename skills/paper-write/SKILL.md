@@ -589,6 +589,13 @@ Before declaring done:
 - [ ] No TODO/FIXME/XXX markers left in the text
 - [ ] No `[VERIFY]` markers left unchecked
 - [ ] Abstract is self-contained (understandable without reading the paper)
+- [ ] **Abstract contains ZERO em-dashes** (`—` / `---`) — hard gate, see [`../shared-references/writing-principles.md`](../shared-references/writing-principles.md) §Punctuation. Run:
+  ```bash
+  awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex \
+    | grep -oE "—|---" | wc -l
+  ```
+  Non-zero count blocks completion; surface offending sentences and rewrite.
+- [ ] Main-body em-dash count ≤ 2 (same reference)
 - [ ] Title is specific and informative (not generic)
 - [ ] Related work is ≥1 full page
 - [ ] references.bib contains ONLY cited entries (no bloat)
