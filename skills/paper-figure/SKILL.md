@@ -111,6 +111,14 @@ Use this decision tree for data-driven figures (inspired by Imbad0202/academic-r
 | Multi-dataset results | Multi-panel (subfigure) | 0.95\textwidth |
 | Prior work comparison | LaTeX table | — |
 
+**DEDUP GATE (mandatory before generating any figure):**
+
+Before generating a figure, check whether a LaTeX table already exists (or is planned) for the same dataset. If yes, do NOT generate the figure — the table is sufficient. A single dataset must appear in exactly ONE of {figure, table} in the main body.
+
+- **Generate a table (not a figure)** when: exact fractions matter, few conditions (≤5×5), downstream tables reference these numbers, or per-condition annotations are needed.
+- **Generate a figure (not a table)** when: the visual pattern (trend, shape, non-monotonicity) IS the claim and cannot be conveyed by a table alone.
+- **Never generate both** for the same data at the same granularity. If the paper plan lists both a figure and a table for the same dataset, flag the conflict and pick one.
+
 ### Step 4: Generate Each Figure
 
 For each figure in the plan, create a standalone Python script:
