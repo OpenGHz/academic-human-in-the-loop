@@ -29,6 +29,7 @@ Use this loop when the paper is content-stable but the prose needs tightening �
 | Inline user feedback? | optional `HUMAN_CHECKPOINT` per round | always — after auto-applied overlap |
 | EDIT_WHITELIST / MIN_REFERENCES | enforced | out of scope (craft-only edits) |
 | codex-reply allowed? | only when `REVIEWER_BIAS_GUARD = false` | **never** (fresh thread only) |
+| Claude × Codex execution | sequential (review → fix → recompile) | **parallel** (Steps 1 & 2 run concurrently via background Agent) |
 
 If you want both content AND writing polish, run `/auto-paper-improvement-loop` first, then this skill at the end for a final craft pass.
 
@@ -53,28 +54,42 @@ If `skills/embodied-ai-paper-writer/SKILL.md` cannot be resolved (e.g., the subm
 
 ## Workflow
 
-### Step 0: Preserve Original
+### Step 0: Preserve Original & Resolve Craft Manual
 
 ```bash
 PAPER_DIR="$1"  # parsed from $ARGUMENTS
 cp "$PAPER_DIR/main.pdf" "$PAPER_DIR/main_polish_before.pdf"
 ```
 
-Verify the submodule is present:
+**Resolve `embodied-ai-paper-writer/SKILL.md` via the canonical chain** (see [`../shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2). Do NOT `find` the whole filesystem — it is slow and ambiguous.
 
 ```bash
-if [ ! -f skills/embodied-ai-paper-writer/SKILL.md ]; then
-  echo "ERROR: skills/embodied-ai-paper-writer/SKILL.md not found." >&2
-  echo "       Run: git submodule update --init skills/embodied-ai-paper-writer" >&2
-  exit 1
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null) || true
 fi
+EAPW=".aris/skills/embodied-ai-paper-writer/SKILL.md"
+[ -f "$EAPW" ] || EAPW="skills/embodied-ai-paper-writer/SKILL.md"
+[ -f "$EAPW" ] || { [ -n "${ARIS_REPO:-}" ] && EAPW="$ARIS_REPO/skills/embodied-ai-paper-writer/SKILL.md"; }
+[ -f "$EAPW" ] || {
+  echo "ERROR: embodied-ai-paper-writer/SKILL.md not resolved." >&2
+  echo "       Tried: .aris/skills/, ./skills/, \$ARIS_REPO/skills/." >&2
+  echo "       Fix: rerun bash tools/install_aris.sh, export ARIS_REPO," >&2
+  echo "       or run: git submodule update --init skills/embodied-ai-paper-writer" >&2
+  exit 1
+}
+EAPW_DIR=$(dirname "$EAPW")           # e.g. /home/.../agents-a3c65d4a4e/skills/embodied-ai-paper-writer
+EAPW_REFS="$EAPW_DIR/references"      # playbook directory — pass to both Claude and Codex
+echo "Craft manual resolved: $EAPW"
 ```
+
+Both Claude and Codex will be told to read `$EAPW` (the SKILL.md) plus 1-3 files from `$EAPW_REFS/` (the playbooks). Pass these absolute paths into the Codex prompt — never assume Codex's CWD matches Claude's.
 
 Write initial state:
 
 ```json
 {
-  "phase": "collecting_claude_suggestions",
+  "phase": "collecting_suggestions_parallel",
   "paper_dir": "<paper-dir>",
   "suggestions_per_side": 5,
   "status": "in_progress",
@@ -82,15 +97,27 @@ Write initial state:
 }
 ```
 
-### Step 1: Claude Produces Top-5
+### Steps 1 & 2: Claude and Codex Run in Parallel
 
-Claude reads in this order:
+**These two steps run concurrently — kick off Codex first as a background Agent, then do Claude's analysis while Codex thinks.** Codex (gpt-5.5 xhigh) is the long pole (typically minutes); Claude's own pass should not idle waiting.
 
-1. `skills/embodied-ai-paper-writer/SKILL.md` (full).
-2. The problem-routing table at the top of that SKILL.md → identify 1-3 relevant `references/*.md` playbook files for the paper's needs → load them.
-3. `<paper-dir>/PAPER_PREFERENCES.md` (if present).
-4. All `<paper-dir>/sections/*.tex` files.
-5. The compiled PDF at `<paper-dir>/main.pdf` (for figure/table visual cues).
+**Mechanism: spawn an Agent with `run_in_background: true` that wraps the `mcp__codex__codex` call.** The Agent returns Codex's JSON output to a file. Claude continues to Step 1 (its own analysis) immediately. When the Agent completes, Claude is notified automatically (do not poll, do not sleep) and proceeds to Step 3.
+
+In the same message, issue both:
+
+1. `Agent(subagent_type=general-purpose, run_in_background=true, ...)` — wraps the Codex call (see Step 2 below for the full prompt).
+2. `Read` tool calls for the inputs Claude needs (paper sections, `$EAPW` SKILL.md, 1-3 playbooks from `$EAPW_REFS/`, `<paper-dir>/PAPER_PREFERENCES.md`).
+
+Update state to `phase: collecting_suggestions_parallel`.
+
+#### Step 1: Claude Produces Top-5 (foreground, while Codex runs)
+
+After the Reads return in the same batch, Claude analyzes (no extra tool calls needed — pure reasoning over what was read):
+
+1. The problem-routing table at the top of `$EAPW` → identifies 1-3 relevant playbook files for the paper's needs → already loaded via the parallel Reads above.
+2. `<paper-dir>/PAPER_PREFERENCES.md` (if present).
+3. All `<paper-dir>/sections/*.tex` files.
+4. The compiled PDF at `<paper-dir>/main.pdf` (for figure/table visual cues — Read the PDF directly).
 
 Then Claude produces exactly `SUGGESTIONS_PER_SIDE` suggestions in this JSON schema. Write to `<paper-dir>/.polish/claude_suggestions.json`:
 
@@ -118,17 +145,15 @@ Rules for Claude's suggestions:
 - **Evidence quote must be verbatim** from the paper (Claude must be able to grep-find it).
 - **Respect `## Hard don'ts`** — if a hard-don't blocks the only suggestion Claude was going to make for a section, pick a different section.
 
-Update state to `phase: collecting_codex_suggestions`.
+#### Step 2: Codex Produces Top-5 (background Agent, fresh thread)
 
-### Step 2: Codex Produces Top-5 (Fresh Thread)
-
-Invoke `mcp__codex__codex` (never `codex-reply` — fresh thread always):
+The Agent spawned in the parallel kickoff invokes `mcp__codex__codex` (never `codex-reply` — fresh thread always):
 
 ```
 mcp__codex__codex:
   model: gpt-5.5
   config: {"model_reasoning_effort": "xhigh"}
-  cwd: <absolute path to repo root>
+  cwd: <absolute path to repo root where $EAPW was resolved>
   prompt: |
     You are a professional embodied-AI paper writing coach, distilled from
     63 top robotics papers (CoRL, RSS, ICRA, IROS, Science Robotics, 2022-2026).
@@ -137,13 +162,13 @@ mcp__codex__codex:
 
     ## Read these files first (in this order, before drafting suggestions)
 
-    1. skills/embodied-ai-paper-writer/SKILL.md — your craft manual.
+    1. <ABSOLUTE_EAPW_PATH> — your craft manual (skills/embodied-ai-paper-writer/SKILL.md).
        Follow its problem-routing table at the top. Based on the paper's
-       sections, load the 1-3 most relevant references/*.md playbook files
-       (e.g., abstract-intro-playbook.md, method-relatedwork-playbook.md,
-       experiments-results-playbook.md, figures-tables-playbook.md,
-       closing-appendix-playbook.md, flow-transitions.md,
-       language-phrasebank.md, titles.md).
+       sections, load the 1-3 most relevant playbook files from
+       <ABSOLUTE_EAPW_REFS_DIR>/ (e.g., abstract-intro-playbook.md,
+       method-relatedwork-playbook.md, experiments-results-playbook.md,
+       figures-tables-playbook.md, closing-appendix-playbook.md,
+       flow-transitions.md, language-phrasebank.md, titles.md).
 
     2. <PAPER_DIR>/PAPER_PREFERENCES.md — author's standing orders.
        Respect every bullet in ## Hard don'ts, ## Notation, ## Style / tone,
@@ -201,13 +226,15 @@ mcp__codex__codex:
     - Rank by priority HIGH > MEDIUM > LOW within the list.
 ```
 
-Substitute `{SUGGESTIONS_PER_SIDE}` and `<PAPER_DIR>` with actual values before sending. Save the returned threadId only for state-file bookkeeping; do not use it for any continuation.
+Substitute `{SUGGESTIONS_PER_SIDE}`, `<ABSOLUTE_EAPW_PATH>`, `<ABSOLUTE_EAPW_REFS_DIR>`, and `<PAPER_DIR>` with the values resolved in Step 0 before sending. Save the returned threadId only for state-file bookkeeping; do not use it for any continuation.
 
-Parse Codex's JSON output (strip any surrounding fences if present). Write to `<paper-dir>/.polish/codex_suggestions.json`.
+#### Step 1+2 join: wait for the background Agent, then parse Codex
+
+When the background Agent completes, you will be notified (do not poll, do not sleep). Read the Agent's output file to get Codex's JSON. Parse it (strip any surrounding fences if present) and write to `<paper-dir>/.polish/codex_suggestions.json`.
 
 If Codex's output is malformed (not parseable as JSON, missing required fields, fewer than `SUGGESTIONS_PER_SIDE` entries), surface the raw output to the user and ask for a re-run rather than guessing — do NOT fabricate suggestions to fill the gap.
 
-Update state to `phase: detecting_overlap`.
+By this point Claude's Step 1 JSON should also already be on disk. Update state to `phase: detecting_overlap`.
 
 ### Step 3: Overlap Detection (Claude)
 
@@ -391,7 +418,7 @@ Report to user:
 
 ```json
 {
-  "phase": "collecting_claude_suggestions" | "collecting_codex_suggestions" | "detecting_overlap" | "auto_applying_overlap" | "awaiting_user" | "applying_user_fixes" | "recompiling" | "done",
+  "phase": "collecting_suggestions_parallel" | "detecting_overlap" | "auto_applying_overlap" | "awaiting_user" | "applying_user_fixes" | "recompiling" | "done",
   "paper_dir": "<paper-dir>",
   "suggestions_per_side": 5,
   "claude_suggestions_path": "<paper-dir>/.polish/claude_suggestions.json",
