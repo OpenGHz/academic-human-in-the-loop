@@ -42,6 +42,7 @@ Use this loop when the paper is content-stable but the prose needs tightening �
 | codex-reply allowed? | only when `REVIEWER_BIAS_GUARD = false` | **never** (fresh thread only) |
 | Claude × Codex execution | sequential (review → fix → recompile) | **parallel** every phase, every section (background Agent) |
 | Editor (who applies fixes to `.tex`) | always Claude | **Claude by default; switchable to Codex per CLI flag or per checkpoint batch** (`— editor: codex` at start, or `codex go` / `codex 1 3 5` reply at a checkpoint) |
+| Iteration self-awareness | none — each round is independent | **Phase 3 includes a self-review step**: compares Phase 3 issues against Phase 1's applied items, classifies as `regression` / `new_introduced` / `genuine_new`, surfaces `SELF_REVIEW.md` + banner. Strict rule: the same craft principle at the same place after a fix is a regression. |
 
 If you want both content AND writing polish, run `/auto-paper-improvement-loop` first, then this skill at the end for a final craft pass.
 
@@ -633,14 +634,122 @@ consistency issues introduced by per-section edits.
 Reply: "yes" / "no"   (default: no — anything other than yes is treated as no)
 ```
 
-**Step 3.1 — If `yes`:** State `phase: phase3_collecting`. Repeat Phase 1 logic verbatim:
+**Step 3.1 — If `yes`:** State `phase: phase3_collecting`. Repeat Phase 1 logic with one extra **self-review** step inserted between the coach pass and the checkpoint:
 
-- `<NAMESPACE> = phase3`, `<SCOPE_LABEL> = "Phase 3 — Global Pass (Re-Run)"`
-- Same `<PLAYBOOK_PATHS>`, same `<FOCUS>` paragraph (no cap; uncovers any new global issues introduced by Phase 2 edits).
-- After Sub-procedure B returns, **recompile** (same block as Step 2.2). Overwrites `main.pdf`.
-- State `phase: phase3_done`.
+1. **Sub-procedure A** with `<NAMESPACE> = phase3`, `<SCOPE_LABEL> = "Phase 3 — Global Pass (Re-Run)"`, same `<PLAYBOOK_PATHS>` and `<FOCUS>` paragraph as Phase 1 (no cap; uncovers any new global issues introduced by Phase 2 edits).
 
-**Step 3.2 — If `no`:** skip to Finalize.
+2. **Step 3.0.5 — Iteration Self-Review** (see below). Diagnoses regressions and new-introduced issues by comparing Phase 3's suggestions against Phase 1's applied items. Writes `SELF_REVIEW.md` and a banner into `OUTPUT_MD`. **Always runs**; even when nothing anomalous is found, the report records that fact for audit.
+
+3. **Sub-procedure B** with the same namespace. B.4's HUMAN_CHECKPOINT prints the self-review summary inline above the first batch's reply prompt — the user sees regressions before deciding `go` / `stop`.
+
+4. After Sub-procedure B returns, **recompile** (same block as Step 2.2). Overwrites `main.pdf`. State `phase: phase3_done`.
+
+#### Step 3.0.5 — Iteration Self-Review
+
+The core design intent: **after Phase 1+2 polishing, Phase 3 should find fewer (or qualitatively different) global issues**. If it doesn't, something went wrong upstream and the user deserves to see it before approving more edits.
+
+**Inputs:**
+
+- Phase 1 applied items (read from OUTPUT_MD's `## Phase 1 — Global Pass → Auto-Applied` table and `## Phase 1 — Global Pass → User-Approved Applied` section; both have `file`, `evidence_quote`, `craft_principle`, and a status).
+- Phase 3's parsed suggestions: `<paper-dir>/.polish/phase3/claude_suggestions.ndjson` + `codex_suggestions.ndjson`.
+
+**Per-issue diagnosis.** For each Phase 3 issue `P` (from either Claude or Codex), classify against the Phase 1 applied set `A`:
+
+| Classification | Condition | What it means |
+|---|---|---|
+| `regression` | ∃ `a ∈ A` with status `applied` or `user_approved_applied` AND `same_file(P, a)` AND (`line_overlap(P, a) ≥ 50%` OR `P.evidence_quote` shares ≥ 60% of `a.evidence_quote` tokens) AND `same_craft_principle(P, a)` | The earlier fix did not stick — either the edit silently reverted, or the issue re-emerged in adjacent prose, or coach is re-flagging text that is already corrected. |
+| `new_introduced` | ∃ `a ∈ A` with status `applied` AND `same_file(P, a)` AND `P.line_range` falls **within ±5 lines** of `a.line_range` AND `different_craft_principle(P, a)` | Phase 1 or Phase 2 edits to that region plausibly introduced a new craft issue (e.g., active-voice rewrite created a tense-mismatch). Needs human triage. |
+| `genuine_new` | none of the above; `P` is unrelated to any applied `a` | A new issue uncovered by re-reading the polished paper. Expected — Phase 3's whole point. |
+
+The **strictest interpretation** of your design intent is encoded in the `regression` row: *the same craft principle, at the same place, should not survive the apply step.* If it does, the fix machinery has a bug or the coach is drifting its judgment.
+
+**Aggregate metrics:**
+
+```
+PHASE1_TOTAL  = sum(Phase 1 emitted_claude + emitted_codex, after overlap dedup ≈ total Pending + Auto-Applied)
+PHASE3_TOTAL  = sum(Phase 3 emitted, same accounting)
+REGRESSIONS   = count(Phase 3 issues classified as `regression`)
+NEW_INTRODUCED = count(`new_introduced`)
+GENUINE_NEW   = count(`genuine_new`)
+```
+
+**Anomaly flags** (any one triggers a banner; surface the most severe):
+
+- **`R` Regression present** — `REGRESSIONS ≥ 1`. This is the strictest signal: same problem at same place after fix → fix failed or coach drifted.
+- **`N` New-introduced clusters** — `NEW_INTRODUCED ≥ 3` in the same file → Phase 2 edits to that file plausibly broke something.
+- **`D` Drift suspected** — `PHASE3_TOTAL ≥ PHASE1_TOTAL` AND `REGRESSIONS == 0` AND `NEW_INTRODUCED < 3` → coach is finding novel issues at a rate that contradicts "polished paper has fewer issues". Either (a) coach's evaluation standard drifted upward (asking more of Phase 3 than of Phase 1), (b) Phase 1's coverage was thin, or (c) the playbook applies in dimensions Phase 1 missed. Not a bug, but worth surfacing.
+- **Clean** — no anomaly. Print "Phase 3 ran clean: <PHASE3_TOTAL> issues, all classified `genuine_new`; no regressions, no introduction clusters."
+
+**Outputs of Step 3.0.5:**
+
+1. `<paper-dir>/SELF_REVIEW.md` (always written, even on clean run):
+
+```markdown
+# Self-Review — Iteration Sanity Check
+
+Generated: <ISO-8601> | Editor: <claude|codex> | Phase 3 invoked from main loop
+
+## Summary
+- Phase 1 total issues:     <PHASE1_TOTAL>  (applied: <P1_APPLIED>, skipped: <P1_SKIPPED>)
+- Phase 3 total issues:     <PHASE3_TOTAL>
+- Regressions:              <REGRESSIONS>
+- New-introduced clusters:  <NEW_INTRODUCED>
+- Genuine new issues:       <GENUINE_NEW>
+
+## Flag: <R / N / D / Clean>
+
+<one-paragraph interpretation>
+
+## Regressions
+
+For each: Phase 3 issue id, file:lines, evidence_quote, the matching Phase 1
+applied item (status, evidence_quote, craft_principle), and a 1-sentence
+hypothesis for why the fix did not stick.
+
+## New-Introduced
+
+For each: Phase 3 issue id, file:lines, the nearby Phase 1 applied item,
+and a 1-sentence hypothesis for why the polish edit may have caused it.
+
+## What to do next
+
+- Regressions → either (a) re-apply the original fix more carefully (e.g.,
+  evidence_quote was too narrow, surrounding context still has the issue);
+  (b) accept that the polish edit reverted, and surface to user;
+  (c) if regression count ≥ 3, suspect coach drift — re-check that the
+  playbook scope in Phase 3 matches Phase 1.
+- New-introduced clusters → review Phase 2 edits to the implicated file
+  via `git diff`; consider partial revert if multiple clusters.
+- D flag → consider whether Phase 1's coverage was thin; if so, Phase 3
+  is doing legitimate cleanup. If not, ask the user whether Phase 3 is
+  worth running through.
+```
+
+2. **Banner in OUTPUT_MD** (prepended to the Phase 3 section, before the Auto-Applied table):
+
+```markdown
+> ⚠️ **Iteration self-review flagged this Phase 3 run.** See SELF_REVIEW.md for details.
+> Summary: <PHASE1_TOTAL> issues found in Phase 1 → <PHASE3_TOTAL> in Phase 3; <REGRESSIONS> regressions, <NEW_INTRODUCED> new-introduced, <GENUINE_NEW> genuine new.
+> Flag: <R / N / D>
+```
+
+(Clean runs get a green-checkmark banner: `> ✅ Iteration self-review clean: <PHASE3_TOTAL> genuine new issues; no regressions.`)
+
+3. **Inline print to the user before B.4's first batch:**
+
+```
+🪞 Iteration self-review:
+   Phase 1: <PHASE1_TOTAL> issues  ({P1_APPLIED} applied, {P1_SKIPPED} skipped)
+   Phase 3: <PHASE3_TOTAL> issues  ({REGRESSIONS} regressions, {NEW_INTRODUCED} new-introduced, {GENUINE_NEW} genuine new)
+   Flag: <R / N / D / Clean>
+   See SELF_REVIEW.md for the per-issue breakdown.
+
+You can `stop` now if the regressions need investigation before more edits.
+```
+
+The self-review **does not abort** Phase 3 — it is informational. The user can `stop` at the next checkpoint after reading the diagnosis. This is by design: false-positive aborts are worse than a user choosing to proceed after an informed warning.
+
+**Step 3.2 — If `no`:** skip to Finalize. `SELF_REVIEW.md` is not written if Phase 3 doesn't run — the loop has nothing to diagnose.
 
 ### Finalize: Step 9 — Polish `WRITING_POLISH_SUGGESTIONS.md`
 
@@ -681,12 +790,18 @@ Report to user:
 
   Phase 3 (global re-run):        ran / skipped
     [if ran: same 4-line breakdown]
+    Self-review flag:             R / N / D / Clean
+    Regressions:                  <REGRESSIONS>
+    New-introduced:               <NEW_INTRODUCED>
+    Genuine new:                  <GENUINE_NEW>
 
   PDFs:
     main_polish_before.pdf      ← original
     main_polish_final.pdf       ← final (= main.pdf)
 
-  Log: WRITING_POLISH_SUGGESTIONS.md
+  Logs:
+    WRITING_POLISH_SUGGESTIONS.md   (full per-phase log)
+    SELF_REVIEW.md                  (only if Phase 3 ran)
 ```
 
 ## State Persistence (Compact Recovery)
@@ -707,8 +822,8 @@ Report to user:
     "phase2_section:<basename>_batch:<P>_awaiting_user" |
     "phase2_section:<basename>_batch:<P>_applying" |
     "phase2_recompiling" | "phase2_done" |
-    "phase3_prompt" | "phase3_collecting" | "phase3_overlap" |
-    "phase3_auto_applying" |
+    "phase3_prompt" | "phase3_collecting" | "phase3_self_review" |
+    "phase3_overlap" | "phase3_auto_applying" |
     "phase3_batch:<P>_awaiting_user" | "phase3_batch:<P>_applying" |
     "phase3_recompiling" | "phase3_done" |
     "finalizing" | "done",
@@ -730,6 +845,12 @@ Report to user:
   },
   "phase3_run": true,
   "phase3_counts": { /* same shape as phase1_counts */ },
+  "self_review": {
+    "ran": true,
+    "phase1_total": 12, "phase3_total": 18,
+    "regressions": 2, "new_introduced": 1, "genuine_new": 15,
+    "flag": "R" | "N" | "D" | "Clean"
+  },
   "codex_threadIds": {
     "coach_phase1": "<id>",
     "coach_phase2_0_abstract": "<id>",
@@ -765,6 +886,7 @@ Report to user:
 - **Priority-batched checkpoint** — Pending non-overlap is split into HIGH / MEDIUM / LOW batches. Each batch is its own checkpoint; `stop` exits the rest of the phase. Empty batches are skipped silently. Index lists (e.g., `1 3 5`) are 1-indexed **within the current batch** — `1` means `H1` in the HIGH batch, `M1` in the MEDIUM batch.
 - **Skipped items do not roll over** — items the user passes over via `skip <list>` or non-mention are recorded as `User-Skipped` and never re-presented in Phase 3 or any later batch. A user `stop` in Phase 1 still allows the user to choose Phase 3 at its prompt, but no Phase 1 items roll into Phase 3's input.
 - **Editor is Claude by default, Codex on opt-in** — `— editor: codex` at start makes Codex the run-level default; a `codex` reply prefix at any checkpoint switches a single batch. Constraints (exact-match, hard-don't gate, craft-only scope) apply identically to both editors; the difference is solely who executes the `Edit` tool calls. Claude verifies every Codex edit by re-grepping the file — Codex's status report is not trusted blindly.
+- **Iteration self-review is non-optional in Phase 3** — Step 3.0.5 always runs when Phase 3 runs (cost: a few seconds of comparison against Phase 1 applied items). The strict regression rule — "same craft principle at the same place after a Phase 1 fix is a regression" — encodes the design intent that polishing should reduce, not preserve, the issue set. Surfacing `R` / `N` / `D` flags is soft (informational, not abortive); the user reads `SELF_REVIEW.md` and decides whether to `stop`. The loop never silently swallows a non-Clean flag.
 
 ## Output
 
@@ -774,6 +896,7 @@ Report to user:
 ├── main_polish_before.pdf                # snapshot at Step 0
 ├── main_polish_final.pdf                 # after all applied fixes
 ├── WRITING_POLISH_SUGGESTIONS.md         # full log; sections per phase
+├── SELF_REVIEW.md                        # only if Phase 3 ran; iteration sanity check
 ├── WRITING_POLISH_STATE.json             # compact-recovery state
 └── .polish/
     ├── phase1/
