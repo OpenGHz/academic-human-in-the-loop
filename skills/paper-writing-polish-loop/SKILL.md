@@ -1,7 +1,7 @@
 ---
 name: paper-writing-polish-loop
-description: "Writing-only polish loop, 3 phases: (1) global pass on whole-paper concerns, (2) per-section loop one section at a time, (3) optional second global pass. In every phase, Claude and Codex (as 'professional embodied-AI writer', gpt-5.5 xhigh, fresh thread — never codex-reply) run in **parallel** via a background Agent, each producing **all** writing-craft suggestions they can find — no artificial cap, so a problem-dense paper gets exhaustive coverage. Overlapping pairs auto-apply (high-confidence: two peers agree). Non-overlapping suggestions land in WRITING_POLISH_SUGGESTIONS.md and are presented to the user in **priority batches** (HIGH → MEDIUM → LOW) to manage decision fatigue. Standard HUMAN_CHECKPOINT syntax (go / 1 3 5 / skip 2,4 / stop / free-text) per batch. Recompile is deferred to end-of-phase. For robotics / embodied-AI papers. Use when user says \"优化写作\", \"polish writing\", \"writing polish loop\", \"写作打磨\", \"craft pass\", or wants a writing-craft-focused pass distinct from content/theory review."
-argument-hint: "[paper-directory]"
+description: "Writing-only polish loop, 3 phases: (1) global pass on whole-paper concerns, (2) per-section loop one section at a time, (3) optional second global pass. In every phase, Claude and Codex (as 'professional embodied-AI writer', gpt-5.5 xhigh, fresh thread — never codex-reply) run in **parallel** via a background Agent, each producing **all** writing-craft suggestions they can find — no artificial cap, so a problem-dense paper gets exhaustive coverage. Overlapping pairs auto-apply (high-confidence: two peers agree). Non-overlapping suggestions land in WRITING_POLISH_SUGGESTIONS.md and are presented to the user in **priority batches** (HIGH → MEDIUM → LOW) to manage decision fatigue. Standard HUMAN_CHECKPOINT syntax (go / 1 3 5 / skip 2,4 / stop / free-text) per batch. **Editor is Claude by default; user can switch to Codex via `— editor: codex` at start or `codex go` / `codex 1 3 5` / `codex apply` at any checkpoint.** Recompile is deferred to end-of-phase. For robotics / embodied-AI papers. Use when user says \"优化写作\", \"polish writing\", \"writing polish loop\", \"写作打磨\", \"craft pass\", or wants a writing-craft-focused pass distinct from content/theory review."
+argument-hint: "[paper-directory] [— editor: claude|codex]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex
 ---
 
@@ -41,6 +41,7 @@ Use this loop when the paper is content-stable but the prose needs tightening �
 | EDIT_WHITELIST / MIN_REFERENCES | enforced | out of scope (craft-only edits) |
 | codex-reply allowed? | only when `REVIEWER_BIAS_GUARD = false` | **never** (fresh thread only) |
 | Claude × Codex execution | sequential (review → fix → recompile) | **parallel** every phase, every section (background Agent) |
+| Editor (who applies fixes to `.tex`) | always Claude | **Claude by default; switchable to Codex per CLI flag or per checkpoint batch** (`— editor: codex` at start, or `codex go` / `codex 1 3 5` reply at a checkpoint) |
 
 If you want both content AND writing polish, run `/auto-paper-improvement-loop` first, then this skill at the end for a final craft pass.
 
@@ -49,8 +50,9 @@ If you want both content AND writing polish, run `/auto-paper-improvement-loop` 
 - **SUGGESTION_CAP = none** — Neither Claude nor Codex is told to limit the number of suggestions in any phase. Both sides emit every craft issue they can find within the playbook scope. The user's protection against decision fatigue is the priority-batched checkpoint in Sub-procedure B (HIGH → MEDIUM → LOW batches, each its own checkpoint, `stop`-able at any batch), NOT a cap. **Rationale:** a problem-dense paper is exactly the case that benefits most from a thorough pass; capping forces self-censorship that biases against such papers.
 - **SUGGESTION_OUTPUT_FORMAT = NDJSON** — Both sides emit one JSON object per line (newline-delimited JSON). This is the cap-free output format's truncation insurance: if a long Codex response is cut mid-stream by transport limits, every complete line before the cut is still parseable; only the trailing partial line is lost. A single JSON array, by contrast, becomes unparseable on any truncation.
 - **CHECKPOINT_BATCH_BY_PRIORITY = true** — Pending non-overlap suggestions are split into HIGH / MEDIUM / LOW batches; the user sees one batch at a time. `stop` at any batch exits the rest of the phase.
-- **WRITER_MODEL = `gpt-5.5`** — Model used via `mcp__codex__codex` for the Codex side.
+- **WRITER_MODEL = `gpt-5.5`** — Model used via `mcp__codex__codex` for the Codex side (both coach and, when selected, editor).
 - **WRITER_REASONING = `xhigh`** — `model_reasoning_effort` for the Codex call.
+- **EDITOR = `claude`** — Default executor of the actual `.tex` edits (`Edit` tool calls). Override via `— editor: codex` in `$ARGUMENTS` to make Codex the default editor for the whole run. Per-checkpoint override: user can prefix a reply with `codex` (e.g., `codex go`, `codex 1 3 5`, `codex apply`) to route only that batch's edits through Codex. The next batch falls back to the run-level default unless the user prefixes again. Whichever editor runs, **exact-match Edit + hard-don't gate + craft-only scope are non-negotiable** — see Sub-procedure C.
 - **GLOBAL_PLAYBOOKS** = `["flow-transitions.md", "language-phrasebank.md", "figures-tables-playbook.md"]` — read in Phase 1 + Phase 3 only. These cover cross-section concerns: arc / openers / pivots / connectors (`flow-transitions.md`), rhetorical phrasebook (`language-phrasebank.md`), and figure/table conventions that span sections (`figures-tables-playbook.md`).
 - **SECTION_TO_PLAYBOOK_MAP** — basename-prefix → playbook list (matched case-insensitively against the section file's basename without `.tex`):
   - `0_abstract`, `abstract`, `1_intro*`, `intro*` → `["abstract-intro-playbook.md"]`
@@ -79,6 +81,15 @@ If `skills/embodied-ai-paper-writer/SKILL.md` cannot be resolved (e.g., the subm
 
 ```bash
 PAPER_DIR="$1"  # parsed from $ARGUMENTS
+
+# Parse --- editor: <claude|codex> --- (default claude).
+# Accepts: "— editor: codex", "—editor:codex", "--editor codex" (case-insensitive value).
+EDITOR_DEFAULT="claude"
+if echo "$ARGUMENTS" | grep -qiE '[—-]-?editor[[:space:]]*:?[[:space:]]*codex'; then
+  EDITOR_DEFAULT="codex"
+fi
+echo "Editor default: $EDITOR_DEFAULT (override per checkpoint with 'codex …' reply prefix)"
+
 cp "$PAPER_DIR/main.pdf" "$PAPER_DIR/main_polish_before.pdf"
 mkdir -p "$PAPER_DIR/.polish"
 ```
@@ -138,6 +149,7 @@ Also check for `\title{...}` in `main.tex` — if present, the title is in scope
   "section_list": ["sections/0_abstract", "sections/1_introduction", ...],
   "current_section_index": null,
   "current_priority_batch": null,
+  "editor_default": "claude",
   "status": "in_progress",
   "timestamp": "<ISO-8601>"
 }
@@ -322,12 +334,16 @@ The overlap bucket can be empty (no agreement); the `_ONLY` buckets can be large
 
 #### B.2 — Auto-Apply Overlap (Hard-Don't Gated)
 
-For each `(C_i, X_j)` in `OVERLAP_PAIRS`:
+For each `(C_i, X_j)` in `OVERLAP_PAIRS`, **synthesize the fix into an apply-able item**:
 
-1. **Synthesize the fix.** Prefer the cleaner of the two `proposed_fix` formulations — usually Codex's (it is the dedicated writer), but if Claude's is more specific or actionable, use Claude's. If they materially conflict, log both and skip (treat as if non-overlapping and surface in the Pending list).
-2. **Re-read `<paper-dir>/PAPER_PREFERENCES.md ## Hard don'ts`.** If a bullet blocks the fix (e.g., "Do not rewrite Theorem 1", "Do not paraphrase the abstract's first sentence"), do NOT apply. Log status as `blocked_by_hard_dont: <quoted bullet>`.
-3. **Apply via `Edit`** to the target `.tex` file. The edit must be exact — find the `evidence_quote` in the file and replace with the new wording. If the quote no longer matches (a prior overlap edit shifted surrounding context), surface the conflict to the user rather than guessing — do NOT do fuzzy matching.
-4. **Log status** as one of: `applied`, `blocked_by_hard_dont`, `conflict_skipped`.
+- Prefer the cleaner of the two `proposed_fix` formulations — usually Codex's (it is the dedicated writer), but if Claude's is more specific or actionable, use Claude's. If they materially conflict, log both and skip (treat as if non-overlapping and surface in the Pending list).
+- Carry over `file`, `evidence_quote`, and the synthesized `new_text` (the exact replacement string).
+
+Hand the resulting fix list to **Sub-procedure C** with:
+- `<EDITOR>` = the run-level `editor_default` (no per-batch override applies here; overlap auto-apply happens before any user reply).
+- `<STATUS_TAG>` = `applied`.
+
+C runs the pre-flight hard-don't gate, performs the edits via the chosen editor, verifies, and returns the per-item status list. Write those statuses into OUTPUT_MD's Auto-Applied table.
 
 #### B.3 — Append to `WRITING_POLISH_SUGGESTIONS.md`
 
@@ -378,7 +394,16 @@ Each batch is a separate checkpoint. For each batch you can:
 - `1 3 5` — apply only items 1, 3, 5 in this batch (1-indexed within the batch, e.g., `1` means `H1` in the HIGH batch).
 - `skip 2,4` — apply all items in this batch except 2 and 4.
 - `stop` / `none` — apply nothing more for any remaining batches in this phase; finalize the phase as-is.
-- free-text — treated as additional instructions; Claude blends with the chosen items in this batch.
+- free-text — treated as additional instructions; the editor blends with the chosen items in this batch.
+
+**Editor override (one batch only).** Prefix any of the above with `codex` to route this batch's edits through Codex instead of the run-level default:
+
+- `codex go` — Codex applies every item in this batch.
+- `codex 1 3 5` — Codex applies only items 1, 3, 5 in this batch.
+- `codex skip 2,4` — Codex applies all items in this batch except 2 and 4.
+- `codex apply` — alias for `codex go`.
+
+The next batch reverts to the run-level default (`claude` unless `— editor: codex` was set at start). Constraints (exact-match, hard-don't gate, craft-only) apply to both editors identically — `codex` only changes who runs the edits, not what's allowed.
 
 Within an item index list, items not mentioned are dropped (not deferred). Across batches: a batch you `go` through still hands you the next batch; only `stop` exits the phase early.
 
@@ -401,17 +426,17 @@ Iterate over the non-empty priority batches in order `[HIGH, MEDIUM, LOW]`. For 
    Reply: "go" / "1 3 5" / "skip 2,4" / "stop" / free-text
    ```
 
-2. **Wait for the user's inline reply.** Parse with the same logic as `/auto-paper-improvement-loop` Step 2b / `/auto-review-loop` Phase B:
+2. **Parse the reply.** First, peel off an optional `codex` prefix (case-insensitive; tolerates `codex,` or `codex:`). If present, set `<BATCH_EDITOR> := codex` for this batch only; otherwise `<BATCH_EDITOR> := editor_default`. Then parse the rest with the same logic as `/auto-paper-improvement-loop` Step 2b / `/auto-review-loop` Phase B:
 
    - `go` / `continue` / `ok` / `proceed` / `apply all` → apply all items in **this batch** → continue to next batch.
    - Space/comma-separated digit list → apply only those indices **in this batch** → continue to next batch. Items not listed are dropped (User-Skipped) — they do not roll over to the next batch.
    - `skip <list>` → apply all items in this batch except those indices → continue to next batch.
-   - `stop` / `none` / `done` → apply nothing more in this batch; **abort the phase**. Remaining batches (and remaining Phase 2 sections, if applicable) are logged as User-Skipped. Return `STOPPED` to the caller.
-   - Anything else → free-text. Try to extract an index list with a brief clarifying ask if genuinely unparseable; otherwise treat as "additional instruction merged with all items in this batch" and apply.
+   - `stop` / `none` / `done` → apply nothing more in this batch; **abort the phase**. Remaining batches (and remaining Phase 2 sections, if applicable) are logged as User-Skipped. Return `STOPPED` to the caller. (A `codex stop` is the same as `stop` — `stop` does no edits, so the editor is moot.)
+   - Anything else → free-text. Try to extract an index list with a brief clarifying ask if genuinely unparseable; otherwise treat as "additional instruction merged with all items in this batch" and apply with `<BATCH_EDITOR>`.
 
 3. **Persistence prompt** — if the reply contains `always`, `never`, `in this paper`, `every time`, or corrects a recurring style/notation pattern, propose a diff to `<paper-dir>/PAPER_PREFERENCES.md` before applying this batch's fixes. Show the diff inline. Ask `y / edit / skip` — fixes proceed regardless. The pinned bullet immediately gates this batch's apply and every subsequent batch in the phase. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md) Write Protocol.
 
-4. **Apply this batch's selected items** (see B.5 below) before moving to the next batch.
+4. **Apply this batch's selected items via Sub-procedure C** with `<EDITOR> := <BATCH_EDITOR>` and `<STATUS_TAG> = user_approved_applied`. Then move to the next batch — `<BATCH_EDITOR>` does NOT persist; the next batch starts fresh from `editor_default` until the user prefixes again.
 
 After the last batch (LOW) returns, B.4 returns `OK`.
 
@@ -422,15 +447,119 @@ After the last batch (LOW) returns, B.4 returns `OK`.
 
 #### B.5 — Apply Selected Items (per batch)
 
-Called by B.4 once per batch, after the user's reply is parsed. For each selected item:
+Called by B.4 once per batch, after the user's reply is parsed. Delegates to **Sub-procedure C** with the effective editor for this batch (run-level default OR per-batch `codex` prefix override).
 
-1. **Re-read `<paper-dir>/PAPER_PREFERENCES.md ## Hard don'ts`** against the fix (same gate as B.2). The user may have just added a new hard-don't via the persistence prompt — re-read every time.
-2. **Apply via `Edit`** to the target `.tex` file. Same exact-match rule as B.2 — no fuzzy matching.
-3. **Log status** as `user_approved_applied` / `blocked_by_hard_dont` / `conflict_skipped`.
+Pass to C: the list of selected fix items, `<EDITOR>`, and the `user_approved_applied` status tag (so C marks them in OUTPUT_MD correctly).
 
-For free-text instructions, treat them as additional craft fixes to apply within the same batch, constrained to the craft-only scope (no content/theory/citations).
+For free-text instructions in the reply, treat them as additional craft fixes appended to the batch's apply list, constrained to the craft-only scope (no content/theory/citations).
 
 **Do not recompile here.** Recompile is owned by the phase driver.
+
+---
+
+### Sub-procedure C: Apply Fix Batch
+
+**Used by B.2 (overlap auto-apply) and B.5 (user-approved per-batch apply).** Parameters:
+
+- `<FIX_LIST>` — list of fix items, each carrying `file`, `evidence_quote`, `proposed_fix`, `craft_principle`, and a synthesized exact-match `new_text` for the `Edit` call.
+- `<EDITOR>` — `claude` or `codex`. Selected per call by the caller (B.2 uses the run-level default; B.5 uses the per-batch effective editor).
+- `<STATUS_TAG>` — `applied` (from B.2's overlap path) or `user_approved_applied` (from B.5).
+
+**The constraints are non-negotiable regardless of `<EDITOR>`:**
+- exact-match `evidence_quote` find-and-replace; no fuzzy matching.
+- hard-don't gate re-read before EACH item.
+- craft-only scope — no citations, no numbers, no theorem changes, no section reordering.
+- per-item status logged as one of `<STATUS_TAG>` / `blocked_by_hard_dont` / `conflict_skipped` / `failed_other`.
+
+The editor never receives `PAPER_PREFERENCES.md ## Hard don'ts` as advisory text — the gate runs **before** the editor sees the item, and only items that pass the gate are sent. This way, neither editor can "negotiate" against a hard-don't.
+
+#### C.1 — Pre-flight gate (caller-side, before either editor runs)
+
+For each item in `<FIX_LIST>`:
+
+1. Re-read `<paper-dir>/PAPER_PREFERENCES.md ## Hard don'ts` from disk (the user may have added a bullet seconds ago via the persistence prompt).
+2. If any bullet blocks the item: log status `blocked_by_hard_dont: <quoted bullet>`, drop from the list to send.
+3. Verify the `evidence_quote` is still grep-findable in the target file (a prior apply in the same batch may have shifted it). If not, log `conflict_skipped: evidence_quote no longer matches`, drop.
+4. Survivors go into the editor's task list.
+
+#### C.2 — Editor route: Claude
+
+Default. For each surviving item, Claude calls the `Edit` tool directly:
+
+- `file_path` = absolute path to the target `.tex` file
+- `old_string` = the verbatim `evidence_quote`
+- `new_string` = the synthesized `new_text`
+
+Log per-item status as `<STATUS_TAG>` on success, `failed_other: <Edit error>` on tool error. No retries — surface the error and continue with the next item.
+
+#### C.3 — Editor route: Codex (fresh thread, separate from the coach thread)
+
+Used when `<EDITOR> = codex`. Spawn a **new** `mcp__codex__codex` call. This thread is **not** the coach thread from Sub-procedure A — fresh-thread isolation is the same invariant as the coach thread, and the editor role's prompt is incompatible with the coach role:
+
+```
+mcp__codex__codex:
+  model: gpt-5.5
+  config: {"model_reasoning_effort": "xhigh"}
+  cwd: <absolute path to repo root where $EAPW was resolved>
+  prompt: |
+    You are an EDITOR, not a coach. The diagnoses and fix proposals below
+    have already been written, reviewed, and approved by the author. Your
+    job is to apply them **verbatim** to the LaTeX source.
+
+    ## Non-negotiable rules
+
+    1. **Exact-match find-and-replace only.** For each item, locate the
+       `evidence_quote` verbatim in `file`, then replace it with `new_text`.
+       If the quote does not match exactly, set that item's status to
+       `conflict_skipped` and move on. Do NOT do fuzzy matching. Do NOT
+       try to "find a similar passage". Do NOT paraphrase the new_text.
+
+    2. **No new craft suggestions.** Do not propose alternative wordings.
+       Do not flag additional issues. Do not "improve" the new_text. If
+       you would normally suggest a different rewrite, suppress it — the
+       coach phase already concluded.
+
+    3. **Craft-only scope.** Never introduce new \cite{...}, numbers,
+       theorem environments, or section reorderings. If applying the
+       new_text would do any of these, set the item's status to
+       `craft_scope_violation` and skip it.
+
+    4. **Stay inside the listed files.** Do not edit any file not named
+       in the items below.
+
+    5. **One item at a time.** Process items in order. Do not batch
+       conflicting edits.
+
+    ## Items to apply
+
+    <ITEM_LIST_AS_JSON>
+       (each item: {id, file, evidence_quote, new_text, craft_principle})
+
+    ## Output format — NDJSON status report
+
+    For each item, emit one JSON object per line, in the same order as
+    the input:
+
+    {"id":"<id>","status":"<STATUS_TAG>" | "conflict_skipped" | "craft_scope_violation" | "failed_other","detail":"<one line, only if status != <STATUS_TAG>>"}
+
+    Apply the edits as you emit each line. Do not buffer.
+```
+
+Substitute `<ITEM_LIST_AS_JSON>` and `<STATUS_TAG>` before sending. The Codex side performs the actual file edits via its own shell/edit tooling within the workspace-write sandbox. Save the threadId for state-file bookkeeping only.
+
+#### C.4 — Verify Codex's edits (caller-side, after Codex returns)
+
+After Codex's NDJSON status report comes back, Claude verifies (this is the editor-independence gate):
+
+- For each item Codex reported as `<STATUS_TAG>`, grep the target file for the `new_text`. If found and the original `evidence_quote` is gone, accept the status.
+- If the verification fails (new_text not found, or evidence_quote still present), override Codex's status to `failed_other: post-edit verification failed` and surface to the user.
+- For items Codex reported as `conflict_skipped` / `craft_scope_violation` / `failed_other`, accept as-is — Codex is the authority on its own failures.
+
+This verification is not a trust issue — it is the same exact-match invariant that protects Claude's path. Both editor routes must leave the file in a state where the originally-quoted text is gone and the proposed text is present.
+
+#### C.5 — Return
+
+Sub-procedure C returns a per-item status list to its caller (B.2 or B.5). The caller is responsible for writing those statuses into OUTPUT_MD.
 
 ---
 
@@ -587,6 +716,7 @@ Report to user:
   "section_list": ["sections/0_abstract", "sections/1_introduction", "..."],
   "current_section_index": 0,
   "current_priority_batch": "HIGH" | "MEDIUM" | "LOW" | null,
+  "editor_default": "claude" | "codex",
   "phase1_counts": {
     "claude_emitted": E_C, "codex_emitted": E_X, "overlap": N,
     "pending_high": NH, "pending_medium": NM, "pending_low": NL,
@@ -601,9 +731,12 @@ Report to user:
   "phase3_run": true,
   "phase3_counts": { /* same shape as phase1_counts */ },
   "codex_threadIds": {
-    "phase1": "<id>",
-    "phase2_0_abstract": "<id>",
-    "phase3": "<id>"
+    "coach_phase1": "<id>",
+    "coach_phase2_0_abstract": "<id>",
+    "coach_phase3": "<id>",
+    "editor_phase1_overlap": "<id|null>",
+    "editor_phase1_batch:HIGH": "<id|null>",
+    "editor_phase2_0_abstract_batch:HIGH": "<id|null>"
   },
   "status": "in_progress" | "completed" | "failed",
   "timestamp": "<ISO-8601>"
@@ -616,7 +749,7 @@ Report to user:
 
 ## Key Rules
 
-- **Fresh Codex thread, always** — use `mcp__codex__codex`, never `mcp__codex__codex-reply`. No "since last phase" framing in the prompt.
+- **Fresh Codex thread, always** — every Codex invocation (coach in Sub-procedure A, editor in Sub-procedure C) uses `mcp__codex__codex`, never `mcp__codex__codex-reply`. No "since last phase" framing in any prompt. Coach and editor are **separate** fresh threads even within the same phase — the editor never inherits the coach's analysis context.
 - **embodied-ai-paper-writer is mandatory, not optional** — if the submodule is not present, abort with a clear error. The skill is built around this craft manual.
 - **Both sides see PAPER_PREFERENCES.md** — explicit divergence from `/auto-paper-improvement-loop`. Codex is a coach here, not a reviewer.
 - **Phase-scoped playbooks** — Phase 1 / 3 load ONLY `GLOBAL_PLAYBOOKS`; Phase 2 loads ONLY the per-section playbook keyed by basename. Mixing breaks the global-vs-local separation that makes this skill distinct.
@@ -631,6 +764,7 @@ Report to user:
 - **NDJSON output, never a JSON array** — one suggestion per line, every line a complete JSON object. This makes truncated responses partially recoverable (every complete line before the cut is usable; only the trailing partial line is lost). A JSON array becomes unparseable on any truncation.
 - **Priority-batched checkpoint** — Pending non-overlap is split into HIGH / MEDIUM / LOW batches. Each batch is its own checkpoint; `stop` exits the rest of the phase. Empty batches are skipped silently. Index lists (e.g., `1 3 5`) are 1-indexed **within the current batch** — `1` means `H1` in the HIGH batch, `M1` in the MEDIUM batch.
 - **Skipped items do not roll over** — items the user passes over via `skip <list>` or non-mention are recorded as `User-Skipped` and never re-presented in Phase 3 or any later batch. A user `stop` in Phase 1 still allows the user to choose Phase 3 at its prompt, but no Phase 1 items roll into Phase 3's input.
+- **Editor is Claude by default, Codex on opt-in** — `— editor: codex` at start makes Codex the run-level default; a `codex` reply prefix at any checkpoint switches a single batch. Constraints (exact-match, hard-don't gate, craft-only scope) apply identically to both editors; the difference is solely who executes the `Edit` tool calls. Claude verifies every Codex edit by re-grepping the file — Codex's status report is not trusted blindly.
 
 ## Output
 
