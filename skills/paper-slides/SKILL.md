@@ -18,8 +18,10 @@ Unlike posters (single page, visual-first), slides tell a **temporal story**: ea
 ## Constants
 
 - **VENUE = `NeurIPS`** — Target venue, determines color scheme. Supported: `NeurIPS`, `ICML`, `ICLR`, `AAAI`, `ACL`, `EMNLP`, `CVPR`, `ECCV`, `GENERIC`. Override via argument.
-- **TALK_TYPE = `spotlight`** — Talk format. Options: `oral` (15-20 min), `spotlight` (5-8 min), `poster-talk` (3-5 min), `invited` (30-45 min). Determines slide count and content depth.
+- **TALK_TYPE = `spotlight`** — Talk format. Options: `oral` (15-20 min), `spotlight` (5-8 min), `poster-talk` (3-5 min), `invited` (30-45 min), `supplementary-video` (≈3 min, submission attachment — self-contained overview). Determines slide count and content depth. The first four target a **live audience**; `supplementary-video` is **venue-output-tuned** (CoRL / ICRA / RSS / NeurIPS-supp) and ships next to the PDF.
 - **TALK_MINUTES = 15** — Talk duration in minutes. Auto-adjusts slide count (~1 slide/minute for oral, ~1.5 slides/minute for spotlight). Override explicitly if needed.
+- **SUPPLEMENTARY_VIDEO_BUDGET_SECONDS = 180** — Hard cap for the supplementary-video mode; matches CoRL / ICRA / RSS / NeurIPS-supp ceilings. Honored when `talk_type == supplementary-video`.
+- **SUPPLEMENTARY_VIDEO_MAX_MB = 250** — Strict size cap (CoRL ceiling; ICRA & RSS use comparable limits). Surfaced as a hint to `/paper-slides-render` and gated by `/paper-video --mode submission` downstream.
 - **ASPECT_RATIO = `16:9`** — Slide aspect ratio. Options: `16:9` (default, modern projectors), `4:3` (legacy).
 - **SPEAKER_NOTES = true** — Generate `\note{}` blocks in beamer and corresponding PPTX notes. Set `false` for clean slides without notes.
 - **PAPER_DIR = `paper/`** — Directory containing the compiled paper.
@@ -30,6 +32,8 @@ Unlike posters (single page, visual-first), slides tell a **temporal story**: ea
 - **ENGINE = `pdflatex`** — LaTeX engine. Use `xelatex` for CJK text.
 
 > 💡 Override: `/paper-slides "paper/" — talk_type: oral, venue: ICML, minutes: 20, aspect: 4:3`
+>
+> 💡 Submission video: `/paper-slides "paper/" — talk_type: supplementary-video, venue: CORL`
 
 ## Optional: Style reference (`— style-ref: <source>`, opt-in)
 
@@ -79,10 +83,13 @@ Sources accepted: local TeX dir / file, local PDF, arXiv id, http(s) URL. Overle
 
 | Talk Type | Duration | Slides | Content Depth |
 |-----------|----------|:------:|---------------|
+| `supplementary-video` | ≈3 min (180s hard, ≤250 MB strict) | 6-8 | Self-contained 3-min overview: title-pitch → problem → key idea → method → qualitative+quantitative results → 5s take-away. **No anticipated-Q&A.** Results are the largest single slot but motivation and method each get a real slide. |
 | `poster-talk` | 3-5 min | 5-8 | Problem + 1 method slide + 1 result + conclusion |
 | `spotlight` | 5-8 min | 8-12 | Problem + 2 method + 2 results + conclusion |
 | `oral` | 15-20 min | 15-22 | Full story with motivation, method detail, experiments, analysis |
 | `invited` | 30-45 min | 25-40 | Comprehensive: background, related work, deep method, extensive results, discussion |
+
+> **Picking between `poster-talk` and `supplementary-video`**: both run ~3 min, but they serve different audiences. `poster-talk` is for a live human standing in front of your poster — keep Q&A prep, expect spontaneous follow-up, plan for interruptions. `supplementary-video` is a **self-contained 3-min overview of the work** that ships next to the PDF — drop the Q&A prep and the chair-greeting intro, lean on qualitative rollouts (`[VIDEO: ...]` markers, consumed by `/paper-slides-render`) where static figures fail, but keep problem + idea + method as real slides so a reviewer who watches only the video still understands the paper.
 
 ## Venue Color Schemes
 
@@ -136,7 +143,9 @@ Persist state to `slides/SLIDES_STATE.json` after each phase:
 
 5. **Detect CJK**: if paper contains Chinese/Japanese/Korean, set ENGINE to `xelatex`
 
-6. **Determine slide count**: from TALK_TYPE and TALK_MINUTES using the table above
+6. **Determine slide count**: from TALK_TYPE and TALK_MINUTES using the table above.
+
+   > **If `talk_type == supplementary-video`**: total runtime is hard-capped at 180 s and the size ceiling is 250 MB. The deck must be a **self-contained overview** of the paper (the venue language is "providing an overview of the work" — CoRL, ICRA, RSS, NeurIPS-supp): problem → idea → method → results → close. Motivation and method each get a real slide. The anticipated-Q&A section is dropped entirely. Results are the largest single slot but **not** the only content. Target 6-8 slides with the budget shape in Phase 8 below.
 
 7. **Check for resume**: read `slides/SLIDES_STATE.json` if it exists
 
@@ -147,6 +156,21 @@ Persist state to `slides/SLIDES_STATE.json` after each phase:
 Read `paper/sections/*.tex` and build a slide-by-slide outline.
 
 **Slide template by talk type**:
+
+#### Supplementary-video (6-8 slides, 180 s hard cap)
+
+Submission attachment for CoRL / ICRA / RSS / NeurIPS-supp. **Not a live-audience talk.** A reviewer who watches only this video must walk away knowing what the paper is, why it matters, what was done, and what was found. The qualitative rollouts (via `[VIDEO: ...]` markers, consumed by `/paper-slides-render`) are the supplementary's distinct value-add over the static PDF.
+
+| Slide | Purpose | Content Source | Figure / Clip? |
+|:-----:|---------|----------------|:--------------:|
+| 1 | Title + One-Sentence Pitch (~15 s) | Paper metadata + headline result | Title card |
+| 2 | Problem & Gap (~25 s) | Introduction (problem + one-sentence gap, not a literature dump) | Static figure or short failure clip |
+| 3 | Key Idea (~25 s) | Introduction (contribution) | Method teaser figure |
+| 4 | Method-in-One-Picture (~25 s) | Method (condensed to one diagram) | Hero method figure |
+| 5-(N-1) | Qualitative + Quantitative Results (~80 s total, 2-4 slides) | Experiments | **`[VIDEO: figures/<exp>.mp4]`** + one headline number per slide |
+| N | Take-Away + Project Page (~10 s) | Conclusion (one sentence) + URL/QR | QR code |
+
+**Critical**: ❌ no anticipated-Q&A, ❌ no "thank the chair", ❌ no separate related-work slide. ✅ at least 2 of the result slides should carry a `[VIDEO: ...]` marker pointing at a qualitative rollout (e.g. `figures/grasp.mp4`). ✅ slide-1 pitch must land the headline result in the first 15 seconds.
 
 #### Oral (15-22 slides)
 
@@ -556,6 +580,113 @@ The paper and code are available at the QR code on screen. I'm happy to take que
 ### Q8: [Domain-specific question]
 **A**: "[Answer]."
 ```
+
+#### Conditional: `talk_type == supplementary-video`
+
+When the user picked `supplementary-video`, the template above does **not** apply. Use the structure below instead — it is a self-contained 3-min overview of the paper for a reviewer who will watch the video *next to* the PDF, not in place of a live talk. The CoRL call asks for "an overview of the work" and caps at 180 s / 250 MB; ICRA / RSS / NeurIPS-supp are comparable.
+
+```markdown
+# Talk Script: [Paper Title]
+
+**Mode**: supplementary-video (submission attachment; 3 min / 250 MB cap)
+**Venue**: [VENUE] [YEAR]
+**Total slides**: [6-8]
+
+---
+
+## Slide 1: Title + One-Sentence Pitch [0:00 - 0:15]
+
+"This video is an overview of [paper title]. We tackle [task in one phrase], and we show that [headline result in one phrase]."
+
+*[Title card; author list; venue. Optionally show project-page URL or QR — otherwise save for the outro.]*
+
+→ *Transition*: "Here's the problem."
+
+---
+
+## Slide 2: Problem & Why It Matters [0:15 - 0:40]   ≈25 s
+
+"[One sentence framing the real-world problem.] [One sentence stating why the existing state of the art falls short — the *gap*, not a literature dump.]"
+
+*[A single grounding figure or short clip of the failure mode is ideal.]*
+
+→ *Transition*: "Our idea."
+
+---
+
+## Slide 3: Key Idea [0:40 - 1:05]   ≈25 s
+
+"Our key insight is [single sentence of the central idea]. This lets us [single sentence of what becomes possible]."
+
+*[Method teaser figure.]*
+
+→ *Transition*: "How it works."
+
+---
+
+## Slide 4: Method-in-One-Picture [1:05 - 1:30]   ≈25 s
+
+"[Single sentence describing the architecture or pipeline.] [Single sentence describing the training or inference loop, whichever is the contribution.]"
+
+*[Hero method diagram. No equations unless one *is* the contribution.]*
+
+→ *Transition*: "Results."
+
+---
+
+## Slide 5–(N-1): Qualitative + Quantitative Results [1:30 - 2:50]   ≈80 s — the largest single block
+
+The experiments section is the supplementary's distinct value-add over the PDF, but it is **not** the entire video. Allocate 1:00–1:30 here, split across 2–4 slides. For each result slide:
+
+- Lead with the qualitative rollout: `[VIDEO: figures/<exp>.mp4]` marker on its own line (consumed by `/paper-slides-render` at compose time; the still PNG is swapped for the clip with auto-loop + silent-pad).
+- One sentence of setup, one sentence of what-to-look-for, **one quantitative number** per slide that the rollout cannot convey on its own.
+- Include at least one comparison-to-baseline slide if the paper claims a comparison — reviewers expect to see it move, not just read the table.
+
+Example shape (one of 2–4 result slides):
+
+```
+## Slide 5: Grasping on Unseen Objects [1:30 - 1:55]
+
+[VIDEO: figures/grasp_rollout.mp4]
+
+"Our policy grasps the unseen object in 1.8 seconds, compared to 4.2 seconds for the strongest baseline. Watch the gripper adapt mid-trajectory when the object slips."
+```
+
+---
+
+## Slide N: Take-Away + Project Page [2:50 - 3:00]   ≈10 s
+
+"[One sentence stating the take-away in plain language.] Paper, code, and additional rollouts are at [URL]."
+
+*[QR code or URL. **No "thank you", no Q&A invitation** — there is no audience.]*
+
+---
+
+## Time Budget Summary
+
+| Slide | Topic | Duration | Cumulative |
+|:-----:|-------|:--------:|:----------:|
+| 1 | Title + Pitch | 0:15 | 0:15 |
+| 2 | Problem & Gap | 0:25 | 0:40 |
+| 3 | Key Idea | 0:25 | 1:05 |
+| 4 | Method | 0:25 | 1:30 |
+| 5–(N-1) | Results (qualitative + quantitative) | 1:20 | 2:50 |
+| N | Take-away + Link | 0:10 | 3:00 |
+
+**Total**: 3:00 (hard cap; CoRL / ICRA / RSS / NeurIPS-supp)
+```
+
+**Differences vs. the default oral template — call these out explicitly to keep the LLM from drifting back to the oral arc:**
+
+- ❌ **No anticipated-Q&A section.** A reviewer cannot ask follow-ups.
+- ❌ **No "thank the chair" intro, no "thank the audience" outro.** There is no audience.
+- ❌ **No standalone related-work slide.** The *gap* belongs in Slide 2; a literature dump does not belong in 3 minutes.
+- ✅ **Problem + Key Idea + Method each get a real slide.** This is what differentiates a 3-min overview from a results reel.
+- ✅ **Results are the single largest slot (~1:20 of 3:00 ≈ 45%) but not the only content.** The qualitative rollouts (via `[VIDEO: ...]` markers, consumed by `/paper-slides-render` v2) are the supplementary's distinct value-add over the static PDF.
+- ✅ **Slide-1 pitch lands the headline result in the first 15 seconds.** A reviewer who skims only the opening should already know what the paper claims.
+- ✅ **Calibrate written speakable text for TTS pacing (~155 wpm), not human-presenter pacing (~130 wpm).** Edge-TTS will overflow a 4-minute script if you write at oral-talk density.
+
+After generating the TALK_SCRIPT.md, recommend the user advance to `/paper-slides-render` (which honors the `[VIDEO: ...]` markers) and then `/paper-video --mode submission --venue <V>` (which enforces the 180 s / 250 MB CoRL ceiling).
 
 ### Final Output Summary
 
