@@ -1,7 +1,7 @@
 ---
 name: paper-slides
-description: "Generate conference presentation slides (beamer LaTeX → PDF + editable PPTX) from a compiled paper, with speaker notes and full talk script. Use when user says \"做PPT\", \"做幻灯片\", \"make slides\", \"conference talk\", \"presentation slides\", \"生成slides\", \"写演讲稿\", or wants beamer slides for a conference talk."
-argument-hint: "[paper-directory-or-talk-length] [— style-ref: <source>]"
+description: "Generate conference presentation slides (beamer LaTeX → PDF, with PPTX export deferred until the deck is final) from a compiled paper, with speaker notes and full talk script. Use when user says \"做PPT\", \"做幻灯片\", \"make slides\", \"conference talk\", \"presentation slides\", \"生成slides\", \"写演讲稿\", or wants beamer slides for a conference talk."
+argument-hint: "[paper-directory-or-talk-length] [— style-ref: <source>] [— with-pptx: true|false]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
@@ -24,6 +24,7 @@ Unlike posters (single page, visual-first), slides tell a **temporal story**: ea
 - **SUPPLEMENTARY_VIDEO_MAX_MB = 250** — Strict size cap (CoRL ceiling; ICRA & RSS use comparable limits). Surfaced as a hint to `/paper-slides-render` and gated by `/paper-video --mode submission` downstream.
 - **ASPECT_RATIO = `16:9`** — Slide aspect ratio. Options: `16:9` (default, modern projectors), `4:3` (legacy).
 - **SPEAKER_NOTES = true** — Generate `\note{}` blocks in beamer and corresponding PPTX notes. Set `false` for clean slides without notes.
+- **PPTX_AT_END = false** — When `false` (default), Phase 7 (PowerPoint export) pauses for explicit user confirmation after Phase 6 instead of running automatically. The PDF iteration loop (Phases 0-6) is the source of truth; the PPTX is a derivative built only when the user says the deck is final. Set `true` to restore the pre-2026-05 always-emit behavior, or pass `— with-pptx: true` on a single invocation.
 - **PAPER_DIR = `paper/`** — Directory containing the compiled paper.
 - **OUTPUT_DIR = `slides/`** — Output directory for all slide files.
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Model used via Codex MCP for slide review.
@@ -34,6 +35,8 @@ Unlike posters (single page, visual-first), slides tell a **temporal story**: ea
 > 💡 Override: `/paper-slides "paper/" — talk_type: oral, venue: ICML, minutes: 20, aspect: 4:3`
 >
 > 💡 Submission video: `/paper-slides "paper/" — talk_type: supplementary-video, venue: CORL`
+>
+> 💡 Build PPTX upfront (legacy / orchestrator-style): `/paper-slides "paper/" — with-pptx: true`
 
 ## Optional: Style reference (`— style-ref: <source>`, opt-in)
 
@@ -453,7 +456,49 @@ Also generate `slides/speaker_notes.md` as a standalone backup:
 
 **State**: Write `SLIDES_STATE.json` with `phase: 6`.
 
-### Phase 7: PowerPoint Export
+### Phase 7: PowerPoint Export (opt-in)
+
+**Gate**: Phase 7 runs the actual export **only** when one of these is true:
+
+- `PPTX_AT_END == true` (the user flipped the constant, e.g. for legacy workflows)
+- `— with-pptx: true` was passed in `$ARGUMENTS` for this invocation
+- The user answers "yes" / "生成" / "build it" at the checkpoint below
+
+Otherwise Phase 7 records that the PPTX was deferred (or declined) in `SLIDES_STATE.json` and continues to Phase 8 without producing `slides/presentation.pptx` or `slides/generate_pptx.py`. The PDF iteration loop (Phases 0-6) is the source of truth; the PPTX is a derivative that we want to build once, at the end, not on every iteration.
+
+#### Checkpoint (skip if `PPTX_AT_END == true` or `— with-pptx: true`)
+
+Present this message verbatim to the user before doing any export work:
+
+```
+📄 PDF is ready at slides/main.pdf — review it now.
+
+The PPTX (slides/presentation.pptx) is a derivative of the LaTeX source. It's
+cheap to regenerate once, but expensive to keep in sync if you're still
+iterating, because main.tex and generate_pptx.py don't auto-sync. So:
+
+  - "yes" / "生成" / "build it"        → build PPTX now and continue to Phase 8
+  - "later" / "wait" / "skip for now"  → skip PPTX, continue to Phase 8 (you
+                                         can ask later: re-run /paper-slides
+                                         with — with-pptx: true once the deck
+                                         is final *)
+  - "no" / "never"                     → skip PPTX, mark SLIDES_STATE.json
+                                         with pptx_status: "declined"
+
+Recommended: iterate on the PDF until you're sure the deck is final, THEN say
+"yes". Each PPTX build only takes a few seconds, but every iteration on
+.pptx that doesn't round-trip through main.tex is silently lost the next
+time Phase 7 runs.
+
+* A focused `— pptx-only` rerun mode is a planned follow-up. For now,
+  re-running /paper-slides with — with-pptx: true is the path; it skips Phase
+  1's STOP checkpoint when SLIDES_STATE.json shows the outline already
+  approved.
+```
+
+⛔ **STOP** here and wait for the user's answer.
+
+#### Branch A — "yes" (or forced via `PPTX_AT_END == true` / `— with-pptx: true`)
 
 Generate an editable PPTX using `python-pptx`:
 
@@ -479,9 +524,19 @@ cd slides && python3 generate_pptx.py
 # Output: slides/presentation.pptx
 ```
 
-> ⚠️ If `python-pptx` is not installed, skip with a note: "Install `pip install python-pptx` to enable PowerPoint export."
+> ⚠️ If `python-pptx` is not installed, skip with a note: "Install `pip install python-pptx` to enable PowerPoint export." and write `SLIDES_STATE.json` with `pptx_status: "skipped-missing-dep"`.
 
-**State**: Write `SLIDES_STATE.json` with `phase: 7`.
+Surface the output path. Then write `SLIDES_STATE.json` with `phase: 7, pptx_status: "built"`.
+
+#### Branch B — "later" / "wait" / "skip for now"
+
+Do **not** create `slides/generate_pptx.py` and do **not** run `python-pptx`. Surface one line: `PPTX deferred. Re-run /paper-slides with — with-pptx: true once the deck is final.` Then write `SLIDES_STATE.json` with `phase: 7, pptx_status: "deferred"` and continue to Phase 8.
+
+#### Branch C — "no" / "never"
+
+Same behavior as Branch B, but write `pptx_status: "declined"` instead. Continue to Phase 8.
+
+**State**: Write `SLIDES_STATE.json` with `phase: 7` and the appropriate `pptx_status` (one of `"built" | "deferred" | "declined" | "skipped-missing-dep"`).
 
 ### Phase 8: Full Talk Script
 
@@ -697,20 +752,21 @@ After generating the TALK_SCRIPT.md, recommend the user advance to `/paper-slide
   slides/
   ├── main.tex              # Beamer LaTeX source
   ├── main.pdf              # Compiled slides (primary output)
-  ├── presentation.pptx     # Editable PowerPoint
+  ├── presentation.pptx     # Editable PowerPoint (only if PPTX_AT_END==true or — with-pptx: true)
   ├── SLIDE_OUTLINE.md      # Slide-by-slide outline
   ├── SLIDES_REVIEW.md      # GPT-5.6-Sol review feedback
   ├── speaker_notes.md      # Per-slide speaker notes
   ├── TALK_SCRIPT.md        # Full word-for-word talk script + Q&A
-  ├── SLIDES_STATE.json     # State persistence
-  ├── generate_pptx.py      # PPTX generation script
+  ├── SLIDES_STATE.json     # State persistence (includes pptx_status)
+  ├── generate_pptx.py      # PPTX generation script (only if PPTX was built)
   └── figures/              # Symlinked from paper/figures/
 
 Next steps:
-1. Practice with TALK_SCRIPT.md (read aloud, time yourself)
-2. Edit presentation.pptx for visual tweaks (animations, custom graphics)
-3. Review Anticipated Q&A section before the talk
-4. Do a dry run with a colleague
+1. Iterate on the PDF (slides/main.pdf) — the LaTeX source (slides/main.tex) is the source of truth. When the deck is final, re-run /paper-slides with — with-pptx: true to produce the editable PPTX.
+2. Practice with TALK_SCRIPT.md (read aloud, time yourself)
+3. Edit presentation.pptx for visual tweaks (animations, custom graphics) — once it has been built
+4. Review Anticipated Q&A section before the talk
+5. Do a dry run with a colleague
 ```
 
 **State**: Write `SLIDES_STATE.json` with `phase: 8, status: "completed"`.
