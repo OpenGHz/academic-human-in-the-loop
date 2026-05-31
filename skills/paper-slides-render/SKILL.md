@@ -365,6 +365,15 @@ Always: **the clip's source audio is muted** (motor whirr, ambient sound, etc. a
 - Video slides are letterboxed/pillarboxed against a **black** background to match `/paper-video`'s clip pipeline. Still-PNG slides use white. Mixing both in one deck is fine but the pad color visibly differs at clip boundaries.
 - The PDF still shows whatever figure beamer rendered — VIDEO markers are a render-time substitution, not a beamer change. Reviewers who only have the PDF (no MP4) still see the static figure.
 
+### Where `[VIDEO: ...]` markers do NOT take effect
+
+`[VIDEO: ...]` is a **render-time substitution for this skill's MP4 output only**. It is not a slide-embedding mechanism. In particular:
+
+- **`slides/main.pdf`** — beamer renders whatever the LaTeX source declared (typically `\includegraphics{...}` for a still). VIDEO markers are inside `TALK_SCRIPT.md`, not in the LaTeX, so the PDF is unchanged. If you want a playable clip inside the PDF, use beamer `\movie` / `media9` — but those depend on a video-capable PDF reader (Adobe Reader yes; Preview / zathura / most browsers no), which is why this skill bypasses them.
+- **`slides/presentation.pptx`** — the PPTX produced by `/paper-slides` Phase 7 uses `python-pptx`, which can write images, shapes, and text but **cannot embed video shapes**. So the same slide that displays a clip in `presentation.mp4` will display the still figure (or be empty) in `presentation.pptx`. If you need a playable clip inside the PPTX for live presentation, add the video manually in PowerPoint / Keynote after Phase 7 — that path is out of scope for this skill.
+
+In short: VIDEO markers are honored **only** in the MP4 produced by `python3 "$RENDER_HELPER" render`. They are silently inert in the PDF and PPTX outputs of `/paper-slides`.
+
 ### Preflight (recommended)
 
 Pass `--talk-script` to preflight so missing files / out-of-bounds trim ranges fail before any TTS or ffmpeg work starts:
