@@ -154,8 +154,13 @@ running unattended.
 Invoke `/paper-slides` to generate Beamer source + PPTX from the approved
 outline.
 
+`/paper-slides` defaults to PDF-only (PPTX deferred via Phase 7 checkpoint).
+Orchestrators always pass `— with-pptx: true` so the PPTX is built upfront
+and Phase 3's `/slides-polish` has a file to operate on without surfacing
+the inner skill's checkpoint to the user.
+
 ```
-/paper-slides "<paper-dir>" — talk_type: <T> — minutes: <N> — venue: <V> — aspect: 16:9 — notes: true
+/paper-slides "<paper-dir>" — talk_type: <T> — minutes: <N> — venue: <V> — aspect: 16:9 — notes: true — with-pptx: true
 ```
 
 Forward `— style-ref:` if the user originally passed it (writer-side; the
