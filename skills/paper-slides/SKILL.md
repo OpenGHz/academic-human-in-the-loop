@@ -264,6 +264,9 @@ For each slide in the outline, draft the actual content.
 | **Bold key numbers** | "Achieves **94.3%** accuracy" |
 | **Progressive disclosure** | Use `\pause` or `\onslide` for complex slides |
 | **No Related Work slide** | Unless invited talk (30+ min) |
+| **Consistent across analogous slides** | Same-role boxes/panels keep identical size & style on every slide; fix alignment by **repositioning (centering), not resizing**. Keep parallel items parallel (e.g. every posed question ends with `?`) |
+| **One idea per line** | Never weld two unrelated ideas with a `·` / `;` separator (a `·` is only for a short list of *parallel* items) — split to separate lines. Drop redundant conditionals that make a posed question self-answering (`unlock first if locked?` → `unlock first?`) |
+| **Task-intro slides show real I/O** | For a "what is the task" slide, build a concrete `Question → Model → Answer` panel from the paper's actual prompt + choice list (Appendix prompt tables) and show the explored attempt as frames — beats abstract bullets for conveying the task |
 
 **For each slide, produce**:
 1. `\frametitle{}`
@@ -795,6 +798,8 @@ needed (re-run `/paper-slides` instead).
 
 - **Large file handling**: If the Write tool fails due to file size, immediately retry using Bash (`cat << 'EOF' > file`) to write in chunks. Do NOT ask the user for permission — just do it silently.
 - **One message per slide.** If a slide has two ideas, split it into two slides.
+- **Minimal change on edits.** When the user asks to fix one thing, change only that — "adjust position, keep the size" means reposition (e.g., center), not resize; don't restyle or refactor unrequested elements across the deck.
+- **Task-intro slides demonstrate, not describe.** Prefer a concrete `Question → Model → Answer` panel (drawn from the paper's prompt + choices) plus the explored attempt as frames, over abstract bullets.
 - **Do NOT fabricate data.** All numbers must come from `paper/sections/*.tex`.
 - **Bullet points only** — never full sentences on slides. Sentence fragments are fine.
 - **Figure slides: figure ≥60% of slide area.** The figure IS the content.
