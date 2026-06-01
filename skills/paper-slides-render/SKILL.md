@@ -95,13 +95,13 @@ Each slide is introduced by an H2 header that names its number, title, and plann
 
 Parsing rules (enforced by the helper):
 
-- Headers must match `## Slide N: <title> [MM:SS - MM:SS]` (em-dash `–` also accepted).
+- Headers must match `## Slide N: <title> [MM:SS - MM:SS]` (hyphen, en-dash `–`, or em-dash `—` accepted). Trailing annotations after the bracket — e.g. `[0:00 - 0:15]  (~40 words)` or `· 5× [VIDEO: …]` — are tolerated and ignored, so `/paper-slides` output parses without hand-editing.
 - The body is everything between the header and the next `## Slide` header, or a horizontal-rule `---` line, whichever comes first.
 - **Only quoted text becomes narration**. Straight quotes (`"..."`) and curly quotes (`"..."`) are both detected.
 - `→ *Transition*: ...` markers are stripped.
 - Italicized stage directions (`*[Wait for chair...]*` lines) are stripped.
 - If no quotes are found, the helper falls back to the full body with markdown stripped, and flags the slide in `fallback_mode_slides`.
-- A slide body may also carry one `[VIDEO: path]` marker that swaps the rasterized PNG for a video clip at compose time. See [Embedding experiment videos](#embedding-experiment-videos) for syntax + duration semantics.
+- A slide body may carry `[VIDEO: ...]` marker(s). A bare `[VIDEO: path]` swaps the whole rasterized PNG for the clip (full-frame; one per slide). Anchored markers `[VIDEO: clip ON still.png]` overlay each clip onto the still it names, in place — **multiple per slide** — preserving the slide's own title/captions. See [Embedding experiment videos](#embedding-experiment-videos) for syntax + duration semantics.
 
 ## Workflow: MUST EXECUTE ALL STEPS
 
@@ -188,15 +188,22 @@ python3 "$RENDER_HELPER" render \
   --resolution "${RESOLUTION:-1920x1080}" \
   --fps "${FPS:-30}" \
   --workspace . \
+  ${VENUE_CAP:+--max-seconds $VENUE_CAP} \
+  ${RATE:+--rate "$RATE"} \
   ${WITH_SUBTITLES:+--with-subtitles} \
   --json-out slides/render/render.json
 ```
 
-This is long-running. Per slide it: looks up cached audio (content-hash on voice + text) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → optionally calls `whisper` for word-level alignment → composes a per-slide MP4 segment → concatenates everything with `-movflags +faststart` → if `--with-subtitles` and whisper produced SRTs, re-encodes once with a subtitle burn-in pass.
+`--workspace` may be the paper dir (which contains `slides/`) **or** the slides dir itself — the helper auto-detects and never doubles the path.
+
+Pass `--max-seconds <cap>` whenever the talk has a venue ceiling (e.g. 180 for CoRL / NeurIPS-supp). The helper synthesizes all narration first, then **projects the final length before the expensive compose**, so an over-budget deck is caught early (see exit 4 below) rather than after a full render. `--rate +10%` (edge-tts speed delta) is the no-rewrite remedy when it overruns.
+
+This is long-running. Per slide it: looks up cached audio (content-hash on voice + text + rate) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → projects total vs `--max-seconds` and halts if over (exit 4) → optionally calls `whisper` for word-level alignment → composes a per-slide MP4 segment (still slides held for exactly narration length; deterministic, no `-shortest` overshoot) → concatenates everything with `-movflags +faststart` → if `--with-subtitles` and whisper produced SRTs, re-encodes once with a subtitle burn-in pass.
 
 On non-zero exit:
 
 - Exit 1 — parse / TTS / pdftoppm failed. Read `render.json.tts_errors` or `error` field, fix, rerun. Do NOT auto-retry; most failures are user-actionable (network drop, malformed script).
+- **Exit 4 — projected duration over `--max-seconds`** (halted after TTS, before any compose). The JSON carries `projected_seconds`, `cap_seconds`, `over_by_seconds`, and a `per_slide` breakdown. **STOP and ask the user** how to proceed: trim narration on the longest slides, re-render with `--rate +N%`, or re-run with `--allow-over-cap` to accept the overflow. Do not silently proceed.
 - Exit 3 — ffmpeg or whisper failed. Stderr is captured verbatim in the JSON. Read it before rerunning.
 
 Whisper-missing with `--with-subtitles` is **not** a failure: `render.json.subtitles.skipped=true` with `skipReason="whisper-missing"`, and the MP4 is produced without subtitles.
@@ -291,13 +298,14 @@ This skill follows **Policy A (skill-local gate)** per `shared-references/integr
 | `parse` | Halt; user fixes TALK_SCRIPT.md | 1 |
 | `narrate` | Continue per-slide; final `ok=false` if any slide failed | 1 if any failed |
 | `render` | Halt at failing step. Subtitles-missing degrades, does NOT fail. | 1 (TTS / pdftoppm / parse), 3 (ffmpeg / whisper) |
+| `render --max-seconds N` | Projected total over cap → halt after TTS, before compose; **orchestrator STOPs and asks user** | 4 |
 | `verify` | Report all violations | 2 |
 
 Soft-fail slot: `subtitles.skipReason ∈ {"whisper-missing", "whisper-failed", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`. Subtitle failure is the only soft-fail in the entire skill.
 
 ## Idempotency Contract
 
-- Re-running `render` with unchanged inputs **reuses** cached audio (per-slide content-hash on voice+text) and PNGs (per-slide PDF mtime). Skipped work is logged with `audio_cached: true` or `png_cached: true`.
+- Re-running `render` with unchanged inputs **reuses** cached audio (per-slide content-hash on voice+text+rate) and PNGs (per-slide PDF mtime). Skipped work is logged with `audio_cached: true` or `png_cached: true`. Changing `--rate` invalidates only the audio cache.
 - `edge-tts` calls a server-side voice; identical input text may produce slightly different waveform bytes across runs. Bit-identical MP4 is **not** guaranteed — `verify.json.ok=true` is the acceptance criterion.
 - `render` writes the output MP4 atomically (`.tmp` then `replace`).
 - `preflight`, `parse`, `narrate`, `verify` never mutate the source `slides/main.pdf` or `slides/TALK_SCRIPT.md`.
@@ -321,6 +329,8 @@ Soft-fail slot: `subtitles.skipReason ∈ {"whisper-missing", "whisper-failed", 
 | Resolution | `1920x1080` | `— resolution: WxH` |
 | FPS | `30` | `— fps: N` |
 | Subtitles | off | `— with-subtitles` |
+| Narration rate | normal | `— rate: +10%` / `-5%` (edge-tts speed; remedy for over-cap decks) |
+| Duration cap | none | `— max-seconds: N` (halt after TTS if projected total over cap; exit 4) |
 | Duration tolerance | 15 % | `--duration-tolerance 0.10` (on the helper directly) |
 
 Edge TTS voice list: `edge-tts --list-voices` (200+ voices across 50+ locales).
@@ -331,7 +341,7 @@ Robotics, manipulation, and animation work usually needs a moving demonstration 
 
 ### Syntax
 
-Add a `[VIDEO: path]` marker on its own line inside a slide body. Paths are resolved relative to `TALK_SCRIPT.md`'s directory; absolute paths are also allowed. One marker per slide — extras are ignored with a warning.
+Add a `[VIDEO: path]` marker on its own line inside a slide body. Paths are resolved relative to `TALK_SCRIPT.md`'s directory; absolute paths are also allowed. A bare marker is **full-frame**: one per slide, extras ignored with a warning.
 
 ```markdown
 ## Slide 3: Grasping Demo [0:30 - 0:42]
@@ -347,6 +357,24 @@ Optional clip trim (start–end inside the source clip; seconds or `MM:SS`):
 [VIDEO: figures/grasp.mp4 @ 2.5-7.0]
 [VIDEO: figures/grasp.mp4 @ 0:02-0:07]
 ```
+
+### In-place overlays (`ON <still>`) — multiple clips per slide
+
+When a slide already lays out several still thumbnails (e.g. a task gallery), anchor each clip to the still it should replace with `ON <still.png>`. **Multiple anchored markers per slide are allowed** — this is the only way to animate more than one region of a slide.
+
+```markdown
+## Slide 5: Five-task gallery [1:27 - 2:00]
+
+[VIDEO: figures/safe_rollout.mp4 ON figures/still_safe.png]
+[VIDEO: figures/lamp_rollout.mp4 ON figures/still_lamp.png]
+[VIDEO: figures/door_rollout.mp4 @ 0-1.5 ON figures/still_door.png]
+
+"EMT-QA spans five tasks..."
+```
+
+How it works: the helper rasterizes the slide, locates each named still on the page by **template matching** (cv2 normalized cross-correlation, multi-scale — so it recovers the LaTeX-decided box without manual coordinates), and overlays the clip there, looping/trimmed and muted. The slide's own title, captions, and layout are preserved because the rasterized page is the background; only the thumbnails come alive. Requires `opencv-python`; if absent the helper errors only for slides that use `ON` (bare full-frame markers are unaffected). `parse`/`preflight` report each clip's `anchor_path` + `anchor_exists`, and `render.json` logs per-overlay `box` + `match_score` and any `unmatched_overlays`.
+
+> Anchored overlays are still **one composite per slide** under the hood — exactly the "pre-stitch, reference once" pattern, but automated. Unlike a hand-built grid, the slide's real captions and structure survive.
 
 ### Duration policy
 
