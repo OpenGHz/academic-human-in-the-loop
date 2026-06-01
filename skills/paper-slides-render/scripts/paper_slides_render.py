@@ -74,6 +74,16 @@ ALLOWED_VIDEO_CODECS = {"h264", "hevc", "av1"}
 ALLOWED_AUDIO_CODECS = {"aac", "ac3", "opus"}
 REQUIRED_PIXEL_FORMAT = "yuv420p"
 
+# Subtitle style defaults (used when --with-subtitles is set).
+# Threaded through both whisper (output line shaping) and ffmpeg (libass force_style).
+DEFAULT_SUBTITLE_FONT = "DejaVuSans"               # CJK needs "Noto Sans CJK SC" or similar
+DEFAULT_SUBTITLE_SIZE = 24                         # 1080p-friendly; 20 was too thin
+DEFAULT_SUBTITLE_MAX_LINE_WIDTH = 42               # characters per line; whisper wraps above this
+DEFAULT_SUBTITLE_MAX_LINE_COUNT = 2                # max lines per cue
+DEFAULT_SUBTITLE_POSITION = "bottom"               # bottom | top
+DEFAULT_SUBTITLE_MARGIN_V = 80                     # vertical margin from edge (px @ 1080p)
+SUBTITLE_ALIGNMENT_BY_POSITION = {"bottom": 2, "top": 8}  # ASS V4+ numpad alignment
+
 SLIDE_HEADER_RE = re.compile(
     # Trailing text after the time bracket (e.g. "(~40 words)", "· 5× [VIDEO: …]")
     # is tolerated and ignored — /paper-slides emits such annotations, so the
@@ -1084,8 +1094,10 @@ def _whisper_align(
     audio_wav: Path,
     output_dir: Path,
     model_name: str = "base.en",
+    max_line_width: int = DEFAULT_SUBTITLE_MAX_LINE_WIDTH,
+    max_line_count: int = DEFAULT_SUBTITLE_MAX_LINE_COUNT,
 ) -> tuple[Path | None, str | None]:
-    """Run whisper, return (per-slide srt path, error)."""
+    """Run whisper with per-cue line wrapping; return (per-slide srt path, error)."""
     output_dir.mkdir(parents=True, exist_ok=True)
     cli = shutil.which("whisper")
     if cli:
@@ -1094,6 +1106,8 @@ def _whisper_align(
             "--model", model_name,
             "--word_timestamps", "True",
             "--output_format", "srt",
+            "--max_line_width", str(max_line_width),
+            "--max_line_count", str(max_line_count),
             "--output_dir", str(output_dir),
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
@@ -1103,28 +1117,36 @@ def _whisper_align(
         if srt.is_file():
             return srt, None
         return None, f"whisper produced no SRT for {audio_wav.name}"
-    # Module fallback
+    # Module fallback — replicate whisper CLI's max_line_width / max_line_count
+    # behavior by wrapping each segment's text via textwrap.fill before emitting.
     if importlib.util.find_spec("whisper") is None:
         return None, "whisper not available"
     py = (
-        "import sys, json, whisper;"
-        "p=sys.argv[1]; o=sys.argv[2]; m=sys.argv[3];"
-        "model=whisper.load_model(m);"
-        "r=model.transcribe(p, word_timestamps=True);"
-        "import os; out=os.path.join(o, os.path.splitext(os.path.basename(p))[0]+'.srt');"
-        "import datetime;"
+        "import sys, os, textwrap, whisper\n"
+        "p=sys.argv[1]; o=sys.argv[2]; m=sys.argv[3];\n"
+        "mlw=int(sys.argv[4]); mlc=int(sys.argv[5]);\n"
+        "model=whisper.load_model(m);\n"
+        "r=model.transcribe(p, word_timestamps=True);\n"
+        "out=os.path.join(o, os.path.splitext(os.path.basename(p))[0]+'.srt')\n"
         "def fmt(t):\n"
-        "    ms=int((t-int(t))*1000); s=int(t)%60; m=(int(t)//60)%60; h=int(t)//3600;\n"
-        "    return f'{h:02d}:{m:02d}:{s:02d},{ms:03d}'\n"
+        "    ms=int((t-int(t))*1000); s=int(t)%60; mm=(int(t)//60)%60; hh=int(t)//3600\n"
+        "    return f'{hh:02d}:{mm:02d}:{s:02d},{ms:03d}'\n"
+        "def wrap(s):\n"
+        "    lines=textwrap.wrap(s.strip(), width=mlw) or ['']\n"
+        "    return '\\n'.join(lines[:mlc])\n"
         "lines=[]\n"
         "for i,seg in enumerate(r.get('segments') or [], start=1):\n"
         "    lines.append(str(i))\n"
         "    lines.append(fmt(seg['start'])+' --> '+fmt(seg['end']))\n"
-        "    lines.append(seg['text'].strip())\n"
+        "    lines.append(wrap(seg['text']))\n"
         "    lines.append('')\n"
-        "open(out,'w',encoding='utf-8').write('\\n'.join(lines))"
+        "open(out,'w',encoding='utf-8').write('\\n'.join(lines))\n"
     )
-    cmd = [sys.executable, "-c", py, str(audio_wav), str(output_dir), model_name]
+    cmd = [
+        sys.executable, "-c", py,
+        str(audio_wav), str(output_dir), model_name,
+        str(max_line_width), str(max_line_count),
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     if proc.returncode != 0:
         return None, (proc.stderr or proc.stdout or "whisper module failed").strip()[-800:]
@@ -1482,9 +1504,32 @@ def _ffmpeg_concat(segments: list[Path], output: Path) -> tuple[bool, str | None
     return True, None
 
 
-def _ffmpeg_burn_subtitles(input_mp4: Path, srt: Path, output: Path, font: str = "DejaVuSans") -> tuple[bool, str | None]:
+def _ffmpeg_burn_subtitles(
+    input_mp4: Path,
+    srt: Path,
+    output: Path,
+    font: str = DEFAULT_SUBTITLE_FONT,
+    size: int = DEFAULT_SUBTITLE_SIZE,
+    position: str = DEFAULT_SUBTITLE_POSITION,
+    margin_v: int = DEFAULT_SUBTITLE_MARGIN_V,
+) -> tuple[bool, str | None]:
+    """Burn `srt` into `input_mp4` via libass `force_style`. Style fields:
+      FontName   — exact font face on the system (CJK needs Noto Sans CJK SC etc.)
+      FontSize   — points at 384 ASS-virtual height (renders ~accurate at 1080p)
+      Alignment  — ASS V4+ numpad: 2 = bottom-center, 8 = top-center
+      MarginV    — distance from top/bottom edge in pixels
+    """
     output.parent.mkdir(parents=True, exist_ok=True)
-    vf = f"subtitles={srt}:force_style='FontName={font},FontSize=20'"
+    # Sanitize font name: strip single quotes and commas to keep force_style parseable.
+    safe_font = font.replace("'", "").replace(",", "")
+    alignment = SUBTITLE_ALIGNMENT_BY_POSITION.get(position, 2)
+    style = (
+        f"FontName={safe_font},"
+        f"FontSize={int(size)},"
+        f"Alignment={alignment},"
+        f"MarginV={int(margin_v)}"
+    )
+    vf = f"subtitles={srt}:force_style='{style}'"
     cmd = [
         "ffmpeg", "-y",
         "-i", str(input_mp4),
@@ -1555,6 +1600,12 @@ def cmd_render(args: argparse.Namespace) -> int:
     width, height = (int(x) for x in args.resolution.lower().split("x"))
     fps = int(args.fps)
     with_subtitles = bool(args.with_subtitles)
+    sub_font = getattr(args, "subtitle_font", None) or DEFAULT_SUBTITLE_FONT
+    sub_size = int(getattr(args, "subtitle_size", None) or DEFAULT_SUBTITLE_SIZE)
+    sub_position = getattr(args, "subtitle_position", None) or DEFAULT_SUBTITLE_POSITION
+    sub_margin_v = int(getattr(args, "subtitle_margin_v", None) or DEFAULT_SUBTITLE_MARGIN_V)
+    sub_max_line_width = int(getattr(args, "subtitle_max_line_width", None) or DEFAULT_SUBTITLE_MAX_LINE_WIDTH)
+    sub_max_line_count = int(getattr(args, "subtitle_max_line_count", None) or DEFAULT_SUBTITLE_MAX_LINE_COUNT)
 
     warnings: list[str] = []
 
@@ -1648,6 +1699,14 @@ def cmd_render(args: argparse.Namespace) -> int:
         "skipReason": None,
         "path": None,
         "preBurnPath": None,
+        "style": {
+            "font": sub_font,
+            "size": sub_size,
+            "position": sub_position,
+            "margin_v": sub_margin_v,
+            "max_line_width": sub_max_line_width,
+            "max_line_count": sub_max_line_count,
+        } if with_subtitles else None,
     }
     merged_srt: Path | None = None
 
@@ -1749,7 +1808,11 @@ def cmd_render(args: argparse.Namespace) -> int:
             for slide_record in narrate_results:
                 slide_num = slide_record["slide_number"]
                 wav, _ = _audio_paths(workspace, slide_num)
-                srt_path, err = _whisper_align(wav, srt_dir)
+                srt_path, err = _whisper_align(
+                    wav, srt_dir,
+                    max_line_width=sub_max_line_width,
+                    max_line_count=sub_max_line_count,
+                )
                 if err:
                     subtitles_info["skipped"] = True
                     subtitles_info["skipReason"] = "whisper-failed"
@@ -1773,7 +1836,13 @@ def cmd_render(args: argparse.Namespace) -> int:
         # replace output on success. Failure leaves output untouched.
         if merged_srt is not None:
             burned = output.with_suffix(".subs.mp4")
-            ok_burn, burn_err = _ffmpeg_burn_subtitles(output, merged_srt, burned)
+            ok_burn, burn_err = _ffmpeg_burn_subtitles(
+                output, merged_srt, burned,
+                font=sub_font,
+                size=sub_size,
+                position=sub_position,
+                margin_v=sub_margin_v,
+            )
             if not ok_burn:
                 subtitles_info["skipped"] = True
                 subtitles_info["skipReason"] = "ffmpeg-subtitle-burn-failed"
@@ -1960,6 +2029,18 @@ def _build_parser() -> argparse.ArgumentParser:
     ren.add_argument("--fps", type=int, default=DEFAULT_FPS, help=f"Output fps (default: {DEFAULT_FPS})")
     ren.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     ren.add_argument("--with-subtitles", action="store_true", help="Burn whisper-aligned subtitles (degrades to no-subs if whisper missing)")
+    ren.add_argument("--subtitle-font", default=DEFAULT_SUBTITLE_FONT,
+                     help=f"Subtitle font face — use a CJK font (e.g. 'Noto Sans CJK SC') for Chinese/Japanese/Korean (default: {DEFAULT_SUBTITLE_FONT})")
+    ren.add_argument("--subtitle-size", type=int, default=DEFAULT_SUBTITLE_SIZE,
+                     help=f"Subtitle font size in ASS points (default: {DEFAULT_SUBTITLE_SIZE})")
+    ren.add_argument("--subtitle-position", choices=("bottom", "top"), default=DEFAULT_SUBTITLE_POSITION,
+                     help=f"Subtitle vertical position (default: {DEFAULT_SUBTITLE_POSITION})")
+    ren.add_argument("--subtitle-margin-v", type=int, default=DEFAULT_SUBTITLE_MARGIN_V,
+                     help=f"Subtitle distance from top/bottom edge, in pixels at 1080p (default: {DEFAULT_SUBTITLE_MARGIN_V})")
+    ren.add_argument("--subtitle-max-line-width", type=int, default=DEFAULT_SUBTITLE_MAX_LINE_WIDTH,
+                     help=f"Whisper soft cap on characters per subtitle line (default: {DEFAULT_SUBTITLE_MAX_LINE_WIDTH})")
+    ren.add_argument("--subtitle-max-line-count", type=int, default=DEFAULT_SUBTITLE_MAX_LINE_COUNT,
+                     help=f"Whisper max lines per cue; long cues are truncated (default: {DEFAULT_SUBTITLE_MAX_LINE_COUNT})")
     ren.add_argument("--rate", default=None, help="edge-tts speed delta, e.g. +10%% or -5%% (remedy for over-cap decks; invalidates audio cache)")
     ren.add_argument("--max-seconds", type=float, default=None, help="Halt after TTS (exit 4) if projected total exceeds this cap, before composing")
     ren.add_argument("--allow-over-cap", action="store_true", help="Proceed even if projected total exceeds --max-seconds")
