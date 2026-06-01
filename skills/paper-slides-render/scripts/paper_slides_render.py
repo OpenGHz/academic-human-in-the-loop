@@ -57,6 +57,10 @@ DEFAULT_DURATION_TOLERANCE = 0.15  # 15% of planned
 # ffmpeg's -shortest, which overshoots a looped image by ~2.5s) makes segment
 # length deterministic and equal to what the post-TTS duration projection expects.
 STILL_TAIL_SECONDS = 0.0
+# Each composed segment runs ~0.04s longer than its narration (AAC encoder
+# priming), and these accumulate across the concat. The duration projection adds
+# this per segment so --max-seconds stays a TRUE ceiling (slightly conservative).
+SEGMENT_OVERHEAD_SECONDS = 0.05
 
 ALLOWED_VIDEO_CODECS = {"h264", "hevc", "av1"}
 ALLOWED_AUDIO_CODECS = {"aac", "ac3", "opus"}
@@ -1428,8 +1432,10 @@ def _project_durations(
                 cd = max(0.001, float(probe_info["duration"]))
             clip_max = max(clip_max, cd)
         # Mirror compose: video slides → max(narration, clip); still slides →
-        # narration + the fixed tail used by _ffmpeg_compose_slide.
-        effective = max(narration, clip_max) if clips else narration + STILL_TAIL_SECONDS
+        # narration + the fixed tail used by _ffmpeg_compose_slide. Add the per-
+        # segment encoder overhead so the projected total matches the muxed output.
+        base = max(narration, clip_max) if clips else narration + STILL_TAIL_SECONDS
+        effective = base + SEGMENT_OVERHEAD_SECONDS
         total += effective
         per_slide.append({
             "slide_number": n,
