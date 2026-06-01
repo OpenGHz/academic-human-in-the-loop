@@ -305,7 +305,7 @@ Soft-fail slot: `subtitles.skipReason ∈ {"whisper-failed", "alignment-merge-fa
 
 ## Idempotency Contract
 
-- Re-running `render` with unchanged inputs **reuses** cached audio (per-slide content-hash on voice+text+rate) and PNGs (per-slide PDF mtime). Skipped work is logged with `audio_cached: true` or `png_cached: true`. Changing `--rate` invalidates only the audio cache.
+- Re-running `render` with unchanged inputs **reuses** cached audio (per-slide content-hash on voice+text+rate) and PNGs (keyed on PDF mtime + DPI/resolution in `png/.raster.json`). Pages are rasterized at **≥ the output resolution** (supersampled, then downscaled once with lanczos) so text stays crisp instead of being upscaled from a low-DPI render; changing `--resolution` re-rasterizes. Changing `--rate` invalidates only the audio cache.
 - `edge-tts` calls a server-side voice; identical input text may produce slightly different waveform bytes across runs. Bit-identical MP4 is **not** guaranteed — `verify.json.ok=true` is the acceptance criterion.
 - `render` writes the output MP4 atomically (`.tmp` then `replace`).
 - `preflight`, `parse`, `narrate`, `verify` never mutate the source `slides/main.pdf` or `slides/TALK_SCRIPT.md`.
