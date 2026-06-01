@@ -93,23 +93,48 @@ The **orchestrators** ([`/paper-writing`](../skills/paper-writing/SKILL.md), [`/
         └──────────┬───────────┘
                    │ writes: in-place edits to paper/sections/*.tex
                    ▼
-              ┌────────────┐
-              │  paper.pdf │  ⭐ TRUNK COMPLETE — this is what
-              └────────────┘     the three branches all depend on
+       ┌────────────────────────────────────────────────────────┐
+       │  paper/                ⭐ TRUNK COMPLETE — the whole   │
+       │  ├── main.tex             directory is the contract.   │
+       │  ├── sections/*.tex       Branches consume LaTeX        │
+       │  ├── references.bib       SOURCE for text extraction;   │
+       │  ├── figures/             main.pdf is reserved for      │
+       │  └── main.pdf             *visual* reference only.      │
+       └────────────────────────────────────────────────────────┘
 ```
 
 **[`/paper-writing`](../skills/paper-writing/SKILL.md)** is the **trunk orchestrator** that chains `paper-plan → paper-figure → paper-write → paper-compile → polish-loop → audits` end-to-end. Invoke it when you want to go from `NARRATIVE_REPORT.md` to a compiled PDF in one shot; invoke the leaves directly when you're iterating on a single phase.
+
+### Why branches read `paper/sections/*.tex`, not `paper/main.pdf`
+
+The natural question is: *the PDF is the human-readable artifact — why don't downstream skills just extract text from it?* They don't, for four concrete reasons:
+
+| Need | LaTeX source | PDF |
+|---|---|---|
+| **Section boundaries** | `\section{Method}` is a hard delimiter | requires heuristics on font / spacing; subsection vs heading often ambiguous |
+| **Numbers + units** | `94.3\%`, `$2.1 \pm 0.3$` survive verbatim | "94.3%" may render as `94 . 3  %` after font shaping; subscripts and math notation reflow |
+| **Citation keys** | `\cite{lecun2015}` directly addressable | only the rendered "[1]" remains — back-pointer to the key is non-trivial |
+| **Figure references** | `\includegraphics{figures/teaser.pdf}` gives the literal path | PDF embeds the rasterized image; the source path is lost |
+
+So the rule is: **branches read LaTeX source for content extraction; they consult `main.pdf` only for visual-reference jobs** (Codex per-page review of layout, Phase 5 of `/paper-slides` and `/paper-poster`). The PDF's role in this graph is "trunk-complete signal" + "visual ground truth", not "text-to-extract".
 
 ---
 
 ## TALK branch — slides + narrated MP4
 
 ```
-                ┌──────────────────┐
-                │  TRUNK output    │  paper/main.pdf, paper/main.tex,
-                │  (paper.pdf)     │  paper/sections/*.tex, paper/figures/
-                └────────┬─────────┘
-                         ▼
+       ┌────────────────────────────────────────────────────────┐
+       │  TRUNK contract — paper/                               │
+       │                                                        │
+       │    paper/sections/*.tex   ◄── TEXT extraction          │
+       │    paper/main.tex         ◄── metadata (title, author) │
+       │    paper/references.bib   ◄── cite-keys                │
+       │    paper/figures/         ◄── \includegraphics targets │
+       │                                                        │
+       │    paper/main.pdf         ◄── VISUAL reference only    │
+       │                              (Codex review, layout)    │
+       └────────────────────┬───────────────────────────────────┘
+                            ▼
               ┌─────────────────────┐
               │  /paper-slides      │ ── Phase 1: outline (⛔ STOP for approval)
               │  (Phases 0-8)       │ ── Phase 4: latexmk → slides/main.pdf
@@ -163,10 +188,13 @@ The **orchestrators** ([`/paper-writing`](../skills/paper-writing/SKILL.md), [`/
 ## POSTER branch
 
 ```
-                ┌──────────────────┐
-                │  TRUNK output    │
-                └────────┬─────────┘
-                         ▼
+       ┌────────────────────────────────────────────────────────┐
+       │  TRUNK contract — paper/                               │
+       │     /paper-poster reads paper/sections/*.tex line by   │
+       │     line for content extraction; main.pdf is used in   │
+       │     Phase 5 as the visual baseline only.               │
+       └────────────────────┬───────────────────────────────────┘
+                            ▼
               ┌─────────────────────┐
               │  /paper-poster      │ ── article + tcbposter LaTeX
               │  (Phases 0-8)       │ ── 4-column IMRAD layout
@@ -223,9 +251,9 @@ Every file that crosses a skill boundary, in one table.
 | `figures/fig*.pdf` | `/paper-figure` (auto) or manual | `/paper-write`, `/paper-poster`, `/paper-slides` | data plots; manual figures (architecture diagrams) must pre-exist |
 | `figures/latex_includes.tex` | `/paper-figure` | `/paper-write` | `\includegraphics{…}` snippets |
 | `figures/TABLE_*.tex` | `/paper-figure` | `/paper-write` | comparison tables (booktabs) |
-| `paper/main.tex` + `paper/sections/*.tex` | `/paper-write`, `/paper-writing-polish-loop` | `/paper-compile`, `/paper-slides`, `/paper-poster` | LaTeX source — single source of truth for the paper |
+| `paper/main.tex` + `paper/sections/*.tex` | `/paper-write`, `/paper-writing-polish-loop` | `/paper-compile`, **`/paper-slides`** (text extraction), **`/paper-poster`** (text extraction), `/citation-audit` (cite-key scan) | LaTeX source — single source of truth for the paper text. Branches grep `\section{}` boundaries, numbers, `\cite{}` keys, `\includegraphics` paths from here, never from the PDF |
 | `paper/references.bib` | `/paper-write` | `/paper-compile`, `/citation-audit` (out of scope) | enforced MIN_REFERENCES floor |
-| `paper/main.pdf` | `/paper-compile` | `/paper-slides`, `/paper-poster`, the user | compiled PDF; gates `MAX_PAGES` |
+| `paper/main.pdf` | `/paper-compile` | `/paper-slides` (Phase 5 visual review), `/paper-poster` (Phase 5 visual review), the user | compiled PDF; gates `MAX_PAGES`. **Not consumed for text extraction** — branches use the LaTeX source row above |
 | `slides/main.pdf` | `/paper-slides` (Phase 4) | `/paper-slides-render`, `/slides-polish` (as visual reference) | beamer deck |
 | `slides/main.tex` | `/paper-slides` (Phase 3) | `/slides-polish` (Beamer side) | beamer source |
 | `slides/TALK_SCRIPT.md` | `/paper-slides` (Phase 8) | `/paper-slides-render` | per-slide quoted narration + `[VIDEO: …]` markers |
