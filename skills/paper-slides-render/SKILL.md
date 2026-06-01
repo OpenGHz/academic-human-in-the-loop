@@ -23,6 +23,12 @@ Claude is the **orchestrator**; a self-contained Python helper does the work: TT
 - **TARGET_CODEC = `libx264 + aac (faststart)`** — Same codec target as `/paper-video` for compatibility.
 - **DURATION_TOLERANCE = `0.15`** — `verify` allows up to ±15 % drift between actual and planned duration. TTS variance makes a fixed-seconds tolerance too loose for short talks and too tight for long ones; fractional tolerance is the right knob.
 - **WITH_SUBTITLES = off (default)** — Pass `— with-subtitles` to burn word-aligned subtitles via `whisper base.en`. If whisper is missing **and** `--with-subtitles` was requested, preflight fails closed (`ok=false`, exit 1) — install whisper first (`pip install openai-whisper`) or drop the flag. Subtitles are rendered **after** the no-subs MP4 is already on disk, so a whisper failure mid-render never blocks the main deliverable.
+- **SUBTITLE_FONT = `DejaVuSans`** — Font face for burned-in subtitles. CJK talks **must** override to a CJK font (e.g. `Noto Sans CJK SC`); DejaVuSans renders □ for Chinese/Japanese/Korean.
+- **SUBTITLE_SIZE = `24`** — ASS font size in points (1080p-calibrated). Range: 18–36 recommended; beyond that readability degrades or subtitles compete with slide content.
+- **SUBTITLE_POSITION = `bottom`** — `bottom` (alignment=2) or `top` (alignment=8). Use `top` when experiment-video clips occupy the bottom of the frame.
+- **SUBTITLE_MARGIN_V = `80`** — Distance from the edge (top or bottom per position) in pixels at 1080p. Increase if text overlaps the slide's footer/header.
+- **SUBTITLE_MAX_LINE_WIDTH = `42`** — Whisper wraps cues at this character count. Narrower = more frequent cue changes; wider = denser per-cue text.
+- **SUBTITLE_MAX_LINE_COUNT = `2`** — Max lines per cue. `2` is the broadcast standard; `1` is cleaner but shows more rapid cue transitions.
 - **OUTPUT_DIR = `slides/render/`** — All artifacts land here.
 - **RENDER_HELPER** — canonical name `paper_slides_render.py`, resolved per
   [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2
@@ -191,12 +197,22 @@ python3 "$RENDER_HELPER" render \
   ${VENUE_CAP:+--max-seconds $VENUE_CAP} \
   ${RATE:+--rate "$RATE"} \
   ${WITH_SUBTITLES:+--with-subtitles} \
+  ${WITH_SUBTITLES:+--subtitle-font "${SUBTITLE_FONT:-DejaVuSans}"} \
+  ${WITH_SUBTITLES:+--subtitle-size "${SUBTITLE_SIZE:-24}"} \
+  ${WITH_SUBTITLES:+--subtitle-position "${SUBTITLE_POSITION:-bottom}"} \
+  ${WITH_SUBTITLES:+--subtitle-margin-v "${SUBTITLE_MARGIN_V:-80}"} \
+  ${WITH_SUBTITLES:+--subtitle-max-line-width "${SUBTITLE_MAX_LINE_WIDTH:-42}"} \
+  ${WITH_SUBTITLES:+--subtitle-max-line-count "${SUBTITLE_MAX_LINE_COUNT:-2}"} \
   --json-out slides/render/render.json
 ```
 
 `--workspace` may be the paper dir (which contains `slides/`) **or** the slides dir itself — the helper auto-detects and never doubles the path.
 
 Pass `--max-seconds <cap>` whenever the talk has a venue ceiling (e.g. 180 for CoRL / NeurIPS-supp). The helper synthesizes all narration first, then **projects the final length before the expensive compose**, so an over-budget deck is caught early (see exit 4 below) rather than after a full render. `--rate +10%` (edge-tts speed delta) is the no-rewrite remedy when it overruns.
+
+> 💡 **CJK subtitle example**: `/paper-slides-render "slides/" — with-subtitles — subtitle-font: "Noto Sans CJK SC" — subtitle-size: 28 — subtitle-position: top`
+>
+> 💡 **Minimal subtitle**: `/paper-slides-render "slides/" — with-subtitles` (uses defaults: DejaVuSans, 24pt, bottom, 42 chars/line, 2 lines/cue)
 
 This is long-running. Per slide it: looks up cached audio (content-hash on voice + text + rate) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → projects total vs `--max-seconds` and halts if over (exit 4) → composes a per-slide MP4 segment (still slides held for exactly narration length; deterministic, no `-shortest` overshoot) → concatenates everything with `-movflags +faststart`. The **no-subs MP4 is now on disk** — the user can play it immediately. If `--with-subtitles` was requested, the helper then runs whisper per-slide alignment → merges SRTs → burns subtitles into the final MP4 (atomic replace). A whisper failure at this stage is soft-fail: the no-subs MP4 stays as the deliverable.
 
