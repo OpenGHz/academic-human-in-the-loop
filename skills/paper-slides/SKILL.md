@@ -654,9 +654,11 @@ When the user picked `supplementary-video`, the template above does **not** appl
 
 ## Slide 1: Title + One-Sentence Pitch [0:00 - 0:15]
 
-"This video is an overview of [paper title]. We tackle [task in one phrase], and we show that [headline result in one phrase]."
+"We present **[full paper title — verbatim, do NOT abbreviate or nicknameify]**. [One sentence stating the task + the headline result.]"
 
 *[Title card; author list; venue. Optionally show project-page URL or QR — otherwise save for the outro.]*
+
+**Why "We present + full title"**: it's the standard conference-talk opening cadence (subject-verb-object, TTS-friendly), and the reviewer has not yet built up any short-form nickname for the paper — using the verbatim title grounds them in the work in the first three seconds. Do NOT open with "This video is an overview of …" (metadiscourse — describes the video instead of the work) or with a bare noun phrase like "An overview of <nickname>" (no main verb; sounds clipped under TTS).
 
 → *Transition*: "Here's the problem."
 
