@@ -35,6 +35,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -61,6 +62,13 @@ STILL_TAIL_SECONDS = 0.0
 # priming), and these accumulate across the concat. The duration projection adds
 # this per segment so --max-seconds stays a TRUE ceiling (slightly conservative).
 SEGMENT_OVERHEAD_SECONDS = 0.05
+# Rasterize the PDF at >= the output resolution so the compose step DOWNSCALES
+# (crisp) instead of upscaling a low-DPI page (blurry text). Supersample for
+# extra sharpness, capped so 1080p renders ~600 dpi while 4K still gets native
+# resolution (the cap never forces an upscale).
+RASTER_SUPERSAMPLE = 2.0
+RASTER_MAX_DPI = 600
+RASTER_MIN_DPI = 144
 
 ALLOWED_VIDEO_CODECS = {"h264", "hevc", "av1"}
 ALLOWED_AUDIO_CODECS = {"aac", "ac3", "opus"}
@@ -953,20 +961,101 @@ def cmd_narrate(args: argparse.Namespace) -> int:
 
 # ── Render: rasterize + whisper + compose + concat ───────────────────────────
 
-def _rasterize_pdf(pdf: Path, slide_count: int, workspace: Path) -> tuple[list[Path], str | None]:
+def _pdf_page_size_pts(pdf: Path) -> tuple[float, float] | None:
+    """First-page size in PostScript points via pdfinfo, or None."""
+    pdfinfo = shutil.which("pdfinfo")
+    if not pdfinfo:
+        return None
+    try:
+        proc = subprocess.run([pdfinfo, str(pdf)], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in proc.stdout.splitlines():
+        if line.lower().startswith("page size:"):
+            m = re.search(r"([\d.]+)\s*x\s*([\d.]+)\s*pts", line)
+            if m:
+                return float(m.group(1)), float(m.group(2))
+    return None
+
+
+def _png_dims(path: Path) -> tuple[int, int]:
+    """(width, height) from the PNG IHDR header (no decode, no deps); (0,0) if unreadable."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+    except OSError:
+        return 0, 0
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+        return 0, 0
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+
+
+def _downscale_png_to_fit(png: Path, target_w: int, target_h: int) -> None:
+    """Downscale a supersampled raster once (lanczos) to fit target_w x target_h,
+    preserving aspect. Caching at output resolution keeps each per-slide compose at
+    ~1:1 (fast) while preserving the supersampled sharpness. Best-effort: on failure
+    the original (larger) PNG is left in place."""
+    w, h = _png_dims(png)
+    if w <= target_w and h <= target_h:
+        return
+    tmp = png.with_name(png.stem + ".fit.png")
+    vf = f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos"
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(png), "-vf", vf, str(tmp)],
+        capture_output=True, text=True,
+    )
+    if proc.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+        tmp.replace(png)
+    elif tmp.exists():
+        tmp.unlink()
+
+
+def _raster_dpi(pdf: Path, target_w: int, target_h: int) -> int:
+    """DPI to rasterize at >= the output resolution (so compose downscales, not
+    upscales), supersampled and capped per the RASTER_* constants."""
+    size = _pdf_page_size_pts(pdf)
+    if size and size[0] > 0 and size[1] > 0:
+        w_in, h_in = size[0] / 72.0, size[1] / 72.0
+        need = max(target_w / w_in, target_h / h_in)
+    else:
+        need = 300.0  # safe fallback (~1080p) when page size is unknown
+    dpi = need * RASTER_SUPERSAMPLE
+    if dpi > RASTER_MAX_DPI:
+        dpi = max(need, float(RASTER_MAX_DPI))  # keep >= need so we never upscale
+    return max(RASTER_MIN_DPI, int(math.ceil(dpi)))
+
+
+def _rasterize_pdf(
+    pdf: Path,
+    slide_count: int,
+    workspace: Path,
+    target_w: int = 1920,
+    target_h: int = 1080,
+) -> tuple[list[Path], str | None]:
     png_dir = _render_root(workspace) / "png"
     png_dir.mkdir(parents=True, exist_ok=True)
     pdf_mtime = pdf.stat().st_mtime
+    dpi = _raster_dpi(pdf, target_w, target_h)
+
+    # Dir-level params cache: re-rasterize all pages when the DPI or output
+    # resolution changes (aspect-agnostic; no width-only heuristics).
+    meta_path = png_dir / ".raster.json"
+    want = {"dpi": dpi, "target_w": target_w, "target_h": target_h}
+    try:
+        params_match = json.loads(meta_path.read_text(encoding="utf-8")) == want
+    except (OSError, json.JSONDecodeError):
+        params_match = False
+
     paths: list[Path] = []
     for n in range(1, slide_count + 1):
         out = png_dir / f"slide_{n:02d}.png"
-        cached = out.is_file() and out.stat().st_mtime >= pdf_mtime
+        cached = params_match and out.is_file() and out.stat().st_mtime >= pdf_mtime
         if not cached:
             # pdftoppm writes <prefix>-<N>.png by default; we use -singlefile
             # so the output goes directly to <prefix>.png.
             prefix = png_dir / f"slide_{n:02d}"
             cmd = [
-                "pdftoppm", "-r", "144", "-png", "-singlefile",
+                "pdftoppm", "-r", str(dpi), "-png", "-singlefile",
                 "-f", str(n), "-l", str(n), str(pdf), str(prefix),
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -979,7 +1068,15 @@ def _rasterize_pdf(pdf: Path, slide_count: int, workspace: Path) -> tuple[list[P
                     alt.replace(out)
             if not out.is_file():
                 return [], f"pdftoppm produced no PNG for page {n}"
+            # Downscale the supersampled raster to the output size once, so each
+            # compose scales ~1:1 instead of resampling a huge image every frame.
+            _downscale_png_to_fit(out, target_w, target_h)
         paths.append(out)
+
+    try:
+        meta_path.write_text(json.dumps(want), encoding="utf-8")
+    except OSError:
+        pass
     return paths, None
 
 
@@ -1271,7 +1368,7 @@ def _ffmpeg_compose_slide(
     # keeps the segment length predictable and equal to the duration projection.
     seg_dur = max(0.1, _ffprobe_duration(wav) + STILL_TAIL_SECONDS)
     vf = (
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=white"
     )
     cmd = [
@@ -1501,7 +1598,7 @@ def cmd_render(args: argparse.Namespace) -> int:
 
     # Phase 3: rasterize
     pages_to_render = min(effective_pages, len(slides)) if effective_pages else len(slides)
-    pngs, raster_err = _rasterize_pdf(pdf_path, pages_to_render, workspace)
+    pngs, raster_err = _rasterize_pdf(pdf_path, pages_to_render, workspace, width, height)
     if raster_err:
         payload = {"ok": False, "error": raster_err, "checkedAt": _now()}
         _print_and_dump(payload, args, stream=sys.stderr)
