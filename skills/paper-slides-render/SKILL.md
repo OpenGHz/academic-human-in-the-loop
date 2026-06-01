@@ -22,7 +22,7 @@ Claude is the **orchestrator**; a self-contained Python helper does the work: TT
 - **DEFAULT_FPS = `30`** — 30 fps.
 - **TARGET_CODEC = `libx264 + aac (faststart)`** — Same codec target as `/paper-video` for compatibility.
 - **DURATION_TOLERANCE = `0.15`** — `verify` allows up to ±15 % drift between actual and planned duration. TTS variance makes a fixed-seconds tolerance too loose for short talks and too tight for long ones; fractional tolerance is the right knob.
-- **WITH_SUBTITLES = off (default)** — Pass `— with-subtitles` to burn word-aligned subtitles via `whisper base.en`. If whisper is missing the render degrades to no-subs (`subtitles.skipped=true`) and never blocks.
+- **WITH_SUBTITLES = off (default)** — Pass `— with-subtitles` to burn word-aligned subtitles via `whisper base.en`. If whisper is missing **and** `--with-subtitles` was requested, preflight fails closed (`ok=false`, exit 1) — install whisper first (`pip install openai-whisper`) or drop the flag. Subtitles are rendered **after** the no-subs MP4 is already on disk, so a whisper failure mid-render never blocks the main deliverable.
 - **OUTPUT_DIR = `slides/render/`** — All artifacts land here.
 - **RENDER_HELPER** — canonical name `paper_slides_render.py`, resolved per
   [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2
@@ -198,15 +198,15 @@ python3 "$RENDER_HELPER" render \
 
 Pass `--max-seconds <cap>` whenever the talk has a venue ceiling (e.g. 180 for CoRL / NeurIPS-supp). The helper synthesizes all narration first, then **projects the final length before the expensive compose**, so an over-budget deck is caught early (see exit 4 below) rather than after a full render. `--rate +10%` (edge-tts speed delta) is the no-rewrite remedy when it overruns.
 
-This is long-running. Per slide it: looks up cached audio (content-hash on voice + text + rate) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → projects total vs `--max-seconds` and halts if over (exit 4) → optionally calls `whisper` for word-level alignment → composes a per-slide MP4 segment (still slides held for exactly narration length; deterministic, no `-shortest` overshoot) → concatenates everything with `-movflags +faststart` → if `--with-subtitles` and whisper produced SRTs, re-encodes once with a subtitle burn-in pass.
+This is long-running. Per slide it: looks up cached audio (content-hash on voice + text + rate) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → projects total vs `--max-seconds` and halts if over (exit 4) → composes a per-slide MP4 segment (still slides held for exactly narration length; deterministic, no `-shortest` overshoot) → concatenates everything with `-movflags +faststart`. The **no-subs MP4 is now on disk** — the user can play it immediately. If `--with-subtitles` was requested, the helper then runs whisper per-slide alignment → merges SRTs → burns subtitles into the final MP4 (atomic replace). A whisper failure at this stage is soft-fail: the no-subs MP4 stays as the deliverable.
 
 On non-zero exit:
 
 - Exit 1 — parse / TTS / pdftoppm failed. Read `render.json.tts_errors` or `error` field, fix, rerun. Do NOT auto-retry; most failures are user-actionable (network drop, malformed script).
 - **Exit 4 — projected duration over `--max-seconds`** (halted after TTS, before any compose). The JSON carries `projected_seconds`, `cap_seconds`, `over_by_seconds`, and a `per_slide` breakdown. **STOP and ask the user** how to proceed: trim narration on the longest slides, re-render with `--rate +N%`, or re-run with `--allow-over-cap` to accept the overflow. Do not silently proceed.
-- Exit 3 — ffmpeg or whisper failed. Stderr is captured verbatim in the JSON. Read it before rerunning.
+- Exit 3 — ffmpeg or whisper failed mid-render. Stderr is captured verbatim in the JSON. Read it before rerunning.
 
-Whisper-missing with `--with-subtitles` is **not** a failure: `render.json.subtitles.skipped=true` with `skipReason="whisper-missing"`, and the MP4 is produced without subtitles.
+Whisper-missing with `--with-subtitles` is now a **preflight hard error** (exit 1). If you reach the render step, whisper is guaranteed available. Mid-render whisper failures (e.g. OOM, model download interrupted) are still soft-fail: the no-subs MP4 stays as the deliverable (`render.json.subtitles.skipped=true`, `skipReason ∈ {"whisper-failed", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`).
 
 Advance state to `phase: 2`.
 
@@ -297,11 +297,11 @@ This skill follows **Policy A (skill-local gate)** per `shared-references/integr
 | `preflight` | Halt before render; surface missing dep | 1 |
 | `parse` | Halt; user fixes TALK_SCRIPT.md | 1 |
 | `narrate` | Continue per-slide; final `ok=false` if any slide failed | 1 if any failed |
-| `render` | Halt at failing step. Subtitles-missing degrades, does NOT fail. | 1 (TTS / pdftoppm / parse), 3 (ffmpeg / whisper) |
+| `render` | Halt at failing step. Subtitles run **after** the no-subs MP4 is on disk; mid-render whisper failures are soft-fail (no-subs MP4 stays). | 1 (TTS / pdftoppm / parse), 3 (ffmpeg), 4 (over-cap) |
 | `render --max-seconds N` | Projected total over cap → halt after TTS, before compose; **orchestrator STOPs and asks user** | 4 |
 | `verify` | Report all violations | 2 |
 
-Soft-fail slot: `subtitles.skipReason ∈ {"whisper-missing", "whisper-failed", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`. Subtitle failure is the only soft-fail in the entire skill.
+Soft-fail slot: `subtitles.skipReason ∈ {"whisper-failed", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`. These only fire mid-render (after preflight passed); `whisper-missing` is now caught by preflight and never reaches render. Subtitle failure is the only soft-fail in the entire skill.
 
 ## Idempotency Contract
 
