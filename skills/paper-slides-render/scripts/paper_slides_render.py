@@ -579,8 +579,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         can_write = False
 
     warnings: list[str] = []
-    if args.with_subtitles and not whisper_info["available"]:
-        warnings.append("whisper not available; subtitles will be skipped when render runs with --with-subtitles")
+    whisper_required_missing = bool(args.with_subtitles) and not whisper_info["available"]
 
     # Optional clip probing when --talk-script is provided
     clips_info: list[dict[str, Any]] = []
@@ -645,7 +644,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
                 clips_info.append(entry)
 
     required_ok = bool(edge_tts_info["available"]) and bool(pdftoppm) and bool(ffmpeg) and bool(ffprobe) and can_write
-    ok = required_ok and not clip_errors
+    ok = required_ok and not clip_errors and not whisper_required_missing
 
     payload: dict[str, Any] = {
         "ok": ok,
@@ -675,6 +674,11 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         errors.append("ffprobe not on PATH (usually shipped with ffmpeg)")
     if not can_write:
         errors.append(f"output directory not writable: {out_dir}")
+    if whisper_required_missing:
+        errors.append(
+            "--with-subtitles was requested but whisper is not available "
+            "(pip install openai-whisper, or drop --with-subtitles)"
+        )
     errors.extend(clip_errors)
     if errors:
         payload["error"] = "; ".join(errors)
@@ -1533,48 +1537,16 @@ def cmd_render(args: argparse.Namespace) -> int:
             _print_and_dump(payload, args, stream=sys.stderr)
             return 4
 
-    # Phase 5: optional whisper alignment
+    # Phase 5: subtitle plan (placeholder only; whisper runs after concat in Phase 8)
     subtitles_info: dict[str, Any] = {
         "requested": with_subtitles,
         "available": False,
         "skipped": False,
         "skipReason": None,
         "path": None,
+        "preBurnPath": None,
     }
     merged_srt: Path | None = None
-    if with_subtitles:
-        whisper_info = _check_whisper()
-        if not whisper_info["available"]:
-            subtitles_info["skipped"] = True
-            subtitles_info["skipReason"] = "whisper-missing"
-            warnings.append("whisper not available; --with-subtitles requested but skipped")
-        else:
-            subtitles_info["available"] = True
-            srt_dir = _render_root(workspace) / "srt"
-            cumulative_offset = 0.0
-            per_slide_srt: list[tuple[Path, float]] = []
-            for slide_record in narrate_results:
-                slide_num = slide_record["slide_number"]
-                wav, _ = _audio_paths(workspace, slide_num)
-                srt_path, err = _whisper_align(wav, srt_dir)
-                if err:
-                    subtitles_info["skipped"] = True
-                    subtitles_info["skipReason"] = "whisper-failed"
-                    warnings.append(f"whisper failed for slide {slide_num}: {err}")
-                    per_slide_srt = []
-                    break
-                per_slide_srt.append((srt_path, cumulative_offset))
-                cumulative_offset += slide_record.get("duration_seconds") or 0.0
-            if per_slide_srt:
-                merged_srt = _render_root(workspace) / "subtitles.srt"
-                merge_err = _merge_srts(per_slide_srt, merged_srt)
-                if merge_err:
-                    subtitles_info["skipped"] = True
-                    subtitles_info["skipReason"] = "alignment-merge-failed"
-                    warnings.append(f"SRT merge failed: {merge_err}")
-                    merged_srt = None
-                else:
-                    subtitles_info["path"] = str(merged_srt)
 
     # Phase 6: per-slide compose
     segments_dir = _render_root(workspace) / "segments"
@@ -1641,30 +1613,76 @@ def cmd_render(args: argparse.Namespace) -> int:
         _print_and_dump(payload, args, stream=sys.stderr)
         return 3
 
-    # Phase 7: concat
-    concat_target = output
-    if merged_srt is not None:
-        # We will burn subtitles afterwards; concat to a temp file first.
-        concat_target = output.with_suffix(".pre-subs.mp4")
-    ok, err = _ffmpeg_concat(segments, concat_target)
+    # Phase 7: concat → no-subs MP4 is the milestone deliverable
+    # Always concat directly to `output`. If --with-subtitles is set, Phase 8
+    # will produce a burned-in copy and atomically replace `output`; if any
+    # whisper step fails, `output` stays as the no-subs version (which is
+    # already a valid render). This way the user never waits on subtitles
+    # before the main deliverable lands on disk.
+    ok, err = _ffmpeg_concat(segments, output)
     if not ok:
         payload = {"ok": False, "error": err, "checkedAt": _now()}
         _print_and_dump(payload, args, stream=sys.stderr)
         return 3
+    subtitles_info["preBurnPath"] = str(output)
 
-    # Phase 8: optional subtitle burn
-    if merged_srt is not None:
-        ok, err = _ffmpeg_burn_subtitles(concat_target, merged_srt, output)
-        if not ok:
+    # Phase 8: optional whisper alignment + subtitle burn-in (post-concat)
+    # Subtitles are non-blocking: every failure mode here is soft-fail. The
+    # no-subs MP4 written by Phase 7 stays as the final output on any error.
+    if with_subtitles:
+        whisper_info = _check_whisper()
+        if not whisper_info["available"]:
+            # In normal flow this is caught by preflight (hard error), so this
+            # branch only fires if the user bypassed preflight. Soft-fail to
+            # match the helper's "never block on subtitles" contract.
             subtitles_info["skipped"] = True
-            subtitles_info["skipReason"] = "ffmpeg-subtitle-burn-failed"
-            warnings.append(f"subtitle burn failed: {err}; output uses pre-burn concat")
-            concat_target.replace(output)
+            subtitles_info["skipReason"] = "whisper-missing"
+            warnings.append("whisper not available; --with-subtitles requested but skipped (preflight should have caught this)")
         else:
-            try:
-                concat_target.unlink()
-            except OSError:
-                pass
+            subtitles_info["available"] = True
+            srt_dir = _render_root(workspace) / "srt"
+            cumulative_offset = 0.0
+            per_slide_srt: list[tuple[Path, float]] = []
+            for slide_record in narrate_results:
+                slide_num = slide_record["slide_number"]
+                wav, _ = _audio_paths(workspace, slide_num)
+                srt_path, err = _whisper_align(wav, srt_dir)
+                if err:
+                    subtitles_info["skipped"] = True
+                    subtitles_info["skipReason"] = "whisper-failed"
+                    warnings.append(f"whisper failed for slide {slide_num}: {err}; keeping no-subs MP4")
+                    per_slide_srt = []
+                    break
+                per_slide_srt.append((srt_path, cumulative_offset))
+                cumulative_offset += slide_record.get("duration_seconds") or 0.0
+            if per_slide_srt:
+                merged_srt = _render_root(workspace) / "subtitles.srt"
+                merge_err = _merge_srts(per_slide_srt, merged_srt)
+                if merge_err:
+                    subtitles_info["skipped"] = True
+                    subtitles_info["skipReason"] = "alignment-merge-failed"
+                    warnings.append(f"SRT merge failed: {merge_err}; keeping no-subs MP4")
+                    merged_srt = None
+                else:
+                    subtitles_info["path"] = str(merged_srt)
+
+        # Burn-in pass: write to a temp neighbour of output, then atomically
+        # replace output on success. Failure leaves output untouched.
+        if merged_srt is not None:
+            burned = output.with_suffix(".subs.mp4")
+            ok_burn, burn_err = _ffmpeg_burn_subtitles(output, merged_srt, burned)
+            if not ok_burn:
+                subtitles_info["skipped"] = True
+                subtitles_info["skipReason"] = "ffmpeg-subtitle-burn-failed"
+                warnings.append(f"subtitle burn failed: {burn_err}; keeping no-subs MP4")
+                if burned.exists():
+                    try:
+                        burned.unlink()
+                    except OSError:
+                        pass
+            else:
+                # Atomically swap the burned-in copy into place.
+                burned.replace(output)
 
     # Final stats
     final_size_mb = output.stat().st_size / (1024 * 1024) if output.is_file() else 0.0
