@@ -2,7 +2,7 @@
 name: novelty-check
 description: Verify research idea novelty against recent literature. Use when user says "查新", "novelty check", "有没有人做过", "check novelty", or wants to verify a research idea is novel before implementing.
 argument-hint: "[method-or-idea-description]"
-allowed-tools: Bash(*), WebSearch, WebFetch, Grep, Read, Glob, mcp__codex__codex
+allowed-tools: Bash(*), WebSearch, WebFetch, Grep, Read, Glob, Edit, Write, mcp__codex__codex
 ---
 
 # Novelty Check Skill
@@ -63,6 +63,8 @@ For EACH core claim, search using ALL available sources:
    - Recent arXiv preprints (2025-2026)
 
 3. **Read abstracts**: For each potentially overlapping paper, WebFetch its abstract and related work section
+
+4. **Capture FULL metadata at first contact — do not defer.** The moment a paper looks like it will enter the Closest Prior Work table or the bibtex, `WebFetch` its **arXiv abstract page** (`https://arxiv.org/abs/<id>`) and record the **exact title** and the **complete author list, all authors in order** — not "first author + others", not the ID alone. WebSearch result snippets routinely omit authors; that is a retrieval gap, not a reason to leave the field blank. **It is laziness, not discipline, to write a paper into the report with an ID but no authors and plan to "backfill later".** If a `WebFetch` fails (socket/timeout), retry once (and try the local proxy per global prefs for `Bash`-based fetches); only if it still fails may you mark the author field `[authors-unverified: fetch failed]` and say so explicitly in the report.
 
 ### Phase C: Cross-Model Verification
 Call REVIEWER_MODEL via Codex MCP (`mcp__codex__codex`) with xhigh reasoning.
@@ -146,6 +148,18 @@ Output a structured report:
 [State the delta honestly in one sentence a reviewer could verify]
 ```
 
+### Phase D.5: Patch the Literature Landscape (DEFAULT — whenever the check ran against a landscape `.md`)
+
+**This is default behavior, not opt-in.** If the novelty check was seeded from or pointed at a literature-landscape Markdown file — i.e. the argument is such a file, `— prior-art:` resolved to a landscape `.md`, or the user's open/working file is one (e.g. `literature/related_work.md`, a `/research-lit` output) — then **write the findings back into that file by default**, without waiting to be asked. A novelty check that surfaces a closer competitor than the landscape contains has *already done the work*; leaving the landscape stale wastes it and risks the next reader re-deriving a now-falsified "this space is empty" claim.
+
+Patch the file with three edits, mirroring the file's existing style and structure:
+1. **A new "Round-N additions" block** (continue the file's existing round numbering) listing every newly-found paper not already in the landscape, grouped into the file's themes (or a new theme if it's a genuinely new line), each row with venue/year, one-line method, relevance/delta to the idea, and a verified arXiv ID + status mark.
+2. **Re-scope the synthesis honestly.** If the check found a closer neighbor than the landscape's stated closest prior work, update the "closest neighbor"/"gaps" framing so it reflects reality — including *narrowing* any gap claims the new paper undercuts. Do not only add; **correct**.
+3. **Append verified bibtex entries** for the new papers — with **complete author lists** captured in Phase B step 4 (never `author={others}`). Also opportunistically fix any `author={others}` placeholders you notice in pre-existing entries while you are in the file.
+4. **Update the file's provenance header** with a one-line note: which skill updated it, the date, the headline finding, and the cross-model score.
+
+**Opt-out / scope:** skip this phase only if the user passed `— no-patch`, the check was a bare inline idea with no landscape file in play, or the landscape file is read-only/not writable. When skipping because there is no file, offer in the report to create one. Never silently overwrite content that contradicts the new findings — *correct* it in place and let the diff show the change.
+
 ### Phase E: Persist Closest Prior Work to Research Wiki (only when `research-wiki/` exists)
 
 **Skip entirely (no action, no error) if `research-wiki/` is absent.** When it exists, persist the **Closest Prior Work** this check surfaced — it is the highest-value related-work set for later paper writing (exactly what a reviewer will cite against you), and every entry already passed `verify_papers.py`, so it should compound into the wiki instead of evaporating with the verdict.
@@ -197,6 +211,7 @@ When `$WIKI_SCRIPT` is non-empty, for **each** paper in the Closest Prior Work t
 - Check both the method AND the experimental setting for novelty
 - If the method is not novel but the FINDING would be, say so explicitly
 - Always check the most recent 6 months of arXiv — the field moves fast
+- **Metadata completeness is not optional.** Every paper that reaches the Closest Prior Work table, the wiki, or the bibtex must carry its **exact title and full author list**, fetched from the arXiv abstract page (Phase B step 4). `author={others}`, "first author et al.", or an ID with no authors is an incomplete result, not a finished one — fetch it now, never "backfill later". The only acceptable gap is an *explicitly flagged* `[authors-unverified: fetch failed]` after a real retry failed.
 - **Anti-hallucination for Closest Prior Work.** Every paper in the prior-work table must pass pre-search verification via `verify_papers.py` (canonical name resolved per [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2; 3-layer arXiv / CrossRef / Semantic Scholar fallback inside the helper itself). Policy D1 (primary + degraded-output fallback): if the helper is unresolved **or** its invocation fails, tag candidate entries `[UNVERIFIED]` and surface the uncertainty rather than dropping them. Never fabricate arXiv IDs, DOIs, or titles from memory. Full protocol in [`shared-references/citation-discipline.md`](../shared-references/citation-discipline.md) § Pre-Search Verification Protocol.
 
 ## Review Tracing
