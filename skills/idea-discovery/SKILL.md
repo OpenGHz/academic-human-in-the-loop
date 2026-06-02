@@ -296,11 +296,11 @@ then end the turn.
 For each top idea (positive pilot signal), run a thorough novelty check:
 
 ```
-/novelty-check "[top idea 1 description]" — prior-art: idea-stage/IDEA_REPORT.md
-/novelty-check "[top idea 2 description]" — prior-art: idea-stage/IDEA_REPORT.md
+/novelty-check "[top idea 1 description]" — prior-art: idea-stage/IDEA_REPORT.md — composed: idea-stage/IDEA_REPORT.md
+/novelty-check "[top idea 2 description]" — prior-art: idea-stage/IDEA_REPORT.md — composed: idea-stage/IDEA_REPORT.md
 ```
 
-By Phase 3 the report already holds the Phase-1 literature landscape (folded in by `/idea-creator`), so `— prior-art: idea-stage/IDEA_REPORT.md` seeds each novelty check with the survey's hits **before** it runs its own search — wider coverage, fewer missed prior works. `/novelty-check` still searches independently and adjudicates against the union (it never treats "absent from the report" as "novel").
+Two directives, both pointing at the canonical report: `— prior-art:` seeds each check *from* the report (the Phase-1 landscape `/idea-creator` folded in), so it starts wider and misses less; `— composed:` makes the check fold its verdict *into* the report instead of scattering a standalone `idea-stage/NOVELTY_<slug>.md` (per [`shared-references/output-composition.md`](../shared-references/output-composition.md)). `/novelty-check` still searches independently and adjudicates against the union (it never treats "absent from the report" as "novel").
 
 **What this does:**
 - Multi-source literature search (arXiv, Scholar, Semantic Scholar)
