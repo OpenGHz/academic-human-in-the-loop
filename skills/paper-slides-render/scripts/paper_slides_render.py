@@ -613,7 +613,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     warnings: list[str] = []
     whisper_required_missing = (
         bool(args.with_subtitles)
-        and (getattr(args, "subtitle_source", "whisper") == "whisper")
+        and (getattr(args, "subtitle_source", "script") == "whisper")
         and not whisper_info["available"]
     )
 
@@ -1543,10 +1543,17 @@ def _fmt_srt_time(t: float) -> str:
 
 def _script_srt_body(text: str, duration: float, max_line_width: int, max_line_count: int) -> str:
     """Build an SRT body (cues timed 0..duration) directly from the known narration
-    text — no ASR. Wrap to max_line_width chars, group into <= max_line_count-line
-    cues, and split `duration` across cues proportional to their character count.
-    More accurate than whisper for jargon-heavy decks (text is ground truth); cue
-    timing is proportional rather than force-aligned."""
+    text — no ASR.
+
+    Strategy: split on sentence boundaries first (`.`, `!`, `?`, including curly
+    quote variants), then for each sentence wrap to `max_line_width` chars and
+    cluster every `max_line_count` lines into one cue (so a long sentence yields
+    >1 cue rather than a wall of text). Split `duration` across cues proportional
+    to character count.
+
+    More accurate than whisper for jargon-heavy decks because the text is ground
+    truth; cue timing is proportional rather than word-force-aligned. Sentence-
+    first slicing keeps cue boundaries on semantic breaks instead of mid-clause."""
     import textwrap
     text = _strip_markdown(text)  # drop *italic* / **bold** / [links] so cues don't show literal markup
     text = " ".join(text.split())
@@ -1554,8 +1561,27 @@ def _script_srt_body(text: str, duration: float, max_line_width: int, max_line_c
         return ""
     width = max(8, max_line_width)
     per_cue = max(1, max_line_count)
-    lines = textwrap.wrap(text, width=width) or [text]
-    cues = [lines[i:i + per_cue] for i in range(0, len(lines), per_cue)]
+
+    # Sentence-boundary split: keep punctuation glued to the preceding chunk.
+    # Matches one or more terminators (handles "...", "?!", etc.) plus trailing
+    # close-quotes/parens. Whitespace after is consumed but not captured.
+    sentence_re = re.compile(r"([^.!?…]+[.!?…]+[\"'”’\)\]]*)(?:\s+|$)")
+    sentences = [m.group(1).strip() for m in sentence_re.finditer(text) if m.group(1).strip()]
+    # Remainder after the last sentence terminator (e.g. a fragment with no period)
+    last_end = 0
+    for m in sentence_re.finditer(text):
+        last_end = m.end()
+    tail = text[last_end:].strip()
+    if tail:
+        sentences.append(tail)
+    if not sentences:
+        sentences = [text]
+
+    cues: list[list[str]] = []
+    for sentence in sentences:
+        lines = textwrap.wrap(sentence, width=width) or [sentence]
+        for i in range(0, len(lines), per_cue):
+            cues.append(lines[i:i + per_cue])
     weights = [max(1, sum(len(ln) for ln in cue)) for cue in cues]
     total = sum(weights)
     blocks: list[str] = []
@@ -1769,7 +1795,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     sub_margin_v = int(getattr(args, "subtitle_margin_v", None) or DEFAULT_SUBTITLE_MARGIN_V)
     sub_max_line_width = int(getattr(args, "subtitle_max_line_width", None) or DEFAULT_SUBTITLE_MAX_LINE_WIDTH)
     sub_max_line_count = int(getattr(args, "subtitle_max_line_count", None) or DEFAULT_SUBTITLE_MAX_LINE_COUNT)
-    subtitle_source = getattr(args, "subtitle_source", None) or "whisper"
+    subtitle_source = getattr(args, "subtitle_source", None) or "script"
     sub_text_color = getattr(args, "subtitle_text_color", None) or DEFAULT_SUBTITLE_TEXT_COLOR
     sub_box = not bool(getattr(args, "subtitle_no_box", False))
     sub_box_opacity = float(getattr(args, "subtitle_box_opacity", None) or DEFAULT_SUBTITLE_BOX_OPACITY)
@@ -2222,8 +2248,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pre = sub.add_parser("preflight", help="Check edge-tts / pdftoppm / ffmpeg / ffprobe and writable output dir")
     pre.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     pre.add_argument("--with-subtitles", action="store_true", help="Also probe whisper availability")
-    pre.add_argument("--subtitle-source", choices=("whisper", "script"), default="whisper",
-                     help="script source needs no whisper, so preflight won't require it")
+    pre.add_argument("--subtitle-source", choices=("script", "whisper"), default="script",
+                     help="Subtitle source: 'script' (default; cues from TALK_SCRIPT.md narration, no ASR, spelling-perfect) or 'whisper' (ASR, word-aligned but mis-transcribes domain jargon)")
     pre.add_argument("--talk-script", default=None, help="Optional TALK_SCRIPT.md path; when given, probe any [VIDEO: ...] clip references")
     pre.add_argument("--json-out", help="Path to write JSON result")
     pre.set_defaults(func=cmd_preflight)
@@ -2250,8 +2276,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ren.add_argument("--fps", type=int, default=DEFAULT_FPS, help=f"Output fps (default: {DEFAULT_FPS})")
     ren.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     ren.add_argument("--with-subtitles", action="store_true", help="Burn subtitles (source per --subtitle-source)")
-    ren.add_argument("--subtitle-source", choices=("whisper", "script"), default="whisper",
-                     help="whisper = ASR word-alignment (needs whisper); script = exact narration text timed from audio (no whisper, correct jargon)")
+    ren.add_argument("--subtitle-source", choices=("script", "whisper"), default="script",
+                     help="script (default) = exact narration text from TALK_SCRIPT.md timed across each slide's audio (no whisper, jargon spelled correctly); whisper = ASR word-alignment (needs whisper; mis-transcribes domain terms)")
     ren.add_argument("--subtitle-text-color", default=None, help="Hex RGB for subtitle text (default white)")
     ren.add_argument("--subtitle-box-color", default=None, help="Hex RGB for the caption band (default: deck primary color, else dark)")
     ren.add_argument("--subtitle-box-opacity", type=float, default=None, help="Caption band opacity 0..1 (default 0.82)")
