@@ -272,7 +272,10 @@ json.dump({"skill": e["ST_SKILL"], "run_id": e["ST_RUN_ID"],
 fi
 
 # --- Determine call number ---
-CALL_NUM=$(find "$RUN_DIR" -maxdepth 1 -name '*.request.json' 2>/dev/null | wc -l | tr -d ' ')
+# Count existing request files via a nullglob array in a subshell: no `ls`
+# (which exits non-zero on no-match and, under `set -o pipefail`, would abort
+# the script before any trace is written), and safe for spaces in paths.
+CALL_NUM=$(shopt -s nullglob; set -- "${RUN_DIR}/"*.request.json; echo "$#")
 CALL_NUM=$((CALL_NUM + 1))
 CALL_PREFIX=$(printf '%03d' $CALL_NUM)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
