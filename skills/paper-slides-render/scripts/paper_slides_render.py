@@ -1541,26 +1541,84 @@ def _fmt_srt_time(t: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def _balanced_wrap(text: str, max_width: int) -> list[str]:
+    """textwrap.wrap, but with a balanced target width.
+
+    Plain `textwrap.wrap(s, max_width)` greedily packs lines, which leaves
+    the last line short — e.g. a 50-char sentence wrapped at 42 chars
+    produces ["42-char line", "8-char line"]. This version:
+
+      1. First wraps at `max_width` to find the minimum line count N.
+      2. Then binary-searches a smaller width that still yields N lines,
+         so the lines come out roughly equal length instead of last-line-
+         stranded.
+
+    Result for the 50-char example: ["25-char line", "25-char line"]
+    instead of ["42-char line", "8-char line"]. No stranded short tails.
+
+    `break_long_words=False` so URLs aren't sliced; `break_on_hyphens=False`
+    so "pull-drawer" / "EMT-QA" stay intact (important for paper jargon).
+    """
+    import textwrap
+
+    def wrap_at(w: int) -> list[str]:
+        return textwrap.wrap(
+            text, width=w,
+            break_long_words=False, break_on_hyphens=False,
+        ) or [text]
+
+    # Step 1: minimum line count at max_width (greedy upper bound)
+    greedy = wrap_at(max_width)
+    n = len(greedy)
+    if n <= 1:
+        return greedy
+
+    # Step 2: binary-search the smallest width that still yields n lines.
+    # Lower bound: longest word (can't be smaller without splitting); we still
+    # honor break_long_words=False, so the search is monotonic — narrower
+    # widths can only produce more lines, never fewer.
+    longest_word = max((len(w) for w in text.split()), default=max_width)
+    lo, hi = longest_word, max_width
+    best = greedy
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        lines = wrap_at(mid)
+        if len(lines) <= n:
+            best = lines
+            hi = mid - 1
+        else:
+            lo = mid + 1
+    return best
+
+
 def _script_srt_body(text: str, duration: float, max_line_width: int, max_line_count: int) -> str:
     """Build an SRT body (cues timed 0..duration) directly from the known narration
     text — no ASR.
 
     Strategy: split on sentence boundaries first (`.`, `!`, `?`, including curly
-    quote variants), then for each sentence wrap to `max_line_width` chars and
-    cluster every `max_line_count` lines into one cue (so a long sentence yields
-    >1 cue rather than a wall of text). Split `duration` across cues proportional
-    to character count.
+    quote variants), then for each sentence balanced-wrap to ≤ max_line_width
+    (so the last line isn't stranded), cluster every `max_line_count` lines
+    into one cue, and orphan-merge any trailing cue whose only line carries
+    too few characters back into the previous cue. Split `duration` across
+    cues proportional to character count.
 
-    More accurate than whisper for jargon-heavy decks because the text is ground
-    truth; cue timing is proportional rather than word-force-aligned. Sentence-
-    first slicing keeps cue boundaries on semantic breaks instead of mid-clause."""
-    import textwrap
+    More accurate than whisper for jargon-heavy decks because the text is
+    ground truth; cue timing is proportional rather than word-force-aligned.
+    Sentence-first slicing keeps cue boundaries on semantic breaks instead
+    of mid-clause; balanced wrap + orphan merge eliminate "one-word last
+    line" artifacts.
+    """
     text = _strip_markdown(text)  # drop *italic* / **bold** / [links] so cues don't show literal markup
     text = " ".join(text.split())
     if not text or duration <= 0:
         return ""
     width = max(8, max_line_width)
     per_cue = max(1, max_line_count)
+    # Orphan threshold: a tail cue with one line shorter than this gets merged
+    # back into the previous cue (yielding a cue with `per_cue + 1` lines).
+    # 35 % of max_line_width = ~15 chars at the default 42 — about 2-3 short
+    # words, which is what readers perceive as a "stranded" cue.
+    orphan_threshold = max(8, int(width * 0.35))
 
     # Sentence-boundary split: keep punctuation glued to the preceding chunk.
     # Matches one or more terminators (handles "...", "?!", etc.) plus trailing
@@ -1579,9 +1637,20 @@ def _script_srt_body(text: str, duration: float, max_line_width: int, max_line_c
 
     cues: list[list[str]] = []
     for sentence in sentences:
-        lines = textwrap.wrap(sentence, width=width) or [sentence]
+        lines = _balanced_wrap(sentence, width)
         for i in range(0, len(lines), per_cue):
             cues.append(lines[i:i + per_cue])
+        # Orphan-merge within this sentence: if its last cue is a single short
+        # line, fold it back into the previous cue (which is still part of the
+        # same sentence — never merge across sentence boundaries).
+        if len(cues) >= 2 and len(lines) > per_cue:
+            sentence_cue_count = math.ceil(len(lines) / per_cue)
+            if sentence_cue_count >= 2:
+                last_cue = cues[-1]
+                if len(last_cue) == 1 and len(last_cue[0]) < orphan_threshold:
+                    cues[-2].extend(last_cue)
+                    cues.pop()
+
     weights = [max(1, sum(len(ln) for ln in cue)) for cue in cues]
     total = sum(weights)
     blocks: list[str] = []
