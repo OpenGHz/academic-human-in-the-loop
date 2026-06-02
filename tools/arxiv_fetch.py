@@ -12,6 +12,7 @@ Examples
 --------
 python3 tools/arxiv_fetch.py search "attention mechanism" --max 10
 python3 tools/arxiv_fetch.py search "id:2301.07041" --max 1
+python3 tools/arxiv_fetch.py search "object memory robot" --max 10 --sort submittedDate
 python3 tools/arxiv_fetch.py download 2301.07041 --dir papers
 """
 
@@ -82,8 +83,20 @@ def _looks_like_arxiv_id(value: str) -> bool:
     return bool(_NEW_STYLE_ID_RE.match(value) or _OLD_STYLE_ID_RE.match(value))
 
 
-def _api_url(query: str, max_results: int, start: int) -> str:
-    """Build the arXiv API URL for a search query or specific ID lookup."""
+def _api_url(
+    query: str,
+    max_results: int,
+    start: int,
+    sort_by: str = "relevance",
+    sort_order: str = "descending",
+) -> str:
+    """Build the arXiv API URL for a search query or specific ID lookup.
+
+    ``sort_by`` accepts the arXiv API values ``relevance``,
+    ``submittedDate``, or ``lastUpdatedDate``; ``sort_order`` is
+    ``descending`` or ``ascending``. Sorting is ignored for direct
+    ``id:`` / bare-ID lookups (the API does not sort an ``id_list`` query).
+    """
     query = query.strip()
     if query.startswith("id:"):
         params = {"id_list": _normalize_id(query)}
@@ -94,8 +107,8 @@ def _api_url(query: str, max_results: int, start: int) -> str:
             "search_query": query,
             "start": start,
             "max_results": max_results,
-            "sortBy": "relevance",
-            "sortOrder": "descending",
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
         }
     return f"{_API_BASE}?{urllib.parse.urlencode(params)}"
 
@@ -163,9 +176,25 @@ def _parse_entry(entry: ET.Element) -> dict:
     }
 
 
-def search(query: str, max_results: int = 10, start: int = 0) -> list[dict]:
-    """Search arXiv and return a list of paper dictionaries."""
-    url = _api_url(query, max_results=max_results, start=start)
+def search(
+    query: str,
+    max_results: int = 10,
+    start: int = 0,
+    sort_by: str = "relevance",
+    sort_order: str = "descending",
+) -> list[dict]:
+    """Search arXiv and return a list of paper dictionaries.
+
+    Pass ``sort_by="submittedDate"`` for a recency sweep (newest first) —
+    relevance sort otherwise buries brand-new papers.
+    """
+    url = _api_url(
+        query,
+        max_results=max_results,
+        start=start,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     root = _fetch_atom(url)
     return [_parse_entry(entry) for entry in root.findall(f"{{{_ATOM_NS}}}entry")]
 
@@ -256,6 +285,20 @@ def _build_parser() -> argparse.ArgumentParser:
             default=0,
             help="Start offset for pagination (default: 0).",
         )
+        p.add_argument(
+            "--sort",
+            dest="sort_by",
+            choices=("relevance", "submittedDate", "lastUpdatedDate"),
+            default="relevance",
+            help="Sort order: relevance (default), submittedDate (newest "
+                 "first — use for recency sweeps), or lastUpdatedDate.",
+        )
+        p.add_argument(
+            "--sort-order",
+            choices=("descending", "ascending"),
+            default="descending",
+            help="Sort direction (default: descending).",
+        )
 
     search_parser = subparsers.add_parser("search", help="Search arXiv papers")
     _add_search_args(search_parser)
@@ -291,7 +334,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     if args.command in ("search", "get", "fetch"):
-        results = search(args.query, max_results=args.max, start=args.start)
+        results = search(
+            args.query,
+            max_results=args.max,
+            start=args.start,
+            sort_by=args.sort_by,
+            sort_order=args.sort_order,
+        )
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return 0
 
