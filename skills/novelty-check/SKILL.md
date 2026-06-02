@@ -2,7 +2,7 @@
 name: novelty-check
 description: Verify research idea novelty against recent literature. Use when user says "查新", "novelty check", "有没有人做过", "check novelty", or wants to verify a research idea is novel before implementing.
 argument-hint: "[method-or-idea-description]"
-allowed-tools: WebSearch, WebFetch, Grep, Read, Glob, mcp__codex__codex
+allowed-tools: Bash(*), WebSearch, WebFetch, Grep, Read, Glob, mcp__codex__codex
 ---
 
 # Novelty Check Skill
@@ -12,6 +12,13 @@ Check whether a proposed method/idea has already been done in the literature: **
 ## Constants
 
 - REVIEWER_MODEL = `gpt-5.6-sol` — Model used via Codex MCP. Must be an OpenAI model (e.g., `gpt-5.6-sol`, `o3`, `gpt-4o`)
+- **PRIOR_ART = none** — Optional pre-loaded prior-art set that seeds the check. When supplied, these papers are treated as known prior art in **Phase A.5** *before* the skill runs its own web search, so a prior `/research-lit` survey (or any curated list) widens coverage and reduces missed prior work. Accepts a file path (`references.bib`, a landscape `.md`, or a `research-wiki/` directory) or an inline comma/semicolon-separated paper list. Default `none` = behave exactly as before (web-only, self-contained).
+
+> 💡 Overrides:
+> - `/novelty-check "idea" — prior-art: refine-logs/landscape.md` — seed from a saved literature survey
+> - `/novelty-check "idea" — prior-art: research-wiki/` — seed from the persistent wiki
+> - `/novelty-check "idea" — prior-art: references.bib` — seed from an existing bib
+> - `/novelty-check "idea" — prior-art: "Smith 2025 (arXiv 2501.01234); Lee 2024 NeurIPS"` — inline list
 
 ## Instructions
 
@@ -25,13 +32,30 @@ Given a method description, systematically verify its novelty:
    - What is the mechanism?
    - What makes it different from obvious baselines?
 
+### Phase A.5: Load Supplied Prior Art (only when `— prior-art:` is set)
+
+**Skip this phase entirely if `PRIOR_ART = none` (default).** When a `— prior-art:` value is supplied, load it as a *seed* prior-art set **before** searching:
+
+1. **Resolve the source**:
+   - **File** (`*.bib` / `*.md` / `*.json`): `Read` it. For `references.bib`, extract title / author / year / `eprint` / `doi` per entry. For a landscape `.md` (e.g. from `/research-lit`), `Grep` the paper table and citation lines.
+   - **Directory** (e.g. `research-wiki/`): `Glob research-wiki/papers/**/*.md` and read each page's frontmatter (title, arXiv id, thesis).
+   - **Inline list**: parse the comma/semicolon-separated references directly.
+2. **Build the seed set**: `{title, arxiv_id|doi, one-line claim}` for each supplied paper. These are *candidate* prior art, not yet adjudicated.
+3. **Map onto core claims** from Phase A: for each claim, note which supplied papers already look related, so Phase B's search and Phase C's delta analysis focus on the real overlap.
+
+> The supplied set **widens** the starting coverage — it is **not a ceiling**. Phase B still runs its own multi-source web search to catch what the supplied survey missed, and Phase C adjudicates novelty against the **union** of supplied + newly-found papers. Never treat "not in the supplied set" as "novel."
+
 ### Phase B: Multi-Source Literature Search
 For EACH core claim, search using ALL available sources:
 
 1. **Web Search** (via `WebSearch`):
    - Search arXiv, Google Scholar, Semantic Scholar
    - Use specific technical terms from the claim
-   - Try at least 3 different query formulations per claim
+   - **Query along three axes — not just reworded synonyms. Missed prior work most often uses different terminology than your method name:**
+     1. **Method axis** — your method/technique name and its close variants
+     2. **Problem axis** — the problem/task itself, phrased as someone solving it *without* your method
+     3. **Alias axis** — known aliases, neighboring task names, and the terms competing sub-communities would use
+   - Run **at least one query per axis per claim** (≥3 total); add more reformulations when results look thin
    - Include year filters for 2024-2026
 
 2. **Known paper databases**: Check against:
@@ -121,6 +145,44 @@ Output a structured report:
 ### Suggested Positioning
 [State the delta honestly in one sentence a reviewer could verify]
 ```
+
+### Phase E: Persist Closest Prior Work to Research Wiki (only when `research-wiki/` exists)
+
+**Skip entirely (no action, no error) if `research-wiki/` is absent.** When it exists, persist the **Closest Prior Work** this check surfaced — it is the highest-value related-work set for later paper writing (exactly what a reviewer will cite against you), and every entry already passed `verify_papers.py`, so it should compound into the wiki instead of evaporating with the verdict.
+
+Resolve `$WIKI_SCRIPT` per the canonical chain in [`shared-references/wiki-helper-resolution.md`](../shared-references/wiki-helper-resolution.md) (Variant B — warn-and-skip):
+
+```bash
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+ARIS_REPO="${ARIS_REPO:-$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null)}"
+WIKI_SCRIPT=".aris/tools/research_wiki.py"
+[ -f "$WIKI_SCRIPT" ] || WIKI_SCRIPT="tools/research_wiki.py"
+[ -f "$WIKI_SCRIPT" ] || { [ -n "${ARIS_REPO:-}" ] && WIKI_SCRIPT="$ARIS_REPO/tools/research_wiki.py"; }
+[ -f "$WIKI_SCRIPT" ] || {
+  echo "WARN: research_wiki.py not found; novelty verdict still reported, wiki ingest skipped. Fix: bash tools/install_aris.sh, export ARIS_REPO, or cp <ARIS-repo>/tools/research_wiki.py tools/." >&2
+  WIKI_SCRIPT=""
+}
+```
+
+When `$WIKI_SCRIPT` is non-empty, for **each** paper in the Closest Prior Work table:
+
+```bash
+# Ingest the prior-art paper (dedup handled by the helper — an existing arXiv id is skipped).
+[ -n "$WIKI_SCRIPT" ] && python3 "$WIKI_SCRIPT" ingest_paper research-wiki/ \
+    --arxiv-id <id> --thesis "<one-line closest-prior-work summary>" --tags novelty-check,prior-art
+```
+
+- Use `--arxiv-id` when available; for venue-only papers with no arXiv mirror, pass `--title/--authors/--year [--external-id-doi <doi>]` instead (same form as `/research-lit`).
+- **Do not hand-write `research-wiki/papers/<slug>.md`** — `ingest_paper` handles slug, metadata fetch, dedup, index/query_pack rebuild, and log append in one call.
+- **Optional edge (best-effort):** if an idea/claim node for the idea under check already exists in the wiki, link it — direction is `idea → paper`, matching the wiki's edge convention (see [`research-wiki/SKILL.md`](../research-wiki/SKILL.md) edge table). Otherwise just ingest the papers (the prior-art set is the value) and skip the edge:
+  ```bash
+  [ -n "$WIKI_SCRIPT" ] && python3 "$WIKI_SCRIPT" add_edge research-wiki/ \
+      --from "idea:<slug>" --to "paper:<slug>" \
+      --type competes_with \
+      --evidence "<one sentence: the overlap this novelty check found>"
+  ```
+  `competes_with` is the edge type for closest-prior-work overlap (added to the wiki vocabulary for exactly this novelty-check use).
+- If the helper is unavailable, log the gap and let `/research-wiki sync` backfill later — **never fail the novelty verdict over a wiki-ingest miss.**
 
 ### Important Rules
 - Two failures waste months equally: a false novelty claim, and a viable idea

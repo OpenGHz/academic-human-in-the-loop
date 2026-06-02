@@ -160,6 +160,7 @@ def add_edge(wiki_root: str, from_id: str, to_id: str, edge_type: str, evidence:
         #   claim --refutes--> claim      (a claim that falsifies another)
         #   claim --uses--> paper         (imports a result/ingredient)
         "depends_on", "refutes", "uses",
+        "competes_with",
     }
     if edge_type not in VALID_TYPES:
         print(f"Warning: unknown edge type '{edge_type}'. Valid: {VALID_TYPES}", file=sys.stderr)
