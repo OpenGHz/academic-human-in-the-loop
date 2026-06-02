@@ -13,12 +13,16 @@ Check whether a proposed method/idea has already been done in the literature: **
 
 - REVIEWER_MODEL = `gpt-5.6-sol` — Model used via Codex MCP. Must be an OpenAI model (e.g., `gpt-5.6-sol`, `o3`, `gpt-4o`)
 - **PRIOR_ART = none** — Optional pre-loaded prior-art set that seeds the check. When supplied, these papers are treated as known prior art in **Phase A.5** *before* the skill runs its own web search, so a prior `/research-lit` survey (or any curated list) widens coverage and reduces missed prior work. Accepts a file path (`references.bib`, a landscape `.md`, or a `research-wiki/` directory) or an inline comma/semicolon-separated paper list. Default `none` = behave exactly as before (web-only, self-contained).
+- **OUTPUT = `idea-stage/NOVELTY_<slug>.md`** — Where the standalone Novelty Report (Phase D.6) is written, `<slug>` derived from the idea. Saving is the default (with a timestamped copy per output-versioning). Suppressed when running composed under an orchestrator, or with `— no-save`.
 
 > 💡 Overrides:
 > - `/novelty-check "idea" — prior-art: refine-logs/landscape.md` — seed from a saved literature survey
 > - `/novelty-check "idea" — prior-art: research-wiki/` — seed from the persistent wiki
 > - `/novelty-check "idea" — prior-art: references.bib` — seed from an existing bib
 > - `/novelty-check "idea" — prior-art: "Smith 2025 (arXiv 2501.01234); Lee 2024 NeurIPS"` — inline list
+> - `/novelty-check "idea" — output: refine-logs/NOVELTY.md` — custom standalone report path
+> - `/novelty-check "idea" — no-save` — print the report only, write no standalone file
+> - `/novelty-check "idea" — composed: idea-stage/IDEA_REPORT.md` — fold into an orchestrator's report instead of a standalone file
 
 ## Instructions
 
@@ -159,6 +163,15 @@ Patch the file with three edits, mirroring the file's existing style and structu
 4. **Update the file's provenance header** with a one-line note: which skill updated it, the date, the headline finding, and the cross-model score.
 
 **Opt-out / scope:** skip this phase only if the user passed `— no-patch`, the check was a bare inline idea with no landscape file in play, or the landscape file is read-only/not writable. When skipping because there is no file, offer in the report to create one. Never silently overwrite content that contradicts the new findings — *correct* it in place and let the diff show the change.
+
+### Phase D.6: Save the Novelty Report (standalone by default; fold in when composed)
+
+The Phase D report is the verdict artifact — PROCEED/ABANDON, the closest-prior-work table, and the positioning a reviewer will test you on. Don't let it evaporate into the conversation. **This is distinct from Phase D.5:** D.5 patches a pre-existing *input* landscape file; this step persists *this check's own report* (and is the only persistence path when there is no input landscape and no `research-wiki/`).
+
+- **Standalone (DEFAULT — no `— composed:` directive):** Write the Phase D report to `OUTPUT` (default `idea-stage/NOVELTY_<slug>.md`, or the `— output:` path). Follow [`shared-references/output-versioning.md`](../shared-references/output-versioning.md): write a timestamped `NOVELTY_<slug>_<YYYYMMDD_HHmmss>.md` (get the stamp via `date +%Y%m%d_%H%M%S`) **and** the fixed-name `NOVELTY_<slug>.md`. Create the parent dir if needed. Skip the write only with `— no-save`.
+- **Composed (only when `— composed: <canonical-report-path>` is passed):** Do **not** write a standalone file. Return the report's conclusions (verdict, closest prior work, positioning) for the orchestrator to fold into its canonical deliverable, citing the `.aris/traces/…` path rather than duplicating the reviewer transcript. Per [`shared-references/output-composition.md`](../shared-references/output-composition.md), never infer composed mode from a report file merely existing on disk — the directive must be explicit, and `— standalone` always wins a conflict.
+
+Phase E (wiki ingest) and Review Tracing run in **both** modes — they are persistence/audit, not the human-facing report.
 
 ### Phase E: Persist Closest Prior Work to Research Wiki (only when `research-wiki/` exists)
 
