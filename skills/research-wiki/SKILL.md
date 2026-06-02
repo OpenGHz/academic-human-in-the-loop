@@ -38,6 +38,7 @@ Inspired by [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6
 | `supports` | exp → claim\|idea | Experiment confirms claim |
 | `invalidates` | exp → claim\|idea | Experiment disproves claim |
 | `supersedes` | paper → paper | Newer work replaces older |
+| `competes_with` | idea → paper | Idea overlaps with / is challenged by this prior work (e.g. closest prior art from `/novelty-check`) |
 
 Edges are stored in `graph/edges.jsonl` only. The `## Connections` section on each page is **auto-generated** from the graph — never hand-edit it.
 
