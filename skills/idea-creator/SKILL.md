@@ -13,6 +13,15 @@ Generate publishable research ideas for: $ARGUMENTS
 
 Given a broad research direction from the user, systematically generate, validate, and rank concrete research ideas. Standalone, Phase 1's landscape survey is **inline** (WebSearch — it does not invoke `/research-lit`); Phases 4-5 invoke `/novelty-check`, `/run-experiment`, and `/monitor-experiment` for validation and pilots. For the full sub-skill pipeline (`/research-lit` → idea generation → `/novelty-check` → `/research-review`), run `/idea-discovery` (Workflow 1), which orchestrates this skill.
 
+> ⚠️ **When NOT to use this skill — you already have a mature, converged idea.**
+> This skill is a *divergent generator*: it brainstorms `NUM_IDEAS` (default 8-12)
+> candidate ideas and ranks them for selection. If you already have one concrete
+> idea you intend to pursue, generating alternatives diverges *away* from it — your
+> idea may not even appear in the list, and pilot GPU is spent on others. For a
+> mature idea, route instead to `/novelty-check` → `/research-review` →
+> `/research-refine` (verify novel → critique → sharpen). The Workflow's **Step 0**
+> below enforces this triage.
+
 ## Constants
 
 - **PILOT_MAX_HOURS = 2** — Skip any pilot estimated to take > 2 hours per GPU. Flag as "needs manual pilot".
@@ -22,8 +31,9 @@ Given a broad research direction from the user, systematically generate, validat
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Default model for the Codex backend. Must be an OpenAI model (e.g., `gpt-5.6-sol`, `o3`, `gpt-4o`). Manual backend uses a model the user chooses, **but it must be a non-Claude model ARIS can classify** (OpenAI, Google, DeepSeek, Moonshot/Kimi, Qwen) — the executor is Claude, so pasting into any Claude product makes Claude judge Claude and voids the cross-model invariant (see `shared-references/reviewer-routing.md`).
 - **REVIEWER_BACKEND = `codex`** — Default: Codex MCP (xhigh). Override with `— reviewer: oracle-pro` for Oracle MCP, or `— reviewer: manual` for Manual Review MCP. If manual-review MCP is unavailable, stop and print the install command; do not fall back to Codex. See `shared-references/reviewer-routing.md`.
 - **OUTPUT_DIR = `idea-stage/`** — All idea-stage outputs go here. Create the directory if it doesn't exist.
+- **NUM_IDEAS = `8-12`** — How many candidate ideas Phase 2 generates before ranking. Lower it for a tighter set when the direction is already fairly narrow and you don't need a wide menu (e.g. `— count: 4`). Does **not** apply when Step 0 routes out an already-formed single idea.
 
-> 💡 Override via argument, e.g., `/idea-creator "topic" — pilot budget: 4h per idea, 20h total`.
+> 💡 Override via argument, e.g., `/idea-creator "topic" — pilot budget: 4h per idea, 20h total` or `/idea-creator "topic" — count: 4`.
 
 ## Reviewer Calling Convention
 
@@ -50,6 +60,27 @@ remote web UIs cannot read your local filesystem paths. Review tracing applies
 equally to both backends.
 
 ## Workflow
+
+### Step 0: Input triage — broad direction vs. already-formed idea
+
+Before anything else, classify `$ARGUMENTS`:
+
+- **Broad direction** (e.g. "DLLMs post-training", "diffusion models for control") → proceed normally through Phases 0-7 below.
+- **A single, already-concrete/mature idea** (a specific method + problem the user clearly intends to pursue, not a space to explore) → **stop and route out**, unless the user explicitly asked to brainstorm *around* it. Print:
+
+  > This looks like an already-formed idea, not a broad direction. `idea-creator`
+  > generates `NUM_IDEAS` *alternatives* for selection, which would diverge from your
+  > idea. For a mature idea the right path is:
+  > - `/novelty-check "<idea>"`   — is it actually new?
+  > - `/research-review "<idea>"` — external critique
+  > - `/research-refine "<idea>"` — sharpen the method + plan experiments
+  >
+  > Want alternatives anyway (or variants around this idea)? Reply to proceed and I'll
+  > brainstorm `NUM_IDEAS` as usual.
+
+  Then **wait** for the user to either confirm (brainstorm anyway) or switch skills. Do not start the survey until they choose.
+
+> When genuinely in doubt, treat it as a broad direction and proceed — Step 0 is a guardrail against obvious misuse, not a hard blocker.
 
 ### Phase 0: Load Research Wiki (if active)
   A verdict-bearing manual response MUST begin with
@@ -288,7 +319,7 @@ Bundle contents:
     Key gaps identified:
     [write the Phase-1 gap summary into this bundle file]
 
-    Generate 8-12 concrete research ideas. For each idea:
+    Generate [NUM_IDEAS] concrete research ideas. For each idea:
     1. One-sentence summary
     2. Core hypothesis (what you expect to find and why)
     3. Minimum viable experiment (what's the cheapest way to test this?)
