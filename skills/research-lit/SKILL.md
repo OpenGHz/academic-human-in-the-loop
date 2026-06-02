@@ -143,11 +143,72 @@ Before searching online, check if the user already has relevant papers locally:
 >
 > Then continue to Step 1.
 
+### Step 0d: Mine provided materials for seeds (if the user pointed to any)
+
+If the request references an idea doc, design note, codebase, `ref_docs/cites/`, a
+`.bib`, or an existing draft, **read it first and extract seeds before searching**:
+- **Named systems / methods / baselines** mentioned → each becomes a facet query (Step 1.1).
+- **Author / lab lines** (e.g. the authors of a base model the user builds on) →
+  search their recent work; teams reuse ideas across papers.
+- **Existing citations / bib entries** → feed directly into the citation snowball
+  (Step 1.2) as seeds.
+- **Task nouns** (objects, mechanisms, settings the user describes) → these define the
+  *task-domain* facet, which method-phrased topics routinely miss.
+
+> Seeds anchor recall far better than cold keyword guesses: a single seed paper's
+> reference list + citers often covers a sub-field that no query you would have
+> thought to type would surface.
+
 ### Step 1: Search (external)
-- Use WebSearch to find recent papers on the topic
-- Check arXiv, Semantic Scholar, Google Scholar
-- Focus on papers from last 2 years unless studying foundational work
-- **De-duplicate**: Skip papers already found in Zotero, Obsidian, or local library
+
+> **Recall-first search protocol (mandatory).** Missed-paper post-mortems almost
+> always trace to *single-facet, single-angle keyword search*. Do NOT fire one query
+> per topic. Design queries with the four steps below; the per-source mechanics
+> (arXiv / S2 / etc.) further down are the *execution layer* for those queries.
+
+**1. Decompose the topic into a facet matrix (mandatory).** Write **≥2 query phrasings
+for each facet**, then search every facet — not only the one the topic is phrased in:
+- **Method / mechanism** (e.g. "experience memory", "retrieval-augmented policy")
+- **Task / problem domain** (e.g. "articulated-object manipulation", "hidden-state
+  adaptation") — *the facet most often skipped when a topic is phrased in method terms*
+- **Application / embodiment** (e.g. "vision-language-action", "manipulation policy")
+- **Aliases & neighboring tasks** (synonyms, adjacent problems, older names)
+- **Benchmark / dataset / setting names**
+- **Key author / lab lines** (from Step 0d seeds)
+
+Keep an explicit checklist of facets searched; a facet with **0 queries is a logged
+coverage gap**, not "done".
+
+**2. Citation snowball from the strongest seeds (mandatory whenever ≥1 strong seed
+exists).** Take the top 3-5 hits so far **plus any Step 0d seeds** and pull their
+backward references + forward citers — this surfaces relevant work that *no keyword
+query matches*:
+
+```bash
+# Snowball is an EXPANSION over found seeds, independent of the `— sources:` SEARCH
+# filter. Resolve $S2_FETCHER via the canonical chain (integration-contract §2).
+python3 "$S2_FETCHER" paper "ARXIV:<seed_id>" \
+  --fields title,references.title,references.externalIds,citations.title,citations.externalIds
+# Fallbacks if $S2_FETCHER is unresolved: `$OPENALEX_FETCHER work <doi|id> --json`
+# (returns referenced_works), else WebFetch the abs page and read its References.
+```
+
+De-duplicate against everything found so far and re-rank by relevance.
+
+**3. Recency sweep (for fast-moving areas).** Relevance-sorted arXiv buries brand-new
+papers, and recent systems often have un-guessable names. Run a dedicated
+**last-12-month pass** on the core terms (OpenAlex `search --year <thisyear-1>-`; S2
+year filter). Convert relative dates using the current date from context.
+
+**4. Saturate, then stop.** Iterate facets + snowball until a full round yields **no new
+relevant papers** (loop-until-dry). De-duplicate against Zotero / Obsidian / local. State
+any residual coverage gaps in the final output rather than implying full coverage.
+
+Baseline pointers (execution layer below): WebSearch (broad), arXiv API (structured
+metadata), and — for citation edges, venue metadata, and recency — strongly consider
+enabling `semantic-scholar` and `openalex` (`— sources: all, semantic-scholar, openalex`)
+on thorough / "comprehensive" reviews. Focus on the last ~2 years unless studying
+foundational work.
 
 **arXiv API search** (runs when `— sources:` is unset, contains `web` or `all`; no download by default — arXiv API is part of the Priority-4 Web tier, see Source Table above):
 
@@ -597,6 +658,12 @@ fi
   warning verbatim and recommend re-running with narrower queries.
 - For papers tagged `verify_pending`, do not promote them to `verified` —
   show the pending state to the user and retry on the next session.
+- **If the helper itself times out or the network is down** (e.g. the arXiv batch
+  endpoint is unreachable), do not collapse the whole set to `[UNVERIFIED]`: first try
+  to confirm each candidate by a direct abstract-page fetch (`https://arxiv.org/abs/<id>`
+  → HTTP 200 + title match, via WebFetch or a stealthy fetch) and tag those
+  `✅ verified (via arxiv-abs)`. Only candidates that still cannot be reached stay
+  `… verify_pending`.
 
 Optional: set `ARIS_VERIFY_EMAIL=you@institution.edu` in your shell to lift
 CrossRef rate limits to the polite pool.
