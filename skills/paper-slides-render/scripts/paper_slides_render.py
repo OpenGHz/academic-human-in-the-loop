@@ -77,11 +77,21 @@ REQUIRED_PIXEL_FORMAT = "yuv420p"
 # Subtitle style defaults (used when --with-subtitles is set).
 # Threaded through both whisper (output line shaping) and ffmpeg (libass force_style).
 DEFAULT_SUBTITLE_FONT = "DejaVuSans"               # CJK needs "Noto Sans CJK SC" or similar
-DEFAULT_SUBTITLE_SIZE = 24                         # 1080p-friendly; 20 was too thin
-DEFAULT_SUBTITLE_MAX_LINE_WIDTH = 42               # characters per line; whisper wraps above this
-DEFAULT_SUBTITLE_MAX_LINE_COUNT = 2                # max lines per cue
+DEFAULT_SUBTITLE_SIZE = 46                         # TRUE pixels @ 1080p (we set PlayResY=height)
+DEFAULT_SUBTITLE_MAX_LINE_WIDTH = 48               # characters per line; wraps above this
+DEFAULT_SUBTITLE_MAX_LINE_COUNT = 1                # one line keeps cues at the bottom edge; raise for denser text
 DEFAULT_SUBTITLE_POSITION = "bottom"               # bottom | top
-DEFAULT_SUBTITLE_MARGIN_V = 80                     # vertical margin from edge (px @ 1080p)
+DEFAULT_SUBTITLE_MARGIN_V = 16                     # TRUE pixels from the edge @ 1080p (sits low, on its own band)
+# Subtitles render as bold white text on a translucent caption band so they read
+# over any slide content and look typeset rather than like auto-captions. The band
+# color defaults to the DECK's \definecolor{primary} (auto-detected from main.tex)
+# so subtitles match the slides; falls back to neutral dark, override per-run.
+DEFAULT_SUBTITLE_TEXT_COLOR = "FFFFFF"             # hex RGB
+DEFAULT_SUBTITLE_BOX = True                        # draw the caption band (BorderStyle=3)
+DEFAULT_SUBTITLE_BOX_COLOR = "1E1E1E"              # fallback band color when the deck primary isn't found
+DEFAULT_SUBTITLE_BOX_OPACITY = 0.82                # 0..1 (1 = opaque)
+DEFAULT_SUBTITLE_BOLD = True
+DEFAULT_SUBTITLE_OUTLINE_PX = 6                    # band padding (BorderStyle=3) / outline width (BorderStyle=1) — snug band
 SUBTITLE_ALIGNMENT_BY_POSITION = {"bottom": 2, "top": 8}  # ASS V4+ numpad alignment
 
 SLIDE_HEADER_RE = re.compile(
@@ -601,7 +611,11 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         can_write = False
 
     warnings: list[str] = []
-    whisper_required_missing = bool(args.with_subtitles) and not whisper_info["available"]
+    whisper_required_missing = (
+        bool(args.with_subtitles)
+        and (getattr(args, "subtitle_source", "whisper") == "whisper")
+        and not whisper_info["available"]
+    )
 
     # Optional clip probing when --talk-script is provided
     clips_info: list[dict[str, Any]] = []
@@ -986,6 +1000,21 @@ def _pdf_page_size_pts(pdf: Path) -> tuple[float, float] | None:
             if m:
                 return float(m.group(1)), float(m.group(2))
     return None
+
+
+def _deck_primary_color(pdf: Path) -> str | None:
+    """Read the deck's brand color from the sibling main.tex
+    (\\definecolor{primary}{HTML}{RRGGBB}) so subtitles can match the slides.
+    Returns a 6-hex-digit RGB string, or None."""
+    tex = pdf.with_suffix(".tex")
+    if not tex.is_file():
+        return None
+    try:
+        text = tex.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    m = re.search(r"\\definecolor\{primary\}\{HTML\}\{([0-9A-Fa-f]{6})\}", text)
+    return m.group(1).upper() if m else None
 
 
 def _png_dims(path: Path) -> tuple[int, int]:
@@ -1504,36 +1533,170 @@ def _ffmpeg_concat(segments: list[Path], output: Path) -> tuple[bool, str | None
     return True, None
 
 
+def _fmt_srt_time(t: float) -> str:
+    if t < 0:
+        t = 0.0
+    ms = int(round((t - int(t)) * 1000))
+    s, m, h = int(t) % 60, (int(t) // 60) % 60, int(t) // 3600
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _script_srt_body(text: str, duration: float, max_line_width: int, max_line_count: int) -> str:
+    """Build an SRT body (cues timed 0..duration) directly from the known narration
+    text — no ASR. Wrap to max_line_width chars, group into <= max_line_count-line
+    cues, and split `duration` across cues proportional to their character count.
+    More accurate than whisper for jargon-heavy decks (text is ground truth); cue
+    timing is proportional rather than force-aligned."""
+    import textwrap
+    text = _strip_markdown(text)  # drop *italic* / **bold** / [links] so cues don't show literal markup
+    text = " ".join(text.split())
+    if not text or duration <= 0:
+        return ""
+    width = max(8, max_line_width)
+    per_cue = max(1, max_line_count)
+    lines = textwrap.wrap(text, width=width) or [text]
+    cues = [lines[i:i + per_cue] for i in range(0, len(lines), per_cue)]
+    weights = [max(1, sum(len(ln) for ln in cue)) for cue in cues]
+    total = sum(weights)
+    blocks: list[str] = []
+    t = 0.0
+    for i, cue in enumerate(cues):
+        start = t
+        end = duration if i == len(cues) - 1 else t + duration * weights[i] / total
+        t = end
+        blocks.append(f"{i + 1}\n{_fmt_srt_time(start)} --> {_fmt_srt_time(end)}\n" + "\n".join(cue))
+    return "\n\n".join(blocks) + "\n"
+
+
+def _write_script_srt(
+    text: str, duration: float, out_srt: Path, max_line_width: int, max_line_count: int
+) -> tuple[Path | None, str | None]:
+    """Write a per-slide SRT (times relative to 0) from known narration text."""
+    body = _script_srt_body(text, duration, max_line_width, max_line_count)
+    if not body.strip():
+        return None, "empty subtitle text"
+    out_srt.parent.mkdir(parents=True, exist_ok=True)
+    out_srt.write_text(body, encoding="utf-8")
+    return out_srt, None
+
+
+def _ass_time(h: int, m: int, s: int, ms: int) -> str:
+    cs = int(round(ms / 10.0))
+    if cs >= 100:
+        cs -= 100
+        s += 1
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _ass_color(hex_rgb: str, opacity: float = 1.0) -> str:
+    """#RRGGBB (+ 0..1 opacity) -> ASS &HAABBGGRR. ASS alpha byte: 00 opaque, FF clear."""
+    h = (hex_rgb or "").lstrip("#")
+    if len(h) != 6:
+        h = "FFFFFF"
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        r, g, b = 255, 255, 255
+    a = max(0, min(255, int(round((1.0 - opacity) * 255))))
+    return f"&H{a:02X}{b:02X}{g:02X}{r:02X}"
+
+
+def _srt_to_ass(
+    srt_path: Path, ass_path: Path, width: int, height: int,
+    font: str, size: int, position: str, margin_v: int,
+    text_color: str = DEFAULT_SUBTITLE_TEXT_COLOR,
+    box: bool = DEFAULT_SUBTITLE_BOX,
+    box_color: str = DEFAULT_SUBTITLE_BOX_COLOR,
+    box_opacity: float = DEFAULT_SUBTITLE_BOX_OPACITY,
+    bold: bool = DEFAULT_SUBTITLE_BOLD,
+    outline_px: int = DEFAULT_SUBTITLE_OUTLINE_PX,
+) -> Path:
+    """Convert an SRT to an ASS whose PlayResX/Y match the OUTPUT video, so FontSize
+    and MarginV are TRUE pixels (ffmpeg's SRT path otherwise assumes a 384x288 canvas
+    and scales a 1080p burn ~3.75x — huge font floating mid-frame). Renders bold text
+    on a translucent caption band (BorderStyle=3) by default so cues read over any
+    slide content and look typeset."""
+    text = srt_path.read_text(encoding="utf-8")
+    alignment = SUBTITLE_ALIGNMENT_BY_POSITION.get(position, 2)
+    safe_font = font.replace(",", " ").strip() or "DejaVuSans"
+    primary = _ass_color(text_color, 1.0)
+    if box:
+        border_style, outline_colour, back_colour, shadow = 3, _ass_color(box_color, box_opacity), "&H00000000", 0
+    else:
+        border_style, outline_colour, back_colour, shadow = 1, _ass_color("000000", 1.0), "&H64000000", 1
+    style = (
+        f"Style: Default,{safe_font},{int(size)},{primary},&H000000FF,{outline_colour},{back_colour},"
+        f"{1 if bold else 0},0,0,0,100,100,0,0,{border_style},{int(outline_px)},{shadow},"
+        f"{alignment},40,40,{int(margin_v)},1"
+    )
+    header = (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {int(width)}\n"
+        f"PlayResY: {int(height)}\n"
+        "WrapStyle: 2\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+        "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"{style}\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    time_re = re.compile(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})")
+    dialogues: list[str] = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        lines = block.splitlines()
+        ti = next((i for i, ln in enumerate(lines) if "-->" in ln), None)
+        if ti is None:
+            continue
+        m = time_re.search(lines[ti])
+        if not m:
+            continue
+        g = [int(x) for x in m.groups()]
+        start, end = _ass_time(*g[:4]), _ass_time(*g[4:])
+        body = "\\N".join(ln.strip() for ln in lines[ti + 1:] if ln.strip())
+        body = body.replace("{", "(").replace("}", ")")  # neutralize ASS override blocks
+        if body:
+            dialogues.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{body}")
+    ass_path.parent.mkdir(parents=True, exist_ok=True)
+    ass_path.write_text(header + "\n".join(dialogues) + "\n", encoding="utf-8")
+    return ass_path
+
+
 def _ffmpeg_burn_subtitles(
     input_mp4: Path,
     srt: Path,
     output: Path,
+    width: int = 1920,
+    height: int = 1080,
     font: str = DEFAULT_SUBTITLE_FONT,
     size: int = DEFAULT_SUBTITLE_SIZE,
     position: str = DEFAULT_SUBTITLE_POSITION,
     margin_v: int = DEFAULT_SUBTITLE_MARGIN_V,
+    text_color: str = DEFAULT_SUBTITLE_TEXT_COLOR,
+    box: bool = DEFAULT_SUBTITLE_BOX,
+    box_color: str = DEFAULT_SUBTITLE_BOX_COLOR,
+    box_opacity: float = DEFAULT_SUBTITLE_BOX_OPACITY,
+    bold: bool = DEFAULT_SUBTITLE_BOLD,
+    outline_px: int = DEFAULT_SUBTITLE_OUTLINE_PX,
 ) -> tuple[bool, str | None]:
-    """Burn `srt` into `input_mp4` via libass `force_style`. Style fields:
-      FontName   — exact font face on the system (CJK needs Noto Sans CJK SC etc.)
-      FontSize   — points at 384 ASS-virtual height (renders ~accurate at 1080p)
-      Alignment  — ASS V4+ numpad: 2 = bottom-center, 8 = top-center
-      MarginV    — distance from top/bottom edge in pixels
-    """
+    """Burn subtitles by first converting to an ASS pinned to the output resolution
+    (so FontSize/MarginV are true pixels), then rendering via libass."""
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Sanitize font name: strip single quotes and commas to keep force_style parseable.
-    safe_font = font.replace("'", "").replace(",", "")
-    alignment = SUBTITLE_ALIGNMENT_BY_POSITION.get(position, 2)
-    style = (
-        f"FontName={safe_font},"
-        f"FontSize={int(size)},"
-        f"Alignment={alignment},"
-        f"MarginV={int(margin_v)}"
-    )
-    vf = f"subtitles={srt}:force_style='{style}'"
+    try:
+        ass = _srt_to_ass(
+            srt, srt.with_suffix(".ass"), width, height, font, size, position, margin_v,
+            text_color=text_color, box=box, box_color=box_color, box_opacity=box_opacity,
+            bold=bold, outline_px=outline_px,
+        )
+    except OSError as e:
+        return False, f"SRT->ASS conversion failed: {e}"
     cmd = [
         "ffmpeg", "-y",
         "-i", str(input_mp4),
-        "-vf", vf,
+        "-vf", f"subtitles={ass}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k",
         "-pix_fmt", "yuv420p",
@@ -1606,6 +1769,15 @@ def cmd_render(args: argparse.Namespace) -> int:
     sub_margin_v = int(getattr(args, "subtitle_margin_v", None) or DEFAULT_SUBTITLE_MARGIN_V)
     sub_max_line_width = int(getattr(args, "subtitle_max_line_width", None) or DEFAULT_SUBTITLE_MAX_LINE_WIDTH)
     sub_max_line_count = int(getattr(args, "subtitle_max_line_count", None) or DEFAULT_SUBTITLE_MAX_LINE_COUNT)
+    subtitle_source = getattr(args, "subtitle_source", None) or "whisper"
+    sub_text_color = getattr(args, "subtitle_text_color", None) or DEFAULT_SUBTITLE_TEXT_COLOR
+    sub_box = not bool(getattr(args, "subtitle_no_box", False))
+    sub_box_opacity = float(getattr(args, "subtitle_box_opacity", None) or DEFAULT_SUBTITLE_BOX_OPACITY)
+    sub_outline_px = int(getattr(args, "subtitle_outline", None) or DEFAULT_SUBTITLE_OUTLINE_PX)
+    # Band color: explicit flag > deck \definecolor{primary} (auto-match the slides) > neutral fallback.
+    sub_box_color = (getattr(args, "subtitle_box_color", None)
+                     or _deck_primary_color(pdf_path)
+                     or DEFAULT_SUBTITLE_BOX_COLOR)
 
     warnings: list[str] = []
 
@@ -1706,6 +1878,10 @@ def cmd_render(args: argparse.Namespace) -> int:
             "margin_v": sub_margin_v,
             "max_line_width": sub_max_line_width,
             "max_line_count": sub_max_line_count,
+            "text_color": sub_text_color,
+            "box": sub_box,
+            "box_color": sub_box_color,
+            "box_opacity": sub_box_opacity,
         } if with_subtitles else None,
     }
     merged_srt: Path | None = None
@@ -1791,7 +1967,44 @@ def cmd_render(args: argparse.Namespace) -> int:
     # Phase 8: optional whisper alignment + subtitle burn-in (post-concat)
     # Subtitles are non-blocking: every failure mode here is soft-fail. The
     # no-subs MP4 written by Phase 7 stays as the final output on any error.
-    if with_subtitles:
+    if with_subtitles and subtitle_source == "script":
+        # Script source: build the SRT from the known narration text + per-slide
+        # audio duration. No ASR, so jargon is spelled correctly; cue timing is
+        # proportional. Offsets use actual segment durations (the concat timeline).
+        subtitles_info["available"] = True
+        subtitles_info["source"] = "script"
+        srt_dir = _render_root(workspace) / "srt"
+        actual_by_num = {d["slide_number"]: d["actual_seconds"] for d in per_slide_drift}
+        cumulative_offset = 0.0
+        per_slide_srt: list[tuple[Path, float]] = []
+        for slide_record in narrate_results:
+            slide_num = slide_record["slide_number"]
+            slide = slides_by_num.get(slide_num)
+            wav, _ = _audio_paths(workspace, slide_num)
+            narration = _ffprobe_duration(wav)
+            text = slide.speakable_text if slide is not None else ""
+            srt_path = srt_dir / f"slide_{slide_num:02d}.srt"
+            p, err = _write_script_srt(text, narration, srt_path, sub_max_line_width, sub_max_line_count)
+            if err or p is None:
+                subtitles_info["skipped"] = True
+                subtitles_info["skipReason"] = "script-srt-failed"
+                warnings.append(f"script subtitle build failed for slide {slide_num}: {err}; keeping no-subs MP4")
+                per_slide_srt = []
+                break
+            per_slide_srt.append((srt_path, cumulative_offset))
+            cumulative_offset += actual_by_num.get(slide_num, narration)
+        if per_slide_srt:
+            merged_srt = _render_root(workspace) / "subtitles.srt"
+            merge_err = _merge_srts(per_slide_srt, merged_srt)
+            if merge_err:
+                subtitles_info["skipped"] = True
+                subtitles_info["skipReason"] = "alignment-merge-failed"
+                warnings.append(f"SRT merge failed: {merge_err}; keeping no-subs MP4")
+                merged_srt = None
+            else:
+                subtitles_info["path"] = str(merged_srt)
+    elif with_subtitles:
+        subtitles_info["source"] = "whisper"
         whisper_info = _check_whisper()
         if not whisper_info["available"]:
             # In normal flow this is caught by preflight (hard error), so this
@@ -1804,7 +2017,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             subtitles_info["available"] = True
             srt_dir = _render_root(workspace) / "srt"
             cumulative_offset = 0.0
-            per_slide_srt: list[tuple[Path, float]] = []
+            per_slide_srt = []
             for slide_record in narrate_results:
                 slide_num = slide_record["slide_number"]
                 wav, _ = _audio_paths(workspace, slide_num)
@@ -1832,29 +2045,35 @@ def cmd_render(args: argparse.Namespace) -> int:
                 else:
                     subtitles_info["path"] = str(merged_srt)
 
-        # Burn-in pass: write to a temp neighbour of output, then atomically
-        # replace output on success. Failure leaves output untouched.
-        if merged_srt is not None:
-            burned = output.with_suffix(".subs.mp4")
-            ok_burn, burn_err = _ffmpeg_burn_subtitles(
-                output, merged_srt, burned,
-                font=sub_font,
-                size=sub_size,
-                position=sub_position,
-                margin_v=sub_margin_v,
-            )
-            if not ok_burn:
-                subtitles_info["skipped"] = True
-                subtitles_info["skipReason"] = "ffmpeg-subtitle-burn-failed"
-                warnings.append(f"subtitle burn failed: {burn_err}; keeping no-subs MP4")
-                if burned.exists():
-                    try:
-                        burned.unlink()
-                    except OSError:
-                        pass
-            else:
-                # Atomically swap the burned-in copy into place.
-                burned.replace(output)
+    # Burn-in pass (shared by both sources): write to a temp neighbour of output,
+    # then atomically replace output on success. Failure leaves output untouched.
+    if with_subtitles and merged_srt is not None:
+        burned = output.with_suffix(".subs.mp4")
+        ok_burn, burn_err = _ffmpeg_burn_subtitles(
+            output, merged_srt, burned,
+            width=width, height=height,
+            font=sub_font,
+            size=sub_size,
+            position=sub_position,
+            margin_v=sub_margin_v,
+            text_color=sub_text_color,
+            box=sub_box,
+            box_color=sub_box_color,
+            box_opacity=sub_box_opacity,
+            outline_px=sub_outline_px,
+        )
+        if not ok_burn:
+            subtitles_info["skipped"] = True
+            subtitles_info["skipReason"] = "ffmpeg-subtitle-burn-failed"
+            warnings.append(f"subtitle burn failed: {burn_err}; keeping no-subs MP4")
+            if burned.exists():
+                try:
+                    burned.unlink()
+                except OSError:
+                    pass
+        else:
+            # Atomically swap the burned-in copy into place.
+            burned.replace(output)
 
     # Final stats
     final_size_mb = output.stat().st_size / (1024 * 1024) if output.is_file() else 0.0
@@ -2003,6 +2222,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pre = sub.add_parser("preflight", help="Check edge-tts / pdftoppm / ffmpeg / ffprobe and writable output dir")
     pre.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
     pre.add_argument("--with-subtitles", action="store_true", help="Also probe whisper availability")
+    pre.add_argument("--subtitle-source", choices=("whisper", "script"), default="whisper",
+                     help="script source needs no whisper, so preflight won't require it")
     pre.add_argument("--talk-script", default=None, help="Optional TALK_SCRIPT.md path; when given, probe any [VIDEO: ...] clip references")
     pre.add_argument("--json-out", help="Path to write JSON result")
     pre.set_defaults(func=cmd_preflight)
@@ -2028,7 +2249,14 @@ def _build_parser() -> argparse.ArgumentParser:
     ren.add_argument("--resolution", default=DEFAULT_RESOLUTION, help=f"WxH (default: {DEFAULT_RESOLUTION})")
     ren.add_argument("--fps", type=int, default=DEFAULT_FPS, help=f"Output fps (default: {DEFAULT_FPS})")
     ren.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
-    ren.add_argument("--with-subtitles", action="store_true", help="Burn whisper-aligned subtitles (degrades to no-subs if whisper missing)")
+    ren.add_argument("--with-subtitles", action="store_true", help="Burn subtitles (source per --subtitle-source)")
+    ren.add_argument("--subtitle-source", choices=("whisper", "script"), default="whisper",
+                     help="whisper = ASR word-alignment (needs whisper); script = exact narration text timed from audio (no whisper, correct jargon)")
+    ren.add_argument("--subtitle-text-color", default=None, help="Hex RGB for subtitle text (default white)")
+    ren.add_argument("--subtitle-box-color", default=None, help="Hex RGB for the caption band (default: deck primary color, else dark)")
+    ren.add_argument("--subtitle-box-opacity", type=float, default=None, help="Caption band opacity 0..1 (default 0.82)")
+    ren.add_argument("--subtitle-no-box", action="store_true", help="Disable the caption band (outline-only text)")
+    ren.add_argument("--subtitle-outline", type=int, default=None, help="Band padding / outline width in px")
     ren.add_argument("--subtitle-font", default=DEFAULT_SUBTITLE_FONT,
                      help=f"Subtitle font face — use a CJK font (e.g. 'Noto Sans CJK SC') for Chinese/Japanese/Korean (default: {DEFAULT_SUBTITLE_FONT})")
     ren.add_argument("--subtitle-size", type=int, default=DEFAULT_SUBTITLE_SIZE,

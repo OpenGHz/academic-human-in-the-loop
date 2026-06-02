@@ -22,13 +22,17 @@ Claude is the **orchestrator**; a self-contained Python helper does the work: TT
 - **DEFAULT_FPS = `30`** — 30 fps.
 - **TARGET_CODEC = `libx264 + aac (faststart)`** — Same codec target as `/paper-video` for compatibility.
 - **DURATION_TOLERANCE = `0.15`** — `verify` allows up to ±15 % drift between actual and planned duration. TTS variance makes a fixed-seconds tolerance too loose for short talks and too tight for long ones; fractional tolerance is the right knob.
-- **WITH_SUBTITLES = off (default)** — Pass `— with-subtitles` to burn word-aligned subtitles via `whisper base.en`. If whisper is missing **and** `--with-subtitles` was requested, preflight fails closed (`ok=false`, exit 1) — install whisper first (`pip install openai-whisper`) or drop the flag. Subtitles are rendered **after** the no-subs MP4 is already on disk, so a whisper failure mid-render never blocks the main deliverable.
+- **WITH_SUBTITLES = off (default)** — Pass `— with-subtitles` to burn subtitles. Two sources via `--subtitle-source`:
+  - **`script`** (recommended; no extra deps) — builds the SRT from the **exact narration text** in TALK_SCRIPT.md, timed across each slide's audio. Spelling is always correct (ideal for jargon: EMT-QA, DRH, pull-drawer, +0.38…); cue timing is proportional rather than force-aligned. Needs no whisper.
+  - **`whisper`** (default for back-compat) — word-aligned subtitles via `whisper base.en` (ASR). More precise timing, but mis-transcribes domain jargon. If whisper is missing **and** `--subtitle-source whisper`, preflight fails closed (`ok=false`, exit 1) — install whisper (`pip install openai-whisper`) or use `--subtitle-source script`.
+  Either way, subtitles are rendered **after** the no-subs MP4 is on disk, so a subtitle failure never blocks the main deliverable.
 - **SUBTITLE_FONT = `DejaVuSans`** — Font face for burned-in subtitles. CJK talks **must** override to a CJK font (e.g. `Noto Sans CJK SC`); DejaVuSans renders □ for Chinese/Japanese/Korean.
-- **SUBTITLE_SIZE = `24`** — ASS font size in points (1080p-calibrated). Range: 18–36 recommended; beyond that readability degrades or subtitles compete with slide content.
+- **SUBTITLE_SIZE = `46`** — Font size in **true output pixels** (the burn pins the ASS `PlayResX/Y` to the video resolution, so size & margin are real px, not the libass-default 384×288 virtual canvas — that default was the bug that made text huge and floated it to mid-frame). Range: 36–56 at 1080p.
 - **SUBTITLE_POSITION = `bottom`** — `bottom` (alignment=2) or `top` (alignment=8). Use `top` when experiment-video clips occupy the bottom of the frame.
-- **SUBTITLE_MARGIN_V = `80`** — Distance from the edge (top or bottom per position) in pixels at 1080p. Increase if text overlaps the slide's footer/header.
-- **SUBTITLE_MAX_LINE_WIDTH = `42`** — Whisper wraps cues at this character count. Narrower = more frequent cue changes; wider = denser per-cue text.
-- **SUBTITLE_MAX_LINE_COUNT = `2`** — Max lines per cue. `2` is the broadcast standard; `1` is cleaner but shows more rapid cue transitions.
+- **SUBTITLE_MARGIN_V = `28`** — Distance from the edge in **true pixels** at 1080p (sits low, on its band).
+- **SUBTITLE caption band** — Subtitles render as **bold white text on a translucent band** (ASS `BorderStyle=3`), so they read cleanly over any slide content and look typeset (not auto-captions). The band color **auto-matches the deck**: the helper reads `\definecolor{primary}{HTML}{…}` from the sibling `main.tex` (falls back to neutral dark). Override with `--subtitle-box-color <hex>` / `--subtitle-box-opacity <0..1>` / `--subtitle-text-color <hex>`, or `--subtitle-no-box` for outline-only text.
+- **SUBTITLE_MAX_LINE_WIDTH = `48`** — Cues wrap at this character count. Narrower = more frequent cue changes; wider = denser per-cue text.
+- **SUBTITLE_MAX_LINE_COUNT = `1`** — Max lines per cue. `1` keeps each cue on the bottom edge (best when slides already have content low in the frame); raise to `2` for the broadcast-style denser text.
 - **OUTPUT_DIR = `slides/render/`** — All artifacts land here.
 - **RENDER_HELPER** — canonical name `paper_slides_render.py`, resolved per
   [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2
@@ -196,14 +200,11 @@ python3 "$RENDER_HELPER" render \
   --workspace . \
   ${VENUE_CAP:+--max-seconds $VENUE_CAP} \
   ${RATE:+--rate "$RATE"} \
-  ${WITH_SUBTITLES:+--with-subtitles} \
-  ${WITH_SUBTITLES:+--subtitle-font "${SUBTITLE_FONT:-DejaVuSans}"} \
-  ${WITH_SUBTITLES:+--subtitle-size "${SUBTITLE_SIZE:-24}"} \
-  ${WITH_SUBTITLES:+--subtitle-position "${SUBTITLE_POSITION:-bottom}"} \
-  ${WITH_SUBTITLES:+--subtitle-margin-v "${SUBTITLE_MARGIN_V:-80}"} \
-  ${WITH_SUBTITLES:+--subtitle-max-line-width "${SUBTITLE_MAX_LINE_WIDTH:-42}"} \
-  ${WITH_SUBTITLES:+--subtitle-max-line-count "${SUBTITLE_MAX_LINE_COUNT:-2}"} \
+  ${WITH_SUBTITLES:+--with-subtitles --subtitle-source "${SUBTITLE_SOURCE:-script}"} \
   --json-out slides/render/render.json
+  # Subtitle style defaults are good (bold white on a deck-colored band, bottom, one line).
+  # Override only if needed: --subtitle-size 46 --subtitle-margin-v 28 --subtitle-box-color <hex>
+  #   --subtitle-box-opacity 0.82 --subtitle-position top --subtitle-no-box --subtitle-max-line-count 2
 ```
 
 `--workspace` may be the paper dir (which contains `slides/`) **or** the slides dir itself — the helper auto-detects and never doubles the path.
