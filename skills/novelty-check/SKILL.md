@@ -13,7 +13,7 @@ Check whether a proposed method/idea has already been done in the literature: **
 
 - REVIEWER_MODEL = `gpt-5.6-sol` — Model used via Codex MCP. Must be an OpenAI model (e.g., `gpt-5.6-sol`, `o3`, `gpt-4o`)
 - **PRIOR_ART = none** — Optional pre-loaded prior-art set that seeds the check. When supplied, these papers are treated as known prior art in **Phase A.5** *before* the skill runs its own web search, so a prior `/research-lit` survey (or any curated list) widens coverage and reduces missed prior work. Accepts a file path (`references.bib`, a landscape `.md`, or a `research-wiki/` directory) or an inline comma/semicolon-separated paper list. Default `none` = behave exactly as before (web-only, self-contained).
-- **OUTPUT = `idea-stage/NOVELTY_<slug>.md`** — Where the standalone Novelty Report (Phase D.6) is written, `<slug>` derived from the idea. Saving is the default (with a timestamped copy per output-versioning). Suppressed when running composed under an orchestrator, or with `— no-save`.
+- **OUTPUT = `idea-stage/IDEA_REPORT.md`** — The single W1 deliverable the Novelty Report (Phase D.6) lands in. When novelty-check is the **entry point** (no upstream `/idea-creator`) it **owns and creates** this report — a lone mature idea is just the `NUM_IDEAS=1` case of the same schema; a second idea checked later is **appended** as another ranked entry. Override the path with `— output:`; `— no-save` prints only; `— composed:` folds into an orchestrator's existing report.
 
 > 💡 Overrides:
 > - `/novelty-check "idea" — prior-art: refine-logs/landscape.md` — seed from a saved literature survey
@@ -21,7 +21,7 @@ Check whether a proposed method/idea has already been done in the literature: **
 > - `/novelty-check "idea" — prior-art: references.bib` — seed from an existing bib
 > - `/novelty-check "idea" — prior-art: "Smith 2025 (arXiv 2501.01234); Lee 2024 NeurIPS"` — inline list
 > - `/novelty-check "idea" — output: refine-logs/NOVELTY.md` — custom standalone report path
-> - `/novelty-check "idea" — no-save` — print the report only, write no standalone file
+> - `/novelty-check "idea" — no-save` — print the report only, write nothing to disk
 > - `/novelty-check "idea" — composed: idea-stage/IDEA_REPORT.md` — fold into an orchestrator's report instead of a standalone file
 
 ## Instructions
@@ -164,12 +164,16 @@ Patch the file with three edits, mirroring the file's existing style and structu
 
 **Opt-out / scope:** skip this phase only if the user passed `— no-patch`, the check was a bare inline idea with no landscape file in play, or the landscape file is read-only/not writable. When skipping because there is no file, offer in the report to create one. Never silently overwrite content that contradicts the new findings — *correct* it in place and let the diff show the change.
 
-### Phase D.6: Save the Novelty Report (standalone by default; fold in when composed)
+### Phase D.6: Persist the Novelty Report (W1 deliverable)
 
-The Phase D report is the verdict artifact — PROCEED/ABANDON, the closest-prior-work table, and the positioning a reviewer will test you on. Don't let it evaporate into the conversation. **This is distinct from Phase D.5:** D.5 patches a pre-existing *input* landscape file; this step persists *this check's own report* (and is the only persistence path when there is no input landscape and no `research-wiki/`).
+The Phase D report is the verdict artifact — PROCEED/ABANDON, the closest-prior-work table, and the positioning a reviewer will test you on. It is **W1 content**, so it lands in the single W1 canonical deliverable `idea-stage/IDEA_REPORT.md` — the *same file* whether you reached novelty-check through `/idea-discovery` or by skipping straight to it with a mature idea. (Distinct from Phase D.5, which patches a pre-existing *input* landscape, and Phase E, which persists the *papers* to the wiki.)
 
-- **Standalone (DEFAULT — no `— composed:` directive):** Write the Phase D report to `OUTPUT` (default `idea-stage/NOVELTY_<slug>.md`, or the `— output:` path). Follow [`shared-references/output-versioning.md`](../shared-references/output-versioning.md): write a timestamped `NOVELTY_<slug>_<YYYYMMDD_HHmmss>.md` (get the stamp via `date +%Y%m%d_%H%M%S`) **and** the fixed-name `NOVELTY_<slug>.md`. Create the parent dir if needed. Skip the write only with `— no-save`.
-- **Composed (only when `— composed: <canonical-report-path>` is passed):** Do **not** write a standalone file. Return the report's conclusions (verdict, closest prior work, positioning) for the orchestrator to fold into its canonical deliverable, citing the `.aris/traces/…` path rather than duplicating the reviewer transcript. Per [`shared-references/output-composition.md`](../shared-references/output-composition.md), never infer composed mode from a report file merely existing on disk — the directive must be explicit, and `— standalone` always wins a conflict.
+Resolve the mode:
+
+- **Composed — `— composed: <path>` is passed** (the orchestrator does this in `/idea-discovery` Phase 3): fold the verdict / closest-prior-work / positioning into `<path>` as this idea's novelty section; write no separate file; cite the `.aris/traces/…` path instead of duplicating the transcript.
+- **Standalone — no `— composed:` directive.** Target = `OUTPUT` (default `idea-stage/IDEA_REPORT.md`, or the `— output:` path), written per [`shared-references/output-versioning.md`](../shared-references/output-versioning.md) (timestamped copy via `date +%Y%m%d_%H%M%S` **and** the fixed-name file; create the parent dir; `— no-save` skips writing). **Upsert this idea into the report — create if absent, append/update if present, never overwrite:**
+  1. **Target absent →** novelty-check **owns and creates** it as a minimal 1-idea `IDEA_REPORT.md`: this idea as the sole ranked entry, the novelty verdict as its novelty section. Add a provenance line (`created by /novelty-check, <date>`) so a later `/idea-creator` or `/idea-discovery` run updates it in place rather than duplicating. The mature-idea entry point is just `NUM_IDEAS=1` — a *reduction* of downstream work, not a schema violation.
+  2. **Target present →** **upsert, never clobber:** if this idea already has an entry, refresh its novelty section in place (versioned); otherwise **append it as another ranked entry**, growing the report toward the `N`-idea schema `/idea-creator` uses. Entries for other ideas are preserved — append adds, it does not overwrite.
 
 Phase E (wiki ingest) and Review Tracing run in **both** modes — they are persistence/audit, not the human-facing report.
 
