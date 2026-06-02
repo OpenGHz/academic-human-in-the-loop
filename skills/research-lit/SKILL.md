@@ -195,10 +195,11 @@ python3 "$S2_FETCHER" paper "ARXIV:<seed_id>" \
 
 De-duplicate against everything found so far and re-rank by relevance.
 
-**3. Recency sweep (for fast-moving areas).** Relevance-sorted arXiv buries brand-new
-papers, and recent systems often have un-guessable names. Run a dedicated
-**last-12-month pass** on the core terms (OpenAlex `search --year <thisyear-1>-`; S2
-year filter). Convert relative dates using the current date from context.
+**3. Recency sweep (for fast-moving areas).** Relevance-sorted search buries brand-new
+papers, and recent systems often have un-guessable names. Run a dedicated **recency pass**
+on the core terms: `arxiv_fetch.py search "<terms>" --sort submittedDate` (newest first),
+plus OpenAlex `search --year <thisyear-1>-` / S2 year filter. Convert relative dates using
+the current date from context.
 
 **4. Saturate, then stop.** Iterate facets + snowball until a full round yields **no new
 relevant papers** (loop-until-dry). De-duplicate against Zotero / Obsidian / local. State
