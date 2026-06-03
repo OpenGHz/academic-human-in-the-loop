@@ -735,10 +735,32 @@ Plus a narrative summary of the landscape (3-5 paragraphs).
 
 If Zotero BibTeX was exported, include a `references.bib` snippet for direct use in paper writing.
 
-### Step 5: Save (if requested)
-- Save paper PDFs to `literature/` or `papers/`
-- Update related work notes in project memory
-- If Obsidian is available, optionally create a literature review note in the vault
+### Step 5: Persist the review
+
+**Default (standalone mode — no `— composed:` directive): ALWAYS write the landscape
+review to a standalone Markdown file, even if the user did not explicitly say "save".**
+A persisted review is the normal, expected artifact of a standalone `/research-lit` run —
+it is reusable by the user and by downstream skills (`/paper-write`, `/novelty-check`,
+`/research-refine`, `/idea-creator`). Do not make this conditional on an explicit save request.
+
+- **Path**: `literature/related_work.md` (create `literature/` if absent). If a review for a
+  *different* topic already exists at that path, write to
+  `literature/related_work_<topic-slug>.md` instead of clobbering it, and tell the user
+  which path you used.
+- **Contents** = the full Step 4 deliverable, persisted: the grouped literature table, the
+  3–5 paragraph narrative/synthesis (landscape + how the user's idea is positioned + gaps it
+  fills), and the `references.bib` snippet. **Verified entries only** in the bib — never
+  fabricate an arXiv ID/DOI for a `verify_pending`/`UNVERIFIED` paper; list those separately
+  as pending so the user can audit.
+- Keep the file self-describing: a short header with the topic, generation date, sources
+  searched, and the verification summary (e.g. "29/34 arXiv-verified, hallucination rate 0.0;
+  N pending").
+- After writing, point the user at the path; do not silently create it.
+
+**Only when explicitly requested** (or when `ARXIV_DOWNLOAD = true`):
+- Download top-relevant paper PDFs to `literature/` or `papers/` (see Step 1 "Optional PDF download").
+- Update related-work notes in project memory.
+- If Obsidian is available, also create a literature-review note in the vault.
 
 > **Composed mode** — if invoked with `— composed: <canonical-report-path>` (an
 > orchestrator like `/idea-discovery` passes this), do **not** write a standalone
@@ -746,8 +768,9 @@ If Zotero BibTeX was exported, include a `references.bib` snippet for direct use
 > to fold into its canonical report as a "Literature Landscape" section; the report
 > links any saved PDFs/`references.bib`, it does not get a duplicate landscape file.
 > Step 6 (research-wiki ingest) still runs — the wiki is a separate persistent store,
-> not a duplicate of the report. **Default (no `— composed:` directive): behave exactly
-> as above — standalone, write files as documented.** Never infer composed mode from a
+> not a duplicate of the report. **Default (no `— composed:` directive): standalone mode —
+> write the landscape review to a standalone `.md` per Step 5 (this is the DEFAULT, not gated
+> on an explicit "save" request).** Never infer composed mode from a
 > report file merely existing on disk. Full rules:
 > [`shared-references/output-composition.md`](../shared-references/output-composition.md).
 
