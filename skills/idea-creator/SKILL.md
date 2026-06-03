@@ -199,7 +199,7 @@ Map the research area to understand what exists and where the gaps are.
    - Top venues in the last 2 years (NeurIPS, ICML, ICLR, ACL, EMNLP, etc.)
    - Recent arXiv preprints (last 6 months)
    - Use 5+ different query formulations
-   - Read abstracts and introductions of the top 10-15 papers
+   - Read abstracts and introductions of the top 10-15 papers. **For benchmark/dataset/system papers — and any paper you are about to dismiss as "not a near-neighbor" — read the task table + main results, not just the abstract** (abstracts frame the headline and bury the capability you are checking; see Key Rules: *Assess prior work by task content*).
 
 2. **Build a landscape map**:
    - Group papers by sub-direction / approach
@@ -375,7 +375,9 @@ Bundle contents:
    related, with links). This is *input for the jury*, not a filter. The
    authoritative novelty verdict is Phase 4's `/novelty-check` (multi-source +
    cross-model). Do **not** drop an idea here because it "might already be
-   done."
+   done." Before calling a paper related-but-differentiable (or unrelated),
+   **open its task table + results, not just the abstract** — abstracts bury
+   the capability you are checking (see Key Rules: *Assess prior work by task content*).
 
 3. **Impact signal — ANNOTATE, do not eliminate**: attach a one-line
    `so_what` note (why the result would matter either way). Do **not** drop on
@@ -437,7 +439,11 @@ per-idea novelty search:
    `/novelty-check` workflow (multi-source search + cross-model verification)
    on the ideas the triage ranked worth pursuing. This bounds the expensive
    multi-source search to the survivors instead of every candidate, while
-   keeping the novelty verdict cross-model.
+   keeping the novelty verdict cross-model. Also run a **trailing-~3-week arXiv
+   recency sweep** (direct `new`/`recent` listings for the relevant categories,
+   e.g. cs.RO / cs.LG — not just WebSearch, whose indexing lag hides days-old
+   near-neighbors), and **read the task tables / results** of the closest hits,
+   not their abstracts (see Key Rules: *Assess prior work by task content*).
 
 3. **Select for pilots**: take the top 2-3 ideas that survive both the
    cross-model triage and the novelty check forward to Phase 5.
@@ -597,6 +603,11 @@ elif research-wiki/ exists AND [ -z "$WIKI_SCRIPT" ]:
 - Include eliminated ideas in the report — they save future time by documenting dead ends.
 - **If the user's direction is broad (e.g., "NLP"), use Phase 1 to derive 2-3 concrete frames and generate across them — ask the user only when a missing constraint would materially change the pilot slate.** A good direction is 1-2 sentences specifying the problem, domain, and constraint — e.g., "factorized gap in discrete diffusion LMs" or "sample efficiency of offline RL with image observations". Without sufficient specificity, generated ideas will be too vague to run experiments on.
 - **Anti-hallucination for cited papers.** When the landscape survey or novelty justification cites specific papers, every cited paper must pass pre-search verification (`verify_papers.py`, canonical name resolved per [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2; 3-layer arXiv / CrossRef / S2 fallback inside the helper itself). Policy D1 (primary + degraded-output fallback): if the helper is unresolved **or** its invocation fails, mark candidates `[UNVERIFIED]` and continue rather than dropping or guessing. Never fabricate arXiv IDs, DOIs, or titles from memory. Full protocol in [`shared-references/citation-discipline.md`](../shared-references/citation-discipline.md) § Pre-Search Verification Protocol.
+
+- **Assess prior work by its task table + results, not its abstract — and sweep the last ~3 weeks of arXiv.** This is the complement to the anti-hallucination rule: a paper can be perfectly *real* and still be *mis-assessed*. Two recurring failure modes both yield false "novel / not a near-neighbor" verdicts:
+  - **Abstract-framing bias.** Benchmark / dataset / system abstracts advertise the headline (reproducibility, scale, a method name) and bury the capability you are checking — a specific task, an ablation axis, the exact baseline — in task-definition **tables, appendices, or results**. Before you annotate a paper as `prior_work` *or* dismiss it as "differentiable / unrelated," **open its task table and main results table.** Watch the inverse too: a number in a task table may be a *position/state label* ("turn knob to position 3"), not a count — verify before crediting a near-neighbor. *(Real miss this skill made: a "low-cost reproducible real-world benchmark" whose abstract never said "count," but whose task table contained the exact `press button N times` train-small-N→test-larger-N split, with the headline result that all VLAs score 0 — i.e. it had already published the very finding under evaluation.)*
+  - **Indexing lag.** `WebSearch` trails arXiv by days–weeks, so the single closest near-neighbor — frequently posted within the last 2–3 weeks — will not surface, and **"nothing came up" is not evidence of novelty.** Before finalizing, **fetch the arXiv recent-listing page directly** — `arxiv.org/list/<cat>/recent` and `…/<YYMM>` (e.g. cs.RO, cs.LG, cs.CV) via WebFetch or a browser-fetch MCP (scrapling) — and scan titles for near-neighbors. WebSearch alone is insufficient; a network-sandboxed `Bash` + the arXiv API may be blocked, so use whichever fetch tool actually reaches the listing. Treat any "looks novel" conclusion drawn only from WebSearch as **provisional** until this direct recent-listing sweep is done. *(Real miss: RoboSemanticBench — the closest prior — posted 2 days before the run, absent from every web search; surfaced only when the user supplied it.)*
+  Apply the content-depth check to **every** `prior_work` annotation (Phase 3); apply **both** checks to the Phase-4 top picks. Each costs minutes and each has already flipped a real novelty verdict.
 
 ## Composing with Other Skills
 
