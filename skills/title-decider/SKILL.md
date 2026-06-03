@@ -30,7 +30,7 @@ It does not invent claims. The title must reflect what the paper *actually* argu
 Before proposing anything, load what already fixes the title's content. Read whatever exists; skip silently what doesn't:
 
 - **Idea / proposal docs** — `Glob` for `**/idea*.md`, `**/PROPOSAL*.md`, `ref_docs/idea/*`, or whatever the user points at. Extract: the one-line goal, the core mechanism, the claimed contribution, and the explicit **non-goals**.
-- **Novelty / related-work** — `idea-stage/NOVELTY_*.md`, `literature/related_work.md`, `research-wiki/`. Extract: the **closest prior work** and the **delta** (this is what the title must differentiate against), plus any **naming-collision risks** already flagged.
+- **Idea / novelty / related-work** — `idea-stage/IDEA_REPORT.md` (the W1 deliverable `/novelty-check` and `/idea-creator` write: method, novelty verdict, closest-prior-work table, positioning; falls back to legacy `idea-stage/NOVELTY_*.md` on older projects), `literature/related_work.md`, `research-wiki/`. Extract: the **closest prior work** and the **delta** (this is what the title must differentiate against), plus any **naming-collision risks** already flagged.
 - **Results / claims** — if a results or claims file exists, confirm the title's scope matches what was actually measured (e.g. an *efficiency* claim needs efficiency metrics, not success-rate).
 
 From these, write yourself a short internal brief: **claim axis** (what is the paper's headline contribution — efficiency? capability? a new benchmark?), **mechanism/framework** (what to name), **scope** (domain + setting), and the **one differentiator** that must survive in the title.
@@ -109,8 +109,11 @@ Capture **not just the title** but the discussion's durable residue — the reje
 - <coined name> — searched <date>: <not an existing named method / collides with X> <link if relevant>
 
 ## Notes for downstream skills
+- **Companion W1 deliverable — read this for full idea + novelty context:** `idea-stage/IDEA_REPORT.md` (the ranked-idea report `/novelty-check` / `/idea-creator` own: method, novelty verdict + score, closest-prior-work table, positioning). `TITLE.md` is the naming/terminology contract; `IDEA_REPORT.md` is the substance behind it — keep them consistent. Also: `literature/related_work.md` (full landscape).
 - <anything paper-plan / paper-write / abstract drafting should honor — e.g. "lead the abstract's first sentence with the amortization framing", "report success rate as a guardrail column, not a headline">
 ```
+
+Always emit the companion-deliverable pointer above (it tells downstream skills where the fuller idea/novelty context lives); fill the rest from the discussion. If `idea-stage/IDEA_REPORT.md` is absent, point instead to whatever idea/novelty artifact exists (`literature/related_work.md`, `research-wiki/`) and say so.
 
 ## Phase E.5 — Patch the literature landscape by default (when the discussion surfaced it)
 
