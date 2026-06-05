@@ -205,6 +205,52 @@ the current date from context.
 relevant papers** (loop-until-dry). De-duplicate against Zotero / Obsidian / local. State
 any residual coverage gaps in the final output rather than implying full coverage.
 
+**Follow-up — when the user reports a missed paper (mandatory when triggered).** Triggers:
+"请补上 X" / "还要加上 Y" / "为什么没查到 Z" / "you missed X" / "add these papers" /
+"why didn't this come up". A reported miss is a **recall-failure signal, not a one-off
+fix** — handle it in three mandatory moves, in this order:
+
+1. **Add the named paper(s) now.** Resolve each to its canonical id (arXiv id / DOI /
+   exact title), run it through Step 1.5 verification and Step 2 extraction, and fold it
+   into the correct theme group of the Step 3 synthesis + Step 4 table — integrated, not
+   merely appended at the end.
+
+2. **Post-mortem: why did the original search miss it? State it explicitly — this is the
+   reflection the user asked for.** Diagnose the *specific* failure for each missed paper,
+   one line each, drawn from the recall protocol above:
+   - *Facet gap* — it lives in a facet you never queried (most often the **task /
+     problem-domain** facet, when the topic was phrased in method terms). Name the
+     missing facet.
+   - *Alias gap* — it names the concept differently (older term, synonym, lab-specific
+     coinage). Name the term that would have matched.
+   - *Snowball gap* — it is a reference or citer of a seed you already had, but that seed
+     was never snowballed. Name the seed.
+   - *Recency gap* — it is newer than the relevance-sorted results returned, and the
+     recency sweep (Step 1.3) missed it or was skipped.
+   - *Source gap* — it is venue-only / behind a source that was not enabled (e.g. needs
+     `semantic-scholar` or `openalex`). Name the source.
+   - *Ranking gap* — it was retrieved but dropped during relevance ranking. Note the
+     mis-rank and what de-prioritized it.
+
+3. **Re-search from the diagnosis — do NOT stop at the named paper.** The same gap almost
+   certainly hid *siblings*; close it rather than patching the one symptom:
+   - **Snowball each named paper as a fresh strong seed** (Step 1.2 — backward refs +
+     forward citers). A user-supplied paper is, by definition, a high-value seed.
+   - **Add the missing facet / alias as new query phrasings** and re-run the facet matrix
+     (Step 1.1).
+   - **Enable the missing source** if it was a source gap (e.g. re-run with
+     `— sources: all, semantic-scholar, openalex`), or **re-run the recency sweep**
+     (Step 1.3) for a recency gap.
+   - **Loop-until-dry again** (Step 1.4) over the new seeds / facets; de-duplicate against
+     everything already shown so the user sees only net-new papers.
+   - Record the closed gap on the facet checklist so the same class of miss does not
+     recur within the session.
+
+> A single named miss routinely unlocks a whole sub-cluster via its reference list +
+> citers. Treat "请补上 X" as "X **plus everything X should have led me to**" — the value
+> is in the siblings the post-mortem surfaces, not just the one paper the user happened
+> to name.
+
 Baseline pointers (execution layer below): WebSearch (broad), arXiv API (structured
 metadata), and — for citation edges, venue metadata, and recency — strongly consider
 enabling `semantic-scholar` and `openalex` (`— sources: all, semantic-scholar, openalex`)
