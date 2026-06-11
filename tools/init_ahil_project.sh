@@ -1,3 +1,5 @@
+set -ex
+
 # Reuse install_ahil.sh to restore git-ignored content (third_party/, .aris/,
 # .vscode/, .claude/, global skills). It resolves/clones the ARIS root from "$1".
 bash "$(dirname "$0")/install_ahil.sh" "$1"
