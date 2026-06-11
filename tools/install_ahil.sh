@@ -1,3 +1,5 @@
+set -ex
+
 # Restore git-ignored content (third_party/, .aris/, .vscode/, .claude/, global skills).
 # Run from the project root, e.g. after cloning, to recreate the local-only setup.
 ARIS_ROOT="$1"
@@ -25,6 +27,7 @@ if [ -z "$ARIS_ROOT" ]; then
 fi
 
 mkdir -p third_party
+
 bash "$ARIS_ROOT/tools/install_aris.sh"
 
 mkdir -p .vscode
@@ -58,5 +61,7 @@ if [ ! -f .claude/settings.json ]; then
 }
 EOF
 fi
+# for non-claude users
+npx skills add uw-ssec/rse-plugins/plugins/scientific-python-development/skills --all
 
 npx skills add OpenGHz/cfgable@python-config-style -g -y -a universal
