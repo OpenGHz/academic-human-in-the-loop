@@ -136,6 +136,13 @@ additions in Step 4, not here.
 
 ### 6. Abstract for the submission form
 
+**Gate — only produce this once the open-source link status is settled.** If the paper promises a
+code/data release and the link is not yet decided, do **not** create `提交摘要_纯文本.md` at all — not
+even a draft or placeholder. A half-finished abstract that still says "released upon acceptance" or
+carries a TODO link is dangerous precisely because it looks ready to paste into the submission form,
+so the file must not exist until the question is resolved (link provided, or explicitly declined —
+see Step 7). If the paper makes no open-source promise, there is nothing to wait on; proceed.
+
 The submission system's abstract box is **not** LaTeX. Convert the paper's abstract to the venue's
 plain-text rules (see the reference; for RAS/PaperCept: plain text, only `<b> <i> <sub> <sup>`
 recognized, excess truncated). Transformations:
@@ -154,15 +161,16 @@ were used. Verify the count with `wc -c`/`wc -w` rather than estimating.
 If the paper promises a code/data release, the camera-ready should not still say "released upon
 acceptance". Treat the link as a small state machine:
 
-- **Promised but link not yet decided** → keep "提供开源链接" open in the checklist (❓ bucket). Do not
-  finalize the abstract md yet.
-- **User provides a link** → put it in the abstract (`\url{...}`), recompile, and **save the final
-  compliant plain-text abstract** to `提交摘要_纯文本.md`.
+- **Promised but link not yet decided** → keep "提供开源链接" open in the checklist (❓ bucket), and do
+  **not** create `提交摘要_纯文本.md` at all — no draft, no placeholder. The submission abstract is
+  withheld entirely until the link is settled.
+- **User provides a link** → put it in the abstract (`\url{...}`), recompile, and **now** save the
+  final compliant plain-text abstract to `提交摘要_纯文本.md`.
 - **User explicitly declines / no link** → use a neutral phrasing (or remove the sentence), note the
-  decision, and **save the final abstract md** anyway.
+  decision, and **now** save the final abstract md.
 
-The trigger for producing the *final* submission-ready abstract md is that the link question has been
-resolved one way or the other. Until then it stays pending.
+The submission abstract md is created **only** once the link question is resolved one way or the other
+(provided or explicitly declined). Until then, no abstract file — and no draft — is produced.
 
 ## Files in this skill
 
