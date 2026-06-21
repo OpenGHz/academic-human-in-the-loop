@@ -11,6 +11,29 @@ third_party/
 init_aris_project.sh
 .vscode/
 papers/
+# LaTeX build intermediates (latexmk / pdflatex / bibtex)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+*.vrb
+*.bcf
+*.run.xml
+*.idx
+*.ind
+*.ilg
+*.xdv
+*.dvi
+compile.log
 EOF
 
 git init
