@@ -139,6 +139,7 @@ Final-check implications:
 IROS and ICRA both use `\documentclass[conference]{IEEEtran}` like other IEEE conferences, but reviewers and the proceedings editors have a few robotics-specific conventions that differ from the generic IEEE conference baseline above:
 
 - **No standalone Limitations section.** Fold limitations and future-work discussion into the final paragraph(s) of the `Conclusion` section. A separate `\section{Limitations}` is unusual in this community and will read as ML-conference-flavored rather than robotics-flavored.
+- **No separate Results section.** Fold results (tables, quantitative comparisons, ablations, qualitative analysis) into the `Experiments` section as subsections (e.g., `\subsection{Setup}` then `\subsection{Main Results}` then `\subsection{Ablations}` then `\subsection{Qualitative Analysis}`). A standalone `\section{Results}` after `\section{Experiments}` reads as ML-flavored and wastes header lines that count against the tight 6-page IROS/ICRA budget.
 - **Captions are sentence case, not ALL-CAPS.** Figure captions in `IEEEtran` are already sentence case. **Table captions are NOT** — `IEEEtran.cls` applies `\scshape` to table caption text, which renders as ALL-CAPS in standard Computer Modern / Times fonts (this is the published IEEE style but does NOT match IROS/ICRA proceedings practice). To match what IROS/ICRA papers actually look like, add the following preamble override:
   ```latex
   \usepackage{caption}
