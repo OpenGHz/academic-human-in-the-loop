@@ -134,6 +134,16 @@ Final-check implications:
 - Confirm the correct `\documentclass` option (`[conference]`, not `[journal]`).
 - Some conferences require IEEE copyright notice — check submission portal for specific requirements.
 
+### IROS / ICRA preferences (robotics IEEE_CONF)
+
+IROS and ICRA both use `\documentclass[conference]{IEEEtran}` like other IEEE conferences, but reviewers and the proceedings editors have a few robotics-specific conventions that differ from the generic IEEE conference baseline above:
+
+- **No standalone Limitations section.** Fold limitations and future-work discussion into the final paragraph(s) of the `Conclusion` section. A separate `\section{Limitations}` is unusual in this community and will read as ML-conference-flavored rather than robotics-flavored.
+- **Captions are not ALL-CAPS.** Use sentence case ("Fig. 1: Overview of the system.") for figure and table captions, not ALL-CAPS ("FIG. 1: OVERVIEW..."). The default `IEEEtran` caption format is already sentence case — do NOT override it with `\MakeUppercase`, `\uppercase`, or `caption=upper` style options.
+- Page limit is typically 6 pages of content + up to 2 pages of references (8 pages total) — check the current year's CFP.
+- Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
+- Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
+
 ## Minimal Submission Checklist
 
 Before submission, verify:
