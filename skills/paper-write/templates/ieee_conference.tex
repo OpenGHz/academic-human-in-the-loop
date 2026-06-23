@@ -27,6 +27,13 @@
 % cleveref must be loaded AFTER hyperref
 \usepackage[capitalize,noabbrev]{cleveref}
 
+% For IROS / ICRA / other robotics IEEE_CONF venues, uncomment the next block.
+% IEEEtran's default \scshape on table captions renders as ALL-CAPS in standard
+% fonts, which does NOT match IROS/ICRA proceedings practice. The override
+% restores sentence case to match what IROS/ICRA papers actually look like.
+% \usepackage{caption}
+% \captionsetup[table]{font=footnotesize, labelfont=normalfont, textfont=normalfont}
+
 % Theorems
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
