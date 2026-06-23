@@ -30,7 +30,7 @@ If none exist, ask the user to describe the paper's contribution in 3-5 sentence
 Keep the existing workflow and outputs, but use the shared references below to improve the quality of the story and outline:
 
 - Read `../shared-references/writing-principles.md` when framing the Abstract, Introduction, Related Work, or hero figure
-- Read `../shared-references/venue-checklists.md` before freezing the outline for a specific venue
+- Read `../shared-references/venue-checklists.md` before freezing the outline for a specific venue. **When `TARGET_VENUE = IEEE_CONF` AND the narrative/topic mentions IROS, ICRA, robot, manipulation, locomotion, navigation, teleoperation, sim2real, or embodied agent**, also apply the `IROS / ICRA preferences` sub-section: fold limitations + future work into Conclusion (no standalone `\section{Limitations}`), use sentence-case captions (never ALL-CAPS, never `\MakeUppercase` on captions), plan a real-robot / hardware experiment story, and plan a video supplementary
 - Load these references only when they help; they are support material, not a new workflow phase
 
 ## Workflow
