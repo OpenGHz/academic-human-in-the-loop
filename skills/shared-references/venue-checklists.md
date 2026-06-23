@@ -139,7 +139,12 @@ Final-check implications:
 IROS and ICRA both use `\documentclass[conference]{IEEEtran}` like other IEEE conferences, but reviewers and the proceedings editors have a few robotics-specific conventions that differ from the generic IEEE conference baseline above:
 
 - **No standalone Limitations section.** Fold limitations and future-work discussion into the final paragraph(s) of the `Conclusion` section. A separate `\section{Limitations}` is unusual in this community and will read as ML-conference-flavored rather than robotics-flavored.
-- **Captions are not ALL-CAPS.** Use sentence case ("Fig. 1: Overview of the system.") for figure and table captions, not ALL-CAPS ("FIG. 1: OVERVIEW..."). The default `IEEEtran` caption format is already sentence case — do NOT override it with `\MakeUppercase`, `\uppercase`, or `caption=upper` style options.
+- **Captions are sentence case, not ALL-CAPS.** Figure captions in `IEEEtran` are already sentence case. **Table captions are NOT** — `IEEEtran.cls` applies `\scshape` to table caption text, which renders as ALL-CAPS in standard Computer Modern / Times fonts (this is the published IEEE style but does NOT match IROS/ICRA proceedings practice). To match what IROS/ICRA papers actually look like, add the following preamble override:
+  ```latex
+  \usepackage{caption}
+  \captionsetup[table]{font=footnotesize, labelfont=normalfont, textfont=normalfont}
+  ```
+  This forces table captions to render in sentence case like figure captions. Do NOT use `\MakeUppercase` / `\uppercase` / `caption=upper`.
 - Page limit is typically 6 pages of content + up to 2 pages of references (8 pages total) — check the current year's CFP.
 - Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
 - Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
