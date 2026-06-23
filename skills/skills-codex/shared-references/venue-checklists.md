@@ -91,6 +91,18 @@ Final-check implications:
 - Verify hardware experiments (or sim justification) are discussed with enough detail to reproduce.
 - Confirm at least one task-generalization or cross-scene result is reported.
 
+## IROS / ICRA preferences (robotics IEEE_CONF)
+
+IROS and ICRA both use `\documentclass[conference]{IEEEtran}`, but reviewers and the proceedings editors have a few robotics-specific conventions worth respecting:
+
+- **No standalone Limitations section.** Fold limitations and future-work discussion into the final paragraph(s) of the `Conclusion` section. A separate `\section{Limitations}` is unusual in this community and will read as ML-conference-flavored rather than robotics-flavored.
+- **Captions are not ALL-CAPS.** Use sentence case ("Fig. 1: Overview of the system.") for figure and table captions, not ALL-CAPS. The default `IEEEtran` caption format is already sentence case — do NOT override it with `\MakeUppercase`, `\uppercase`, or `caption=upper` style options.
+- Page limit is typically 6 pages of content + up to 2 pages of references (8 pages total) — check the current year's CFP.
+- Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
+- Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
+- Citation style is `\cite{}` (numeric, via `cite` package); do not use `\citep` / `\citet`.
+- Not anonymous: include full author information.
+
 ## Minimal Submission Checklist
 
 Before submission, verify:
