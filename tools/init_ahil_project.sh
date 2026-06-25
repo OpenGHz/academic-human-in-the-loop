@@ -8,8 +8,8 @@ cat > .gitignore <<'EOF'
 third_party/
 .aris/
 .claude/
-init_aris_project.sh
 .vscode/
+paper/raw_data/
 papers/
 # LaTeX build intermediates (latexmk / pdflatex / bibtex)
 *.aux
@@ -34,6 +34,12 @@ papers/
 *.xdv
 *.dvi
 compile.log
+# Middleman intermediates
+*.json
+*.txt
+*.png
+*.svg
+*.bkp
 EOF
 
 git init
