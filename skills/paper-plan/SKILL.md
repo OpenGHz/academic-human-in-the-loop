@@ -13,8 +13,8 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 
 - **REVIEWER_MODEL = `gpt-5.6-sol`** — Model used via Codex MCP for outline review. Must be an OpenAI model.
 - **TARGET_VENUE = `ICLR`** — Fallback venue used only when neither (a) the `— venue:` CLI argument nor (b) the input narrative document's `## Target Venue` section specifies one. Resolution priority is **CLI arg > NARRATIVE/topic doc > this default**, applied silently — do not prompt for confirmation when the narrative supplies a venue, even if it differs from this default. Parse common variants case-insensitively and strip year suffix (e.g. "CoRL 2026" → `CORL`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences).
-- **MIN_REFERENCES = `30`** — Hard floor on bibliographic entries for the final paper, inherited from `/paper-writing` (override via `— min-references: <N>`). At plan time, the Citation Scaffolding step (Step 5) must inventory the seed `references.bib` plus all `\cite`-able papers mentioned in the input narrative, and if the union has fewer entries than this floor, the plan emits a `GAP_REFERENCES` block telling the user to run `/research-lit` (or `/comm-lit-review` / `/openalex` / `/gemini-search`) before kicking off `/paper-write`. The plan is allowed to proceed — the hard block lives in `/paper-write` and `/citation-audit` — but proceeding without closing the gap will burn writing-phase cost and then fail downstream.
-- **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; IEEE conference ≈ 5-8 pages total (including references).
+- **MIN_REFERENCES = `30`** — Hard floor on bibliographic entries for the final paper, inherited from `/paper-writing` (override via `— min-references: <N>`). At plan time, the Citation Scaffolding step (Step 5) must inventory the seed `references.bib`, **any literature-review output (`literature/related_work.md` etc.)**, plus all `\cite`-able papers mentioned in the input narrative; if the union has fewer entries than this floor, the plan emits a `GAP_REFERENCES` block. **If a literature landscape already exists, the gap is an import gap — close it by importing entries into `references.bib` during `/paper-write`, NOT by re-running `/research-lit`** (that pass is done). Only recommend a fresh literature pass when no such output exists. The plan is allowed to proceed — the hard block lives in `/paper-write` and `/citation-audit` — but proceeding without closing the gap will burn writing-phase cost and then fail downstream.
+- **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; **IEEE conference (ICRA, IROS, Humanoids) = 8 pages including references** (hard limit; the bibliography counts toward it, so budget the full main body *plus* references to fit in 8 pages).
 
 ## Inputs
 
@@ -25,8 +25,9 @@ The skill expects one or more of these in the project directory:
 3. **Experiment results** — JSON files in `figures/`, screen logs, tables
 4. **idea-stage/IDEA_REPORT.md** — from idea-discovery pipeline (if applicable) *(fall back to `./IDEA_REPORT.md` if not found)*
 5. **Compact files** (if available): `idea-stage/IDEA_CANDIDATES.md` *(fall back to `./IDEA_CANDIDATES.md` if not found)*, `findings.md`, `EXPERIMENT_LOG.md` — preferred over full files when present, saves context window
-6. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — per-paper standing orders. Read at workflow start; bullets in `## Hard don'ts`, `## Notation`, `## Style / tone`, and `## Section-specific` override defaults from this skill and from `../shared-references/writing-principles.md`. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty; do not error.
-7. **`../embodied-ai-paper-writer/SKILL.md`** (only when the paper is robotics / embodied-AI) — domain-specific writing-craft coach distilled from 63 top robotics papers (CoRL, RSS, ICRA, IROS, Science Robotics). Triggered when `TARGET_VENUE` resolves to `CORL` or RSS/ICRA/IROS/Humanoids/ISRR, or when the narrative mentions robot, manipulation, locomotion, navigation, sim2real, embodied agent, VLA, real-robot experiments, teleoperation, etc. **It is a style/craft reference, not a content advisor** — consult it for section construction patterns, vocabulary, figure/table conventions, and rhetorical pivots; it does NOT decide what claims to make.
+6. **Literature review output** — `literature/related_work.md` (also check `literature/*.md`, `related_work.md`, `LITERATURE.md`, or any `/research-lit` / `/comm-lit-review` / `/openalex` / `/gemini-search` output) — the Related-Work source and citation pool. **Glob for this before drafting Related Work, the Citation Plan, or any `GAP_REFERENCES` block.** Its cite-able entries (arXiv IDs, DOIs, venues) count toward `MIN_REFERENCES` even when not yet imported into `references.bib`. If it exists, the literature pass is already DONE — do NOT recommend re-running `/research-lit`; the remaining work is importing the relevant entries during `/paper-write`.
+7. **`<paper-dir>/PAPER_PREFERENCES.md`** (if present) — per-paper standing orders. Read at workflow start; bullets in `## Hard don'ts`, `## Notation`, `## Style / tone`, and `## Section-specific` override defaults from this skill and from `../shared-references/writing-principles.md`. Spec: [`../shared-references/paper-preferences.md`](../shared-references/paper-preferences.md). Missing file → treat as empty; do not error.
+8. **`../embodied-ai-paper-writer/SKILL.md`** (only when the paper is robotics / embodied-AI) — domain-specific writing-craft coach distilled from 63 top robotics papers (CoRL, RSS, ICRA, IROS, Science Robotics). Triggered when `TARGET_VENUE` resolves to `CORL` or RSS/ICRA/IROS/Humanoids/ISRR, or when the narrative mentions robot, manipulation, locomotion, navigation, sim2real, embodied agent, VLA, real-robot experiments, teleoperation, etc. **It is a style/craft reference, not a content advisor** — consult it for section construction patterns, vocabulary, figure/table conventions, and rhetorical pivots; it does NOT decide what claims to make.
 
 If none exist, ask the user to describe the paper's contribution in 3-5 sentences.
 
@@ -305,8 +306,9 @@ For each section, list required citations:
 
 #### Reference Floor Check (`MIN_REFERENCES`)
 
-After drafting the Citation Plan, count the union of:
+**First, glob for a literature-review output** (`literature/related_work.md`, `literature/*.md`, `related_work.md`, `LITERATURE.md`, or other `/research-lit` output) and count its cite-able entries. Then count the union of:
 - Entries already in any seed `references.bib`
+- Cite-able papers in the literature-review output(s) above (arXiv IDs / DOIs / venues), even if not yet in `references.bib`
 - `\cite`-able papers mentioned in the input narrative (Related Work, Experiments, Method)
 - Papers newly listed in the Citation Plan above
 
@@ -320,10 +322,8 @@ Required floor (MIN_REFERENCES): {MIN_REFERENCES}
 Gap: {MIN_REFERENCES - N} more references needed.
 
 Recommended action **before** running /paper-write:
-  - /research-lit "<topic — same as paper's positioning>"
-  - /comm-lit-review (for community-driven literature)
-  - /openalex / /gemini-search (broader sources)
-Re-run /paper-plan after the literature pass to refresh the Citation Plan.
+  - **If a literature-review output already exists** (`literature/related_work.md` etc.): import its relevant entries into `references.bib`. The literature pass is DONE — this is an import gap, not a research gap; do NOT re-run /research-lit.
+  - **Only if no literature output exists**: run /research-lit "<topic — same as paper's positioning>" (or /comm-lit-review, /openalex, /gemini-search), then re-run /paper-plan to refresh the Citation Plan.
 ```
 
 Proceeding to `/paper-write` with the gap unresolved is allowed (the gap is informational at plan time), but `/paper-write` will hard-fail at completion if `\cite{}` keys do not meet the floor, and `/citation-audit` will refuse a PASS verdict on a thin bibliography. Closing the gap up front avoids burning a writing phase.
