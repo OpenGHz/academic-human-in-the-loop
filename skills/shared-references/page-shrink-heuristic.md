@@ -15,6 +15,18 @@ Apply this heuristic when any of the following fires:
 
 Skip the heuristic and stop early as soon as the page count is within the limit. Each step has a real cost in reader experience; don't apply more than you need.
 
+## Before you cut: page *count* is not page *fill*
+
+A trim is only warranted if content actually overflows. The PDF page **count** (`pdfinfo … | grep Pages`, or a compile gate's `PAGES`) answers "are we within the limit?" but says **nothing about how full the last page is.** A document can report N pages while page N holds only a few spilled lines (e.g., the tail of the bibliography) — it is really ~N−1 pages with a near-empty last page.
+
+So **before applying any step below, confirm real overflow by measuring the last page's fill**, not just its existence:
+
+```bash
+pdftotext -f <lastpage> -l <lastpage> main.pdf - | sed '/^$/d' | wc -l   # non-blank lines actually on the last page
+```
+
+If the last page is nearly empty, you are within budget with margin to spare: do **not** trim, and do **not** claim the paper is "tight" — there may even be room to *add*. Never assert margin/headroom (or recommend a trim) from the page count alone; verify last-page fill first, or hedge until you have. Page count answers "within limit?"; last-page fill answers "how much room?".
+
 ## The Ordered Heuristic
 
 Apply in order. Stop the moment the page count drops to ≤ limit. The order is calibrated **least-risky → most-risky**: early steps are pure editorial cleanup; later steps reorganize how the paper reads.
