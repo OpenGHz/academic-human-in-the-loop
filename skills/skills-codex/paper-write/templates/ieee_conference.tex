@@ -3,6 +3,11 @@
 % Class file: IEEEtran.cls (LPPL v1.3 licensed)
 % For IEEE conferences (e.g., ICC, GLOBECOM, INFOCOM, ICASSP, CVPR-workshop, etc.)
 
+% Required for ICRA PDF upload (IEEE PDF eXpress via PaperPlaza refuses PDFs
+% newer than v1.4). IROS uses the same toolchain. Harmless for other IEEE
+% venues, so we set it unconditionally.
+\pdfminorversion=4
+
 \documentclass[conference]{IEEEtran}
 
 % Math
