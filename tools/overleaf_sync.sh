@@ -152,7 +152,7 @@ cmd_status() {
 
   echo
   echo "=== paper/ vs paper-overleaf/ (rsync dry-run) ==="
-  RSYNC_DIFF="$(rsync -aLn --delete "${EXCLUDES[@]}" \
+  RSYNC_DIFF="$(rsync -aLvn --delete "${EXCLUDES[@]}" \
                 "$PAPER_DIR/" "$CLONE_DIR/" 2>/dev/null \
                 | grep -Ev '^(sending incremental|sent |total |^$)' \
                 | grep -v '^\./$' || true)"
