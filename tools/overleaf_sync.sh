@@ -116,6 +116,7 @@ EXCLUDES=(
   --exclude='*.blg'        --exclude='*.fls'      --exclude='*.fdb_latexmk'
   --exclude='*.out'        --exclude='*.synctex.gz'  --exclude='*.toc'
   --exclude='main.pdf'     --exclude='main_round*.pdf' --exclude='main_post_*.pdf'
+  --exclude='raw_data'     --exclude='*.bkp'      --exclude='.$*'
 )
 
 confirm() {
@@ -155,7 +156,7 @@ cmd_status() {
   RSYNC_DIFF="$(rsync -aLvn --delete "${EXCLUDES[@]}" \
                 "$PAPER_DIR/" "$CLONE_DIR/" 2>/dev/null \
                 | grep -Ev '^(sending incremental|sent |total |^$)' \
-                | grep -v '^\./$' || true)"
+                | grep -v '/$' || true)"
   if [[ -n "$RSYNC_DIFF" ]]; then
     printf '%s\n' "$RSYNC_DIFF" | head -50
     PUSH_PENDING=1
