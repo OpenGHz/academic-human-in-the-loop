@@ -280,26 +280,26 @@ EOF
 
   echo
   echo "=== Step 3/4: review ==="
-  if [[ -z "$(git status --porcelain)" ]]; then
+  # Stage first so NEW (untracked) files appear in the stat — git diff on an
+  # unstaged tree hides untracked files entirely, making review look empty.
+  git add -A
+  if git diff --cached --quiet; then
     echo "  (nothing to push)"
     return 0
   fi
-  git status --short
-  echo
-  git diff --stat
+  # --no-pager: never drop into `less` for the review (the 'q-to-quit' trap).
+  git --no-pager diff --cached --stat
   echo
   if ! confirm "Commit and push to Overleaf?"; then
     echo
-    echo "Cancelled. Working tree has uncommitted changes."
-    echo "To discard:"
-    echo "  cd \"$CLONE_DIR\" && git restore --staged . && git checkout -- ."
+    echo "Cancelled. Changes are STAGED but not committed."
+    echo "To unstage:  git -C \"$CLONE_DIR\" restore --staged ."
     return 1
   fi
 
   echo
   echo "=== Step 4/4: commit + push ==="
   MSG="${COMMIT_MSG:-${OVERLEAF_SYNC_COMMIT_MSG:-overleaf-sync: push local paper/ to Overleaf}}"
-  git add -A
   git commit -m "$MSG"
   git push
   echo
