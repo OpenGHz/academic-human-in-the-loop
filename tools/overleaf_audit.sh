@@ -1,104 +1,84 @@
 #!/usr/bin/env bash
-# overleaf_audit.sh — Scan a repo for accidental Overleaf token leaks.
+# overleaf_audit.sh — scan a paper-overleaf clone for accidentally-committed
+# Overleaf tokens, leaked URLs, or stray credential files.
 #
-# Run this any time you suspect a token may have been written somewhere:
-#   bash tools/overleaf_audit.sh [repo-root]
+# Exit codes:
+#   0 — Audit clean
+#   1 — Finding(s) require attention
+#   2 — Bad invocation / not a git repo
 #
-# Exits non-zero if any token-pattern leak is found.
-# Token pattern: 'olp_' followed by 20+ alphanumerics.
+# Usage: bash tools/overleaf_audit.sh <path-to-paper-overleaf>
 
-set -o pipefail
+set -euo pipefail
 
-ROOT="${1:-.}"
-PATTERN='olp_[A-Za-z0-9]{20,}'
-FOUND=0
-
-echo "Scanning $ROOT for Overleaf token patterns…"
-echo ""
-
-# 1. Working tree (excluding .git/ and node_modules/) ─────────────────────────
-echo "[1/4] Working tree files…"
-if command -v rg >/dev/null 2>&1; then
-    LEAKS=$(rg -n --no-heading -e "$PATTERN" \
-                --glob '!**/.git/**' --glob '!**/node_modules/**' \
-                --glob '!**/paper-overleaf/.git/**' \
-                "$ROOT" 2>/dev/null || true)
-else
-    LEAKS=$(grep -rEn "$PATTERN" \
-                --exclude-dir=.git --exclude-dir=node_modules \
-                "$ROOT" 2>/dev/null || true)
-fi
-if [ -n "$LEAKS" ]; then
-    echo "❌ Token pattern in working tree:"
-    echo "$LEAKS"
-    FOUND=1
-else
-    echo "   ✓ none"
+DIR="${1:-paper-overleaf}"
+if [[ ! -d "$DIR/.git" ]]; then
+  echo "ERROR: '$DIR' is not a git repository." >&2
+  exit 2
 fi
 
-# 2. Git remote URLs of all sub-repos ─────────────────────────────────────────
-echo "[2/4] Git remote URLs…"
-LEAKS=""
-while IFS= read -r -d '' gitdir; do
-    REPO=$(dirname "$gitdir")
-    if URL=$(cd "$REPO" && git remote -v 2>/dev/null); then
-        if echo "$URL" | grep -qE "$PATTERN"; then
-            LEAKS+="$REPO:"$'\n'"$URL"$'\n'
-        fi
-    fi
-done < <(find "$ROOT" -name '.git' -type d -print0 2>/dev/null)
-if [ -n "$LEAKS" ]; then
-    echo "❌ Token in remote URL:"
-    echo "$LEAKS"
-    FOUND=1
+cd "$DIR"
+
+PATTERN='olp_[A-Za-z0-9_-]{20,}'
+FINDINGS=0
+
+note() { printf '  ⚠️  %s\n' "$1"; FINDINGS=$((FINDINGS + 1)); }
+ok()   { printf '  ✅ %s\n' "$1"; }
+
+echo "Auditing $(pwd) ..."
+
+# 1. Working tree -------------------------------------------------------
+if grep -r -E "$PATTERN" --binary-files=without-match \
+      --exclude-dir=.git . >/dev/null 2>&1; then
+  note "Working tree contains an Overleaf-token-shaped string. Inspect:"
+  grep -r -n -E "$PATTERN" --binary-files=without-match \
+       --exclude-dir=.git . | head -10 || true
 else
-    echo "   ✓ none"
+  ok "Working tree clean of olp_ tokens."
 fi
 
-# 3. Git history (current repo only — full --all scan can be expensive) ───────
-echo "[3/4] Git history of repo at $ROOT ..."
-if [ -d "$ROOT/.git" ]; then
-    LEAKS=$(cd "$ROOT" && git log -p --all 2>/dev/null | grep -E "$PATTERN" | head -5 || true)
-    if [ -n "$LEAKS" ]; then
-        echo "❌ Token pattern in git history (showing first 5 matches):"
-        echo "$LEAKS"
-        echo ""
-        echo "   Token may already be public if pushed. Revoke immediately:"
-        echo "   https://www.overleaf.com/user/settings"
-        FOUND=1
-    else
-        echo "   ✓ none"
-    fi
+# 2. Remote URL ---------------------------------------------------------
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || echo '')"
+if [[ "$REMOTE_URL" == *"olp_"* ]]; then
+  note "origin URL contains an Overleaf token."
+elif [[ "$REMOTE_URL" == *"@git.overleaf.com"* ]]; then
+  note "origin URL contains credential material (user@host form)."
 else
-    echo "   (skipped — $ROOT is not a git repo)"
+  ok "origin URL is token-free: $REMOTE_URL"
 fi
 
-# 4. Common credential-storage files ──────────────────────────────────────────
-echo "[4/4] Credential files (.netrc, .env, *credentials*)…"
-LEAKS=""
-for f in ~/.netrc ~/.git-credentials "$ROOT/.env" "$ROOT/.envrc"; do
-    if [ -f "$f" ] && grep -qE "$PATTERN" "$f" 2>/dev/null; then
-        LEAKS+="$f"$'\n'
-    fi
+# 3. Git history --------------------------------------------------------
+if git log --all -p -G"$PATTERN" 2>/dev/null \
+   | grep -E "$PATTERN" >/dev/null 2>&1; then
+  note "Git history contains an olp_ token. Rotate the token in Overleaf and rewrite history with git-filter-repo before pushing."
+else
+  ok "Git history clean of olp_ tokens."
+fi
+
+# 4. Plaintext credential files ----------------------------------------
+LEAK=0
+for f in "$HOME/.netrc" "$HOME/.git-credentials" \
+         "$HOME/.config/git/credentials"; do
+  if [[ -f "$f" ]] && grep -q "git.overleaf.com" "$f" 2>/dev/null \
+                  && grep -q "olp_" "$f" 2>/dev/null; then
+    note "$f stores the Overleaf token in plaintext."
+    LEAK=1
+  fi
 done
-if [ -n "$LEAKS" ]; then
-    echo "⚠️  Token in credential file (intentional? confirm not in repo):"
-    echo "$LEAKS"
+[[ $LEAK -eq 0 ]] && ok "No plaintext credential files found."
+
+# 5. Pre-commit hook ---------------------------------------------------
+if [[ -x .git/hooks/pre-commit ]] && grep -q "olp_" .git/hooks/pre-commit 2>/dev/null; then
+  ok "Pre-commit hook installed and screens for olp_ tokens."
 else
-    echo "   ✓ none"
+  note "Pre-commit hook missing or does not screen for tokens. Re-run overleaf_setup.sh."
 fi
 
-echo ""
-if [ $FOUND -eq 0 ]; then
-    echo "✅ Audit clean — no Overleaf token leaks found."
-    exit 0
+echo
+if [[ $FINDINGS -eq 0 ]]; then
+  echo "✅ Audit clean"
+  exit 0
 else
-    echo "❌ Audit FAILED — see leaks above."
-    echo ""
-    echo "Action items:"
-    echo "  1. Revoke the leaked token at https://www.overleaf.com/user/settings"
-    echo "  2. Generate a new token"
-    echo "  3. Remove the leak (working tree: edit; remote URL: git remote set-url; history: git filter-repo)"
-    echo "  4. Re-run overleaf_setup.sh with the new token"
-    exit 1
+  echo "⚠️  Audit found $FINDINGS finding(s) — see above."
+  exit 1
 fi
