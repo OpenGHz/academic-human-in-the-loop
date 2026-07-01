@@ -253,8 +253,18 @@ cmd_push() {
   cd "$CLONE_DIR"
 
   echo "=== Step 1/4: pull --ff-only (surface remote drift) ==="
-  if ! git pull --ff-only; then
-    echo "⚠️  Cannot push: remote diverged. Run 'pull' first." >&2
+  PULL_OUT="$(git pull --ff-only 2>&1)" && PULL_RC=0 || PULL_RC=$?
+  printf '%s\n' "$PULL_OUT"
+  if [[ "$PULL_RC" -ne 0 ]]; then
+    if printf '%s' "$PULL_OUT" | grep -qiE 'gnutls|handshake|could not resolve|connection (refused|timed out|reset)|failed to connect|unable to access|network'; then
+      cat >&2 <<EOF
+⚠️  Cannot push: network error reaching git.overleaf.com (not a divergence).
+  Set the local proxy and retry:
+    export {HTTP_PROXY,HTTPS_PROXY,ALL_PROXY,http_proxy,https_proxy,all_proxy}=http://127.0.0.1:7890
+EOF
+    else
+      echo "⚠️  Cannot push: remote diverged. Run 'pull' first." >&2
+    fi
     exit 1
   fi
 
