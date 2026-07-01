@@ -210,9 +210,17 @@ cat <<EOF
  Helper:      $HELPER
  Pre-commit:  $CLONE_DIR/.git/hooks/pre-commit
 
- Next:
+ Next (with agent):
    1. Tell the agent: "setup done"
    2. The agent will verify (token-free) and run an initial mirror of
       your local paper/ into paper-overleaf/.
+
+ Next (manual):
+   1. Verify setup:
+        cd $CLONE_DIR && git fetch && git log --oneline -3
+        bash tools/overleaf_audit.sh $CLONE_DIR
+   2. Mirror local paper:
+        bash tools/overleaf_sync.sh status
+        bash tools/overleaf_sync.sh push
 ═══════════════════════════════════════════════════════════════════════
 EOF
