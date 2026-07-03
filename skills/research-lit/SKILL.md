@@ -193,6 +193,13 @@ python3 "$S2_FETCHER" paper "ARXIV:<seed_id>" \
 # (returns referenced_works), else WebFetch the abs page and read its References.
 ```
 
+> ⚠️ The S2 `paper … citations` call is **frequently rate-limited and returns empty** — an
+> empty result is NOT proof the seed has no citers. When it comes back empty, do the snowball
+> a different way rather than skipping it: (a) an **author-line arXiv query** (seed authors'
+> surnames + the seed's distinctive method words), and (b) a **name-stem query** (the seed's
+> system name — successors are named `Name-X`/`Name2`/`Name++`). A silently-skipped snowball
+> is the most common root cause of a later user-reported miss.
+
 De-duplicate against everything found so far and re-rank by relevance.
 
 **3. Recency sweep (for fast-moving areas).** Relevance-sorted search buries brand-new
@@ -200,6 +207,15 @@ papers, and recent systems often have un-guessable names. Run a dedicated **rece
 on the core terms: `arxiv_fetch.py search "<terms>" --sort submittedDate` (newest first),
 plus OpenAlex `search --year <thisyear-1>-` / S2 year filter. Convert relative dates using
 the current date from context.
+
+> ⚠️ **Known defect — do not trust `--sort submittedDate` alone.** The arXiv
+> `submittedDate` sort frequently **ignores the query relevance** and returns the
+> globally-newest arXiv submissions (random topics), so a brand-new *on-topic* paper is
+> NOT surfaced. Always pair it with a **relevance search filtered to the target year**
+> (e.g. add the year to the query terms, or post-filter relevance-sorted results to
+> `>= thisyear-1`). A ~1-month-old paper is exactly the case relevance-sort buries and
+> the broken date-sort misses — cover it with the year-filtered relevance query, not the
+> date sort.
 
 **4. Saturate, then stop.** Iterate facets + snowball until a full round yields **no new
 relevant papers** (loop-until-dry). De-duplicate against Zotero / Obsidian / local. State
@@ -234,17 +250,31 @@ fix** — handle it in three mandatory moves, in this order:
 
 3. **Re-search from the diagnosis — do NOT stop at the named paper.** The same gap almost
    certainly hid *siblings*; close it rather than patching the one symptom:
-   - **Snowball each named paper as a fresh strong seed** (Step 1.2 — backward refs +
-     forward citers). A user-supplied paper is, by definition, a high-value seed.
+   - **Snowball each named paper as a fresh strong seed — this is the single highest-yield
+     move and the one most often skipped** (Step 1.2 — backward refs + **forward citers**).
+     A user-supplied paper is, by definition, a high-value seed; its *direct successors* and
+     *same-lab follow-ups* are the highest-probability next misses. **Searching sibling
+     facets is NOT a substitute for snowballing the named paper itself** — a facet sweep can
+     miss the paper's own child. If the S2 citer call is rate-limited / empty, **fall back to
+     an author-line arXiv query that encodes the paper's own method phrase** (e.g. its
+     authors' surnames + its distinctive method words); this routinely finds the successor on
+     the first hit when the citation API is down.
+   - **Treat a shared name stem as a mandatory query.** After adding paper `Foo`, search the
+     bare stem `"Foo"` — successors are frequently named `Foo-X` / `Foo2` / `Foo++` and no
+     keyword phrasing matches them, only the stem does.
    - **Add the missing facet / alias as new query phrasings** and re-run the facet matrix
      (Step 1.1).
    - **Enable the missing source** if it was a source gap (e.g. re-run with
      `— sources: all, semantic-scholar, openalex`), or **re-run the recency sweep**
-     (Step 1.3) for a recency gap.
+     (Step 1.3) for a recency gap — using the **year-filtered relevance query**, not the
+     unreliable `--sort submittedDate` pass (see the Step 1.3 defect warning).
    - **Loop-until-dry again** (Step 1.4) over the new seeds / facets; de-duplicate against
      everything already shown so the user sees only net-new papers.
    - Record the closed gap on the facet checklist so the same class of miss does not
-     recur within the session.
+     recur within the session. **If the same class of miss recurs across rounds** (e.g. a
+     second successor slips through), the fix is a *process* fix, not another one-off patch:
+     re-read this move and confirm the snowball + stem-search were actually executed on the
+     prior named paper, not just planned.
 
 > A single named miss routinely unlocks a whole sub-cluster via its reference list +
 > citers. Treat "请补上 X" as "X **plus everything X should have led me to**" — the value
