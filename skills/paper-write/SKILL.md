@@ -138,6 +138,7 @@ The skill includes conference templates in `templates/`. Select based on TARGET_
 % \usepackage[final]{corl_2026}    % Camera-ready: authors visible + CoRL footnote
 % \usepackage[preprint]{corl_2026} % arXiv preprint: authors visible, no CoRL footnote
 % Required: 4-6 sentence single-paragraph abstract; \keywords{...} (2-3 keywords) after abstract.
+% To choose keywords, run /pick-keywords (venue-aware; uses IEEE RAS controlled vocabulary for IROS/ICRA, free-form otherwise).
 % bib style auto-set to corlabbrvnat by the corl_2026 package; uses natbib (\citep / \citet).
 ```
 
