@@ -117,6 +117,10 @@ and continue with the remaining fields.
 
 When a real author list exists:
 
+State the head count and institution count in one line above the field, so the user can
+eyeball it against the paper's author block before pasting — a dropped author is easy to
+miss in a long comma-separated string, and the field forbids "et al." shortcuts.
+
 **Name format** — *"Names must be given in the order: Firstname Lastname or Firstname Middlename Lastname"*
 
 - Separate with a comma **or** the word `and`. arXiv's example: `E. L. Grossman, T. Zhou, E. Ben-Naim`
@@ -166,6 +170,7 @@ Over 1920 → mark the field `BLOCKED`, report the actual count and the overage 
 | `\label{}` | delete | |
 | `\footnote{}` | delete, or inline if load-bearing | |
 | `%` comments | delete to end of line | |
+| `\%`, `\&`, `\_`, `\#`, `\$` **outside** `$...$` | → plain `%`, `&`, `_`, `#`, `$` | the abstract field is plain text, not a TeX document; the backslash survives verbatim (a literal `69-88\%` is what readers see) |
 | `\em`, `\it`, `\textbf{}`, `\emph{}`, `\textit{}`, `\texttt{}` | → contents | arXiv: font commands *"will not be processed"* |
 | `~`, `\,`, `\ ` (backslash-space) | → plain space | arXiv names these spacing TeX-isms explicitly |
 | `\\`, `\newline`, `\par` | → plain space | see line-break rules below |
@@ -174,7 +179,9 @@ Over 1920 → mark the field `BLOCKED`, report the actual count and the overage 
 **Must keep:**
 - Inline math `$...$` — *"Some TeX commands are supported via MathJax"*
 - TeX accent commands — permitted in this field
-- `\%`, `\&`, `\_` escapes
+- Escapes **inside** `$...$` (MathJax processes them there) — e.g. `$50\%$` is fine, but prefer moving the percent outside the math
+
+**On `\%` specifically:** the abstract field is not compiled as a LaTeX document, so an escape that is mandatory in the paper source becomes a defect here. Only the parts wrapped in `$...$` reach MathJax; everything else is delivered as-is, backslash included. Unescape all of them — `16--30\%` → `16-30%`. This is the same class of error as shipping a literal `\ourmethod`: correct in the source, wrong in the field.
 
 **Line breaks and whitespace** — arXiv's mechanism is unusual:
 - The abstract is wrapped to 80 characters for the email announcement.
@@ -313,6 +320,9 @@ Status: <READY | BLOCKED: <reason> | WARNINGS: N>
 
 ## *Author(s)
 
+<N> authors across <M> institutions, all listed in full (arXiv forbids truncating
+with "et al."). Order follows the paper's author block.
+
 ```
 <Firstname Lastname, F. M. Lastname, Firstname Lastname>
 ```
@@ -421,6 +431,7 @@ If a field is blocked, ask the blocking question inline so the user can resolve 
 - **Never invent an author list.** If the paper is anonymized, block and ask. Do not infer from `git log`, `.bib` self-citations, or filesystem ownership. arXiv refuses anonymous submissions and treats identity misrepresentation as grounds for permanent suspension.
 - **Never claim acceptance.** Infer venue *targeting* from the style package; the words "Accepted at" require the user's explicit confirmation. Default to `Submitted to X` or `Preprint`. arXiv notes Comments is not editable after announcement.
 - **Expand every custom macro.** arXiv has no preamble. A literal `\ourmethod` in a published abstract is the most common arXiv metadata defect.
+- **Unescape `\%` (and `\&`, `\_`, `\#`) outside math.** The abstract field is plain text, not a compiled document — only `$...$` reaches MathJax. `69-88\%` ships the backslash to the reader. Same failure mode as an unexpanded macro: correct in the paper source, wrong in the field.
 - **Affiliations are allowed, not banned.** Strip the LaTeX *markup*, then offer arXiv's parenthesized numbered format. Do not silently drop affiliation information the author put in the paper.
 - **Respect the archive gating.** ACM-class exists only in the cs archive; MSC-class only in math. Mark the unavailable one `N/A` with the reason, not blank.
 - **Read-only on the paper.** The only file written is `ARXIV_METADATA.md`. If the abstract needs a source fix, report it as a warning and let the user or `/paper-write` do it.
