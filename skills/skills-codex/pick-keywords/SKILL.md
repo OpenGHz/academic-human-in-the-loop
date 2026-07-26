@@ -13,7 +13,7 @@ Suggest paper keywords for: **$ARGUMENTS**
 
 - **REVIEWER_MODEL = `gpt-5.5`** — Model used via Codex MCP for a second opinion on the shortlist. Must be an OpenAI model.
 - **DEFAULT_VENUE = `ICLR`** — Fallback if neither `— venue:` nor the input document declares one.
-- **N_KEYWORDS_MIN = 3, N_KEYWORDS_MAX = 5** — Standard for both PMLR (CoRL) and IEEE (ICRA/IROS) venues. Fewer than 3 signals weak categorization; more than 5 dilutes routing.
+- **N_KEYWORDS_MIN = 3, N_KEYWORDS_MAX = 5** — Standard for both PMLR (CoRL) and most IEEE venues. **ICRA 2027 exception: exactly 3 keywords, one per priority tier (1, 2, 3).** Check the venue-specific rules below.
 
 ## Inputs (auto-detect, first hit wins)
 
@@ -62,14 +62,16 @@ This sketch guides the keyword search — it is NOT the output.
 #### If `VOCABULARY_MODE = ICRA_CONTROLLED`
 
 1. Read [`../shared-references/icra-keywords.md`](../shared-references/icra-keywords.md) into working memory. This is the authoritative IEEE RAS PaperPlaza vocabulary.
-2. For each element of the contribution vector, scan the vocabulary for matches:
-   - `contribution_type = system` + `domain contains manipulation` → look at *Manipulation and Grasping* and *Manipulation and Grasping 2* categories.
-   - `learning_paradigm = imitation` → check *Robot Learning 4* (Imitation Learning).
-   - `learning_paradigm = reinforcement` → check *Robot Learning 2*.
-   - `platform contains real-robot` + `domain contains manipulation` → `Perception for Grasping and Manipulation` is often a good third keyword.
-3. Cross-reference with `## Selection Heuristics for Common Robotics Papers` at the bottom of the vocabulary file — if the paper matches one of the archetypes there, use its recipe as a strong prior.
-4. Build a candidate list of 6–8 keywords (ranked by centrality), each tagged with the source category.
-5. Apply anti-patterns from the vocabulary file: prune candidates that violate "all-same-category" or "keyword because it sounds impressive" rules.
+2. **ICRA 2027 enforces a "one per priority tier" rule**: you must select exactly 3 keywords — one from a priority-1 category (no numeric suffix or suffix `1`), one from priority-2 (suffix `2`), and one from priority-3 (suffix `3`). The first keyword (priority 1) becomes the session title, so it must be broad enough to group 4–6 papers. The total character count across all 3 keywords cannot exceed 250.
+3. For each element of the contribution vector, scan the vocabulary for matches:
+   - `contribution_type = system` + `domain contains manipulation` → **Priority 1**: look at *Manipulation and Grasping* (no suffix = priority 1). **Priority 2**: *Manipulation and Grasping 2*. **Priority 3**: pick a learning keyword from *Robot Learning 3* (e.g., `Learning from Demonstration`).
+   - `learning_paradigm = imitation` → Priority 3 or 4: *Robot Learning 4* (Imitation Learning). If your priority-1 and priority-2 slots are already filled by non-learning keywords, `Imitation Learning` goes into the priority-3 or priority-4 slot — but ICRA 2027 only accepts tiers 1/2/3, so `Robot Learning 4` keywords are out of scope. Use `Learning from Demonstration` (priority 3) instead.
+   - `learning_paradigm = reinforcement` → Priority 2: *Robot Learning 2*.
+   - `platform contains real-robot` + `domain contains manipulation` → Priority 2: `Perception for Grasping and Manipulation` (from *Manipulation and Grasping 2*).
+4. Cross-reference with `## Selection Heuristics for Common Robotics Papers` at the bottom of the vocabulary file — if the paper matches one of the archetypes there, use its recipe as a strong prior, but **adapt it to the 3-keyword / one-per-tier constraint**.
+5. Build a candidate list of **exactly 3 keywords** (one per tier), each tagged with its priority tier and source category.
+6. Verify the total character count (sum of keyword string lengths) ≤ 250.
+7. Apply anti-patterns from the vocabulary file: prune candidates that violate "keyword because it sounds impressive" rules.
 
 #### If `VOCABULARY_MODE ∈ {PMLR_FREE, ML_FREE, IEEE_FREE}`
 
@@ -84,15 +86,19 @@ This sketch guides the keyword search — it is NOT the output.
 Send the abstract + candidate list to Codex MCP. Ask **one** focused question, do not chain:
 
 ```
-You are helping choose 3–5 paper keywords for {venue}.
-Below is the abstract and 6–8 candidates I generated.
+You are helping choose {N} paper keywords for {venue}.
+Below is the abstract and {M} candidates I generated.
 {if VOCABULARY_MODE == ICRA_CONTROLLED: state that keywords MUST come from
- the attached IEEE RAS controlled vocabulary; paste vocabulary here.}
+ the attached IEEE RAS controlled vocabulary, AND enforce the ICRA 2027
+ priority-tier rule: exactly 3 keywords, one from priority-1, one from
+ priority-2, one from priority-3. The first keyword (priority 1) becomes
+ the session title — it must be broad enough to group 4–6 papers. Total
+ character count ≤ 250. Paste the relevant vocabulary sections here.}
 
-Return exactly 3–5 keywords, one per line, in priority order (most-central
-first). After the list, one sentence per keyword explaining WHY it was
-chosen and what alternative it beat. Do not add keywords outside the
-candidate pool.
+Return exactly {N} keywords, one per line, in priority order (priority 1
+→ 2 → 3 for ICRA; most-central → least-central otherwise). After the list,
+one sentence per keyword explaining WHY it was chosen and what alternative
+it beat. Do not add keywords outside the candidate pool.
 
 Abstract:
 {abstract text}
@@ -112,11 +118,15 @@ Emit exactly this shape to the user (stdout, not a file):
 ```
 Recommended keywords for {venue} ({VOCABULARY_MODE}):
 
-1. {keyword 1}     — {one-sentence why}
-2. {keyword 2}     — {one-sentence why}
-3. {keyword 3}     — {one-sentence why}
-4. {keyword 4}     — {one-sentence why}   (optional)
-5. {keyword 5}     — {one-sentence why}   (optional)
+1. {keyword 1} (priority 1)     — {one-sentence why}
+2. {keyword 2} (priority 2)     — {one-sentence why}
+3. {keyword 3} (priority 3)     — {one-sentence why}
+{if not ICRA_CONTROLLED or IROS allows 4-5:}
+4. {keyword 4} (priority ...)   — {one-sentence why}   (optional)
+5. {keyword 5} (priority ...)   — {one-sentence why}   (optional)
+
+{if ICRA_CONTROLLED:}
+Total character count: {sum of keyword lengths} / 250
 
 LaTeX snippet:
 
@@ -129,9 +139,13 @@ LaTeX snippet:
 \end{IEEEkeywords}
 
 {if ICRA_CONTROLLED — extra reminder:}
-> ⚠ Also select these exact strings in the PaperPlaza submission form.
-> The `\begin{IEEEkeywords}` block and the portal selections must match,
-> or the area chair may route the paper wrong.
+> ⚠ ICRA 2027 priority-tier assignment in PaperPlaza:
+>   - Keyword 1 ({keyword 1}): assign priority **1** (session title)
+>   - Keyword 2 ({keyword 2}): assign priority **2**
+>   - Keyword 3 ({keyword 3}): assign priority **3**
+> The `\begin{IEEEkeywords}` block and the portal selections (including
+> priority assignments) must match, or the area chair may route the paper
+> wrong. You cannot change keywords after submission.
 ```
 
 Do NOT auto-edit `main.tex` or `sections/`. The user reviews and pastes.
@@ -143,7 +157,8 @@ If the user follows up with "put them in" / "更新到论文" / "apply", locate 
 ## Output Contract
 
 - Never invent an ICRA vocabulary term. If in `ICRA_CONTROLLED` mode and Codex proposes a term not in the file, drop it silently and note "Codex proposed `X`; not in vocabulary, dropped."
-- Never emit more than 5 or fewer than 3 keywords.
+- **For `ICRA_CONTROLLED` mode: emit exactly 3 keywords, one per priority tier (1, 2, 3).** Verify the tier assignment matches the category suffix in `icra-keywords.md` (no suffix or `1` = tier 1, suffix `2` = tier 2, suffix `3` = tier 3). Report total character count; reject if > 250.
+- For other modes: emit 3–5 keywords as appropriate.
 - Never edit the paper without an explicit follow-up instruction from the user.
 - Always report which mode (`ICRA_CONTROLLED` / `PMLR_FREE` / etc.) drove the selection — the user needs this to know whether the terms are portal-strict.
 

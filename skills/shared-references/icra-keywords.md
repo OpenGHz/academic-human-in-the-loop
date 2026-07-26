@@ -4,15 +4,24 @@
 
 **When to use:** whenever `TARGET_VENUE = IEEE_CONF` AND the narrative mentions IROS / ICRA / robot / manipulation / locomotion / navigation / teleoperation / sim2real / embodied agent. For non-robotics IEEE conferences (ICC, GLOBECOM, etc.) this vocabulary does not apply.
 
+**ICRA 2027 submission rules (updated):**
+
+1. **Exactly 3 keywords, one per priority tier (1, 2, 3).** You must select one keyword from a priority-1 category, one from priority-2, and one from priority-3. The 3–5 range mentioned below is the general IEEE practice; ICRA 2027 tightened it to exactly 3. (IROS may differ — check the current year's author kit.)
+2. **The first keyword (priority 1) becomes the session title.** It should be broad enough to group 4–6 papers (e.g., `Manipulation Planning` or `Deep Learning in Grasping and Manipulation`), not hyper-specific (`In-Hand Manipulation` is too narrow for a session title).
+3. **250-character total length limit** across all chosen keywords. Most 3-keyword combinations fit comfortably; watch out if you pick long multi-word terms.
+4. **Keywords are locked at submission.** You cannot change them after hitting submit, so run `/pick-keywords` early (during paper-plan or paper-write, not the night before the deadline).
+5. Keywords determine reviewer assignment AND your session slot if accepted — picking the wrong first keyword can land you in the wrong track.
+
 **How to use:**
 
 1. Read the abstract / narrative report first.
-2. Identify the paper's *primary contribution area* — this determines the first (highest-priority) keyword.
-3. Pick 3–5 keywords across at most 3 categories, in priority order (most-central → least-central).
-4. Prefer more specific terms over generic ones (`Dexterous Manipulation` beats `Manipulation Planning` if both apply).
-5. Copy the exact strings into both the LaTeX `\begin{IEEEkeywords}` block AND the PaperPlaza submission form.
+2. Identify the paper's *primary contribution area* — this determines the **priority-1 keyword** (the session title).
+3. Pick one keyword from a priority-2 category that captures the method/approach.
+4. Pick one keyword from a priority-3 category for a secondary aspect (e.g., the learning paradigm, sensing modality, or application domain).
+5. Verify total character count ≤ 250 (including the keyword strings themselves; PaperPlaza will reject if over).
+6. Copy the exact strings into both the LaTeX `\begin{IEEEkeywords}` block AND the PaperPlaza submission form, in the same order (priority 1 → 2 → 3).
 
-**Priority column semantics:** Some categories in the original PaperPlaza list carry a numeric suffix (e.g. "Robot Learning 2", "Robot Learning 3", "Robot Learning 4"). These are the same top-level area split across multiple *priority buckets* used by the program committee for balancing area-chair loads. Priority `1` is the primary bucket for that area; `2`, `3`, `4` are secondary buckets. When you have a choice, pick from the lowest-numbered bucket that fits.
+**Priority column semantics:** Some categories in the original PaperPlaza list carry a numeric suffix (e.g. "Robot Learning 2", "Robot Learning 3", "Robot Learning 4"). These are the same top-level area split across multiple *priority buckets* used by the program committee for balancing area-chair loads. Priority `1` is the primary bucket for that area; `2`, `3`, `4` are secondary buckets. **For ICRA 2027's "one per tier" rule, treat the SUFFIX NUMBER as the tier**: `Robot Learning` (no suffix) = priority 1, `Robot Learning 2` = priority 2, `Robot Learning 3` = priority 3, `Robot Learning 4` = priority 4 (out of scope for the 3-keyword rule). Categories with no numeric suffix are implicitly priority-1.
 
 ---
 
