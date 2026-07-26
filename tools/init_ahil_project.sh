@@ -40,6 +40,9 @@ compile.log
 *.png
 *.svg
 *.bkp
+
+# arxiv.org submission files
+*.zip
 EOF
 
 git init
