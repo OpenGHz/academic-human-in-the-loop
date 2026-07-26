@@ -154,6 +154,7 @@ IROS and ICRA both use `\documentclass[conference]{IEEEtran}` like other IEEE co
 - Page limit is typically 6 pages of content + up to 2 pages of references (8 pages total) — check the current year's CFP.
 - Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
 - Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
+- **AI-content disclosure in Acknowledgments (ICRA policy).** If AI systems generated any text, figures, images, or code in the paper, disclose it in the `\section*{Acknowledgments}` (or `\section*{Acknowledgment}`) section. Grammar/editing polish by AI does NOT require disclosure — only *generated content*. Example wording: "Portions of the [text / figures / code] were generated with the assistance of [system name]; all content was reviewed and verified by the authors." Do NOT bury the disclosure in the appendix, a footnote, or a paragraph before the acknowledgments — reviewers/PC look for it inside the acknowledgments section specifically. The acknowledgments section itself does not count against the page limit at IROS/ICRA (it sits between the last content section and references).
 
 ## Minimal Submission Checklist
 
