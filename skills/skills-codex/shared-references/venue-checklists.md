@@ -105,6 +105,7 @@ IROS and ICRA both use `\documentclass[conference]{IEEEtran}`, but reviewers and
   This forces table captions to render in sentence case like figure captions. Do NOT use `\MakeUppercase` / `\uppercase` / `caption=upper`.
 - Page limit is typically 6 pages of content + up to 2 pages of references (8 pages total) — check the current year's CFP.
 - Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
+- **Keywords must be picked from the IEEE RAS controlled vocabulary.** PaperPlaza requires authors to select from a fixed keyword tree (~300 terms across 30 categories). The `\begin{IEEEkeywords}` block in the PDF should mirror the PaperPlaza selection so the area chair routes the paper correctly. See [`icra-keywords.md`](icra-keywords.md) for the full vocabulary and selection heuristics; run `/pick-keywords` to auto-select 3–5 terms from an abstract.
 - Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
 - **`\pdfminorversion=4` is required for ICRA PDF upload.** ICRA's submission portal explicitly warns: if you upload a self-generated PDF built by pdfLaTeX, you must add `\pdfminorversion=4` in the preamble (as the very first line, before `\documentclass`), otherwise the generated PDF will be corrupt as far as the portal is concerned. IROS shares the IEEE PDF eXpress toolchain and benefits from the same setting. Add it unconditionally when targeting IROS/ICRA:
   ```latex
