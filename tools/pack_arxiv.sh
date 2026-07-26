@@ -20,6 +20,7 @@
 #   1. --paper <dir>
 #   2. env  OVERLEAF_PAPER_DIR  (or PAPER_DIR)
 #   3. PAPER_DIR=... in $REPO_ROOT/.overleaf-sync.conf
+#   4. ./paper — the "paper" folder under the current directory, if it exists
 
 set -euo pipefail
 
@@ -63,6 +64,7 @@ Paper directory resolution (highest precedence first):
   1. --paper <dir>
   2. env  OVERLEAF_PAPER_DIR (or PAPER_DIR)
   3. PAPER_DIR=... in $CONF
+  4. ./paper (the "paper" folder under \$PWD), if it exists
 
 Options:
   --paper <dir>     Override paper source directory
@@ -130,10 +132,16 @@ elif [[ -f "$CONF" ]]; then
   fi
 fi
 
+# Last resort: a "paper" folder sitting in the current directory. Only taken
+# when it actually exists, so an unconfigured run still gets the full error.
+if [[ -z "$PAPER_DIR" && -d "$PWD/paper" ]]; then
+  PAPER_DIR="$PWD/paper";                           PAPER_DIR_SRC="default (./paper)"
+fi
+
 if [[ -z "$PAPER_DIR" ]]; then
   err "Could not resolve a paper directory."
   say "" >&2
-  say "Tried: --paper, OVERLEAF_PAPER_DIR, PAPER_DIR, PAPER_DIR in $CONF" >&2
+  say "Tried: --paper, OVERLEAF_PAPER_DIR, PAPER_DIR, PAPER_DIR in $CONF, ./paper" >&2
   say "e.g.:  bash tools/pack_arxiv.sh --paper /path/to/paper" >&2
   exit 1
 fi
