@@ -12,6 +12,7 @@
 #      current working directory to filesystem root; falls back to
 #      $REPO_ROOT/.overleaf-sync.conf (repo root of this script) if no
 #      per-project config is found.
+#   4. ./paper — the "paper" folder under the current directory, if it exists
 # If none of the above resolve to an existing directory, the script exits with
 # a non-zero status and prints the resolution chain that was tried.
 
@@ -89,6 +90,7 @@ Paper directory resolution (highest precedence first):
   3. PAPER_DIR=... in .overleaf-sync.conf, searched by walking up from \$PWD
      (falls back to ${REPO_ROOT}/.overleaf-sync.conf if no per-project file found)
      $conf_line
+  4. ./paper (the "paper" folder under \$PWD), if it exists
 
 If none resolve to an existing directory, the script exits non-zero.
 
@@ -134,7 +136,8 @@ done
 # 1. CLI flag wins.
 # 2. Then env (OVERLEAF_PAPER_DIR or PAPER_DIR), captured before this block.
 # 3. Then PAPER_DIR= entry in .overleaf-sync.conf.
-# No hard-coded fallback: if all three are empty, abort with a clear error.
+# 4. Finally ./paper, but only if that directory actually exists — so an
+#    unconfigured run in an unrelated cwd still aborts with a clear error.
 PAPER_DIR=""
 
 if [[ -n "$PAPER_DIR_CLI" ]]; then
@@ -159,6 +162,11 @@ elif [[ -n "$CONF" && -f "$CONF" ]]; then
   fi
 fi
 
+if [[ -z "$PAPER_DIR" && -d "$PWD/paper" ]]; then
+  PAPER_DIR="$PWD/paper"
+  PAPER_DIR_SRC="default (./paper)"
+fi
+
 if [[ -z "$PAPER_DIR" ]]; then
   err "Could not resolve a paper directory."
   say "" >&2
@@ -173,6 +181,8 @@ if [[ -z "$PAPER_DIR" ]]; then
     say "  4. .overleaf-sync.conf (walking up from \$PWD, plus $REPO_ROOT)" >&2
     say "                             : not found" >&2
   fi
+  say "  5. ./paper ($PWD/paper)" >&2
+  say "                             : does not exist" >&2
   say "" >&2
   say "Set one of the above, e.g.:" >&2
   say "  bash tools/build_paper.sh --paper /path/to/paper" >&2
