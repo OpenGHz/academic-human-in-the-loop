@@ -11,6 +11,7 @@
 #   2. --paper <dir>                          -> <dir>/slides
 #   3. env OVERLEAF_PAPER_DIR or PAPER_DIR    -> <env>/slides
 #   4. PAPER_DIR=... in <repo>/.overleaf-sync.conf -> <conf>/slides
+#   5. ./paper (if it exists)                      -> ./paper/slides
 # The slides dir must contain main.pdf and TALK_SCRIPT.md.
 #
 # Options:
@@ -61,7 +62,9 @@ REBUILD_PDF=0
 DO_VERIFY=1
 PROXY_RETRY=1
 
-usage() { sed -n '2,42p' "$0" | sed 's/^# \{0,1\}//'; }
+# Print the header comment block (line 2 up to the first non-comment line), so
+# the help text never drifts when lines are added above.
+usage() { sed -n '2,${/^#/!q;s/^# \{0,1\}//;p;}' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -94,9 +97,11 @@ if [ -z "$SLIDES_DIR" ]; then
   paper="$PAPER_FLAG"
   [ -z "$paper" ] && paper="$ENV_PAPER"
   [ -z "$paper" ] && paper="$(read_conf_paper || true)"
+  # Last resort: a "paper" folder in the current directory, if it exists.
+  [ -z "$paper" ] && [ -d "$PWD/paper" ] && paper="$PWD/paper"
   if [ -z "$paper" ]; then
     echo "ERROR: could not resolve a paper dir." >&2
-    echo "       Tried: --paper / --slides, \$OVERLEAF_PAPER_DIR or \$PAPER_DIR, PAPER_DIR= in $CONF" >&2
+    echo "       Tried: --paper / --slides, \$OVERLEAF_PAPER_DIR or \$PAPER_DIR, PAPER_DIR= in $CONF, ./paper" >&2
     exit 2
   fi
   SLIDES_DIR="$paper/slides"
