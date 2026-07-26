@@ -141,6 +141,7 @@ After-paper outputs and venue porting.
 | [`/slides-polish`](../skills/slides-polish/SKILL.md) | Per-page Codex review + targeted python-pptx / Beamer fixes (font scaling, frame resize, banner-as-tcolorbox, italic leak guard, em-dash spacing, CJK font hint, anonymity placeholder discipline) | Codex MCP, python-pptx |
 | [`/paper-poster-html`](../skills/paper-poster-html/SKILL.md) | **Default** conference poster — single HTML/CSS file with measurement-driven hard gates (two-hue tokens, real paper figures with provenance, anti-patch-loop fix vocabulary) → print-ready PDF via headless Chromium | Playwright (Chromium), PyMuPDF |
 | [`/paper-poster`](../skills/paper-poster/SKILL.md) | DEPRECATED — redirect stub to `/paper-poster-html` (legacy LaTeX pipeline retired; in git history) | — |
+| [`/arxiv-metadata`](../skills/arxiv-metadata/SKILL.md) | arXiv submission-form metadata from the paper source — Title / Authors / Abstract / Comments / Report-no / Journal-ref / DOI / ACM-class / MSC-class + suggested category. Enforces arXiv's real rules per [prep.html](https://info.arxiv.org/help/prep.html): ASCII-only fields (Unicode → TeX accents, not the reverse), 1920-char abstract hard gate, macro expansion, affiliation parenthesized format, archive-gated ACM/MSC. Blocks on anonymized author lists | `pdfinfo` (page count) |
 
 (Orchestrators `/paper-talk` for the talk pipeline and `/resubmit-pipeline`
 for venue porting live under [Workflow Orchestrators](#%EF%B8%8F-workflow-orchestrators).)
