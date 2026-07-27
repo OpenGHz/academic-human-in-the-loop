@@ -8,10 +8,10 @@
 - **禁止 Type 3 字体**：PaperCept 的 PDF 检查会因 Type 3 字体拒收，并指明页码（如 "This document has Type 3 fonts (on page 6)"）。
   - **最常见来源**：matplotlib 默认 PDF 导出（DejaVu 系字体以 Type 3 位图嵌入）。其次是部分老旧 EPS/PS 转换。
   - **源头修复**（有画图脚本时）：导出前设 `matplotlib.rcParams['pdf.fonttype'] = 42`（TrueType；`= 1` 为 Type 1 亦可），重新生成该图。
-  - **无源码时的修复**：用 Ghostscript 把该图文字**轮廓化为矢量路径** —— `scripts/outline_fonts.sh <figure>.pdf`。消除字体对象，保持矢量清晰度与边界框，不损失质量。
+  - **无源码时的修复**：用 Ghostscript 把该图文字**轮廓化为矢量路径** —— `bash "$FONT_FLATTENER" <figure>.pdf`（共享助手 `tools/flatten_pdf_fonts.sh`，按 SKILL.md 的解析链取得）。消除字体对象，保持矢量清晰度与边界框，不损失质量；若轮廓化后仍残留 Type 3，脚本会拒绝覆盖原文件。
 - **所有字体必须嵌入**（`pdffonts` 中 `emb=yes`）。
 - **纸张 US Letter**；使用 IEEE 会议模板（`ieeeconf` / `IEEEtran`，10pt，conference）。
-- 自检：`scripts/check_pdf_fonts.sh <main>.pdf`（再对 `Images/*.pdf` 逐张排查定位元凶）。
+- 自检：`bash "$FONT_FLATTENER" --check <main>.pdf`（再对 `Images/*.pdf` 逐张排查定位元凶；有 Type 3 时退出码非 0，只读不写）。
 
 ## 2. 页数上限（含参考文献）
 

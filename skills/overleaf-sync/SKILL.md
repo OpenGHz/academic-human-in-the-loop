@@ -39,6 +39,37 @@ The `paper-overleaf/` directory is a **git clone of the Overleaf project**. The 
 
 **Single-source-of-truth rule**: at any given time, treat *one* of them as authoritative for active editing. Switch directions explicitly with `pull` or `push`, and run a `status` check before either to surface unexpected divergence.
 
+## Shared helper — resolve once, before any sub-command
+
+`status`, `pull`, `push`, `sync-figures`, and `audit` are already implemented by the shared-runtime
+helper `overleaf_sync.sh`. **Call it instead of retyping the `git`/`rsync` recipes below** — those
+recipes are documentation of what the helper does (and the fallback if it does not resolve), not a
+second implementation to maintain. Resolve it with the standard chain (see
+[`../shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2):
+
+```bash
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null) || true
+fi
+if [ -z "${ARIS_REPO:-}" ] && [ -f "$HOME/.aris/repo" ]; then
+    ARIS_REPO=$(cat "$HOME/.aris/repo" 2>/dev/null) || true
+fi
+OVERLEAF_SYNC=".aris/tools/overleaf_sync.sh"
+[ -f "$OVERLEAF_SYNC" ] || OVERLEAF_SYNC="tools/overleaf_sync.sh"
+[ -f "$OVERLEAF_SYNC" ] || { [ -n "${ARIS_REPO:-}" ] && OVERLEAF_SYNC="$ARIS_REPO/tools/overleaf_sync.sh"; }
+[ -f "$OVERLEAF_SYNC" ] || OVERLEAF_SYNC=""
+```
+
+**Failure policy: fall back, don't block.** If `$OVERLEAF_SYNC` is empty, run the inline recipes in
+each sub-command below — same effect, fewer guardrails.
+
+Path resolution inside the helper: `--paper`/`--clone` flags → `$OVERLEAF_PAPER_DIR`/`$OVERLEAF_CLONE_DIR`
+→ `PAPER_DIR=`/`CLONE_DIR=` in `.overleaf-sync.conf` → `./paper` and `./paper-overleaf`. It carries the
+canonical rsync exclude list (`.git`, `.aris`, LaTeX intermediates, `main.pdf`, `raw_data`, …) — one
+place to fix when the list changes, which is exactly why the inline `--exclude` chains should not be
+copied around.
+
 ## Sub-commands
 
 ### `setup <project-id>` — one-time
@@ -75,6 +106,14 @@ bash <ARIS_REPO>/tools/overleaf_audit.sh .   # must report "Audit clean"
 If `paper-overleaf/` exists but is empty (new Overleaf project), the agent then mirrors local `paper/` into it (see `push` workflow).
 
 ### `pull` — before each editing session
+
+```bash
+bash "$OVERLEAF_SYNC" pull
+```
+
+It runs `git pull --ff-only`, prints the `BEFORE..AFTER` diffstat, and refuses to auto-merge into
+`paper/` — on a non-fast-forward it prints the two `git log` inspection commands and exits 1 rather
+than merging. Fallback (helper unresolved):
 
 ```bash
 cd paper-overleaf && git pull --ff-only
@@ -116,6 +155,24 @@ rsync -av paper-overleaf/sec/0.abstract.tex paper/sec/0.abstract.tex
 Use after ARIS skills have edited `paper/` and you want collaborators on Overleaf to see the changes.
 
 ```bash
+bash "$OVERLEAF_SYNC" push                       # phase 1: stage + show the diff
+bash "$OVERLEAF_SYNC" push --yes -m "<message>"  # phase 2: after the user approves
+```
+
+The helper does all four steps (`pull --ff-only` → `rsync` → `git add -A` + `--cached --stat` review
+→ commit + push) and satisfies the confirmation gate by construction: its `confirm` prompt reads
+stdin, so under an agent harness phase 1 always ends in "Cancelled. Changes are STAGED but not
+committed." **Show that diffstat to the user, wait for approval, then re-run with `--yes`.** Never
+pass `--yes` on the first call. Re-running is safe — the rsync is idempotent.
+
+Two behaviors worth knowing: it distinguishes a network failure from a real divergence (and tells the
+user the proxy export line instead of "remote diverged"), and it stages *before* the review so new
+untracked files show up in the stat. It rsyncs **without** `--delete` unless `OVERLEAF_SYNC_DELETE=1`
+— deleting files on a shared Overleaf project is opt-in.
+
+Fallback (helper unresolved):
+
+```bash
 # 1. Always pull first to surface remote drift
 cd paper-overleaf && git pull --ff-only
 
@@ -148,6 +205,14 @@ git push
 ### `status` — diagnostic
 
 ```bash
+bash "$OVERLEAF_SYNC" status
+```
+
+It prints both divergence axes (remote-vs-clone commit counts, `paper/`-vs-`paper-overleaf/` as an
+`rsync -n` dry run using the canonical excludes) and ends with the verdict from the table below, so
+there is no need to reproduce the `diff -rq | grep -v ...` pipeline by hand. Fallback:
+
+```bash
 cd paper-overleaf
 git fetch
 echo "=== Remote-vs-local divergence ==="
@@ -168,6 +233,27 @@ Three-way state assessment:
 | Yes | No  | Overleaf has new edits | Run `pull`, then re-run status |
 | No  | Yes | Local ARIS edits unsynced | Run `push` |
 | Yes | Yes | Diverged — needs merge | Stop, surface to user, do NOT auto-resolve |
+
+### `sync-figures` — figures only
+
+```bash
+bash "$OVERLEAF_SYNC" sync-figures
+```
+
+Pushes `paper/figures/` → `paper-overleaf/figures/` alone (allow-list: `.pdf .png .svg .jpg .jpeg
+.tex .json`; `__pycache__` and `.figures-prep` excluded), then stages and commits after confirmation
+— **no push**. Use it when only the figures changed and a full `push` would drag in unrelated prose
+edits still in progress.
+
+### `audit` — token leak scan
+
+```bash
+bash "$OVERLEAF_SYNC" audit
+```
+
+Thin alias for `overleaf_audit.sh <clone-dir>` — same scan as the `setup` verification step, run
+against the resolved clone directory. Cheap; run it whenever the remote URL or credential config
+may have been touched.
 
 ## Conflict Resolution
 
