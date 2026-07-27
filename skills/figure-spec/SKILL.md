@@ -154,6 +154,23 @@ rsvg-convert -f pdf figures/fig_arch.svg -o figures/fig_arch.pdf
 
 If validation fails, inspect the error (missing field, duplicate ID, overlap warning, invalid hex color) and fix the JSON.
 
+**If the PDF loses its text** — labels blank, boxes intact — the SVG has `<foreignObject>` text, which
+rsvg and Inkscape 0.92 silently drop. `$FIGURE_RENDERER` emits plain `<text>`, so this only happens to
+**hand-drawn SVGs brought in from draw.io / diagrams.net**. Use the shared helper instead of debugging
+the converter; it renders through headless Chromium and crops to the SVG's bounding box:
+
+```bash
+SVG2PDF=".aris/tools/svg_to_pdf.py"
+[ -f "$SVG2PDF" ] || SVG2PDF="tools/svg_to_pdf.py"
+[ -f "$SVG2PDF" ] || { [ -n "${ARIS_REPO:-}" ] && SVG2PDF="$ARIS_REPO/tools/svg_to_pdf.py"; }   # ARIS_REPO set above
+
+python3 "$SVG2PDF" figures/fig_arch.svg figures/fig_arch.pdf   # output arg optional; --pad N to widen the crop
+```
+
+Needs `pip install playwright && playwright install chromium` once. Never "fix" a dropped label by
+re-typing it as a separate SVG `<text>` element on top of the diagram — it desynchronizes from the
+source and moves on the next re-export.
+
 ### Step 4: Visual Review
 
 Open the SVG/PDF and check:
@@ -248,7 +265,7 @@ Three-stage horizontal cascade with inputs feeding in from top, outputs exiting 
 
 - SVG file in `figures/` (vector, editable, hand-tweakable)
 - Source FigureSpec JSON saved in `figures/specs/` for reproducibility
-- PDF version via `rsvg-convert` for LaTeX inclusion
+- PDF version via `rsvg-convert` for LaTeX inclusion (or `tools/svg_to_pdf.py` for draw.io SVGs — see Step 3)
 
 ## Integration with Other Skills
 
