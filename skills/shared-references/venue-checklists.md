@@ -136,7 +136,18 @@ Final-check implications:
 
 ### IROS / ICRA preferences (robotics IEEE_CONF)
 
-IROS and ICRA both use `\documentclass[conference]{IEEEtran}` like other IEEE conferences, but reviewers and the proceedings editors have a few robotics-specific conventions that differ from the generic IEEE conference baseline above:
+IROS and ICRA are submitted through PaperPlaza, whose automated check enforces a stricter page geometry than the generic IEEE conference baseline above. The official RAS Author's Kit ships `ieeeconf.cls` (with `root.tex`), **not** `IEEEtran` — the two are not interchangeable, because their text blocks differ in width. If you build on `\documentclass[conference]{IEEEtran}` anyway (which the `ieee_conference.tex` template does), you MUST override its margins; see the first bullet. Beyond geometry, reviewers and the proceedings editors have a few robotics-specific conventions:
+
+- **Margins are checked automatically, and are the most common silent failure.** On US Letter, PaperPlaza requires **≥ 0.75in (54pt) left, right and bottom margins on every page**, and **≥ 1in (72pt) at the top of page 1** (0.75in top on the rest). `ieeeconf.cls` satisfies this by fixing `\textwidth` at 7.0in. **Stock `IEEEtran[conference]` does not**: it lays out a 7.16in text block (0.68in sides) and starts the title at 0.75in, so *every* paper overruns by ~5pt per side and ~17pt at the top of page 1. When using IEEEtran, put this before `\documentclass` (CLASSINPUT overrides only take effect there) and the `\renewcommand` after it:
+  ```latex
+  \newcommand{\CLASSINPUTinnersidemargin}{56pt}
+  \newcommand{\CLASSINPUToutersidemargin}{56pt}
+  \newcommand{\CLASSINPUTtoptextmargin}{61pt}    % page-top floats sit ~5pt higher
+  \newcommand{\CLASSINPUTbottomtextmargin}{56pt}
+  \documentclass[conference]{IEEEtran}
+  \renewcommand{\IEEEtitletopspaceextra}{11pt}   % clear the 1in first-page top
+  ```
+  Two traps worth knowing. First, this failure is **invisible to overfull-hbox checks**: the text block itself is misplaced, so every line is legally set inside a wrong frame and the log stays clean at zero overfulls. Verify by measuring rendered ink instead — `gs -dQUIET -dBATCH -dNOPAUSE -sDEVICE=bbox main.pdf` prints one `%%HiResBoundingBox: x0 y0 x1 y1` per page, from which left = `x0`, right = `612-x1`, top = `792-y1`, bottom = `y0`. Second, a float at the top of a page starts ~5pt *above* where the body text starts, so a table-topped page can overrun the top margin even when all body pages pass; that is why the top margin above is 61pt rather than 56pt. Leave ~2pt of slack rather than landing exactly on 54pt.
 
 - **No standalone Limitations section.** Fold limitations and future-work discussion into the final paragraph(s) of the `Conclusion` section. A separate `\section{Limitations}` is unusual in this community and will read as ML-conference-flavored rather than robotics-flavored.
 - **No separate Results section.** Fold results (tables, quantitative comparisons, ablations, qualitative analysis) into the `Experiments` section as subsections (e.g., `\subsection{Setup}` then `\subsection{Main Results}` then `\subsection{Ablations}` then `\subsection{Qualitative Analysis}`). A standalone `\section{Results}` after `\section{Experiments}` reads as ML-flavored and wastes header lines that count against the tight 6-page IROS/ICRA budget.
