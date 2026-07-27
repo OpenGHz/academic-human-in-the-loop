@@ -47,14 +47,38 @@ ls $PAPER_DIR/figures/*.pdf 2>/dev/null || ls $PAPER_DIR/figures/*.png 2>/dev/nu
 
 ### Step 2: First Compilation Attempt
 
+**Prefer the canonical helper `build_paper.sh`** — do NOT hand-roll a `latexmk` invocation when it
+resolves. It adds paper-dir resolution (`--paper` → `$OVERLEAF_PAPER_DIR`/`$PAPER_DIR` →
+`.overleaf-sync.conf` → `./paper`), a post-build intermediate scrub, and page-count reporting.
+
 ```bash
-cd $PAPER_DIR
+# Resolve the helper (shared-runtime chain, per shared-references/integration-contract.md §2)
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null) || true
+fi
+if [ -z "${ARIS_REPO:-}" ] && [ -f "$HOME/.aris/repo" ]; then
+    ARIS_REPO=$(cat "$HOME/.aris/repo" 2>/dev/null) || true
+fi
+PAPER_BUILDER=".aris/tools/build_paper.sh"
+[ -f "$PAPER_BUILDER" ] || PAPER_BUILDER="tools/build_paper.sh"
+[ -f "$PAPER_BUILDER" ] || { [ -n "${ARIS_REPO:-}" ] && PAPER_BUILDER="$ARIS_REPO/tools/build_paper.sh"; }
+[ -f "$PAPER_BUILDER" ] || PAPER_BUILDER=""
+```
 
-# Clean previous build artifacts
-latexmk -C
+**Failure policy: fall back, don't block.** The helper is a convenience wrapper, not a gate — if it
+does not resolve, the inline `latexmk` path below produces the same PDF.
 
-# Full compilation (pdflatex + bibtex + pdflatex × 2)
-latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex 2>&1 | tee compile.log
+```bash
+if [ -n "$PAPER_BUILDER" ]; then
+  # --keep-aux is REQUIRED here: the default post-build scrub deletes main.log,
+  # which Step 3 parses for error diagnosis.
+  bash "$PAPER_BUILDER" --paper "$PAPER_DIR" --main main --clean --keep-aux 2>&1 | tee compile.log
+else
+  cd $PAPER_DIR
+  latexmk -C                                                                    # clean previous artifacts
+  latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex 2>&1 | tee compile.log
+fi
 ```
 
 ### Step 3: Error Diagnosis and Auto-Fix
@@ -226,6 +250,12 @@ For conference submission, additional checks:
 - [ ] **No supplementary mixed in**: appendix clearly after `\newpage\appendix`
 - [ ] **File size**: reasonable (< 50MB for most venues, < 10MB preferred)
 - [ ] **No `[VERIFY]` markers**: search the PDF text for leftover markers
+
+**Packaging the source for arXiv?** Do not assemble the tarball by hand — resolve
+`tools/pack_arxiv.sh` through the same chain as Step 2 and run it. It discovers the real dependency
+set from `main.fls` (what LaTeX actually opened), dereferences symlinks (arXiv silently drops them),
+keeps the `.bbl`, and proves the package stands alone via a clean-room recompile. See
+`/camera-ready-prep` Step 8.
 
 ### Step 8: Output Summary
 
