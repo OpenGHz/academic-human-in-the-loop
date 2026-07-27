@@ -10,7 +10,17 @@
   - **源头修复**（有画图脚本时）：导出前设 `matplotlib.rcParams['pdf.fonttype'] = 42`（TrueType；`= 1` 为 Type 1 亦可），重新生成该图。
   - **无源码时的修复**：用 Ghostscript 把该图文字**轮廓化为矢量路径** —— `bash "$FONT_FLATTENER" <figure>.pdf`（共享助手 `tools/flatten_pdf_fonts.sh`，按 SKILL.md 的解析链取得）。消除字体对象，保持矢量清晰度与边界框，不损失质量；若轮廓化后仍残留 Type 3，脚本会拒绝覆盖原文件。
 - **所有字体必须嵌入**（`pdffonts` 中 `emb=yes`）。
-- **纸张 US Letter**；使用 IEEE 会议模板（`ieeeconf` / `IEEEtran`，10pt，conference）。
+- **纸张 US Letter**；使用 IEEE 会议模板（10pt，conference）。**注意 `ieeeconf` 与 `IEEEtran` 并不等价**：官方 Author's Kit 发的是 `ieeeconf.cls`（配 `root.tex`），版面写死 `\textwidth 7.0in`，天然满足边距要求；若改用 `\documentclass[conference]{IEEEtran}`，它默认排 7.16in（侧边 0.68in）、首页标题从 0.75in 起排，**每一页都会超边距**，必须额外覆盖版面，见下条。
+- **页边距（提交系统逐页画框检查）**：US Letter 下四边 **≥ 0.75in（54pt）**，且**首页顶部 ≥ 1in（72pt）**（其余页顶部 0.75in）。检查结果 PDF 把合法排版区涂成灰底，超出部分肉眼可见，但不告诉你超了多少。用 IEEEtran 时在 `\documentclass` **之前**加（CLASSINPUT 只在该位置生效），`\renewcommand` 放其后：
+  ```latex
+  \newcommand{\CLASSINPUTinnersidemargin}{56pt}
+  \newcommand{\CLASSINPUToutersidemargin}{56pt}
+  \newcommand{\CLASSINPUTtoptextmargin}{61pt}    % 页顶浮动体比正文高约 5pt
+  \newcommand{\CLASSINPUTbottomtextmargin}{56pt}
+  \documentclass[conference]{IEEEtran}
+  \renewcommand{\IEEEtitletopspaceextra}{11pt}   % 首页标题下压，清过 1in 线
+  ```
+  自检：`gs -dQUIET -dBATCH -dNOPAUSE -sDEVICE=bbox main.pdf` 逐页给出 `%%HiResBoundingBox: x0 y0 x1 y1`，左 = `x0`、右 = `612-x1`、上 = `792-y1`、下 = `y0`，全部需 ≥54pt（首页顶 ≥72pt）。**overfull hbox 检查发现不了这类问题** —— 版面框本身摆错位置时，每一行都"合法地"排在错误的框里，日志干净、overfull 计数为 0。
 - 自检：`bash "$FONT_FLATTENER" --check <main>.pdf`（再对 `Images/*.pdf` 逐张排查定位元凶；有 Type 3 时退出码非 0，只读不写）。
 
 ## 2. 页数上限（含参考文献）
