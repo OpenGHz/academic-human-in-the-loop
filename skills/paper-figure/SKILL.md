@@ -178,6 +178,10 @@ Method & Rate & Depends on $D$? & Multi-modal? \\
 - This skill can generate a rough TikZ skeleton as a starting point, but **do not expect publication-quality results**
 - If the figure already exists in `figures/`, preserve it and generate only the LaTeX `\includegraphics` snippet
 - Flag as `[MANUAL]` in the figure plan and `latex_includes.tex`
+- **Converting a hand-drawn SVG to PDF**: use `tools/svg_to_pdf.py` (resolve via `.aris/tools/` →
+  `tools/` → `$ARIS_REPO/tools/`), not `rsvg-convert`/Inkscape — draw.io puts its text in
+  `<foreignObject>`, which those two drop silently, giving you a diagram with blank labels.
+  See `/figure-spec` Step 3.
 
 ### Step 5: Run All Scripts
 

@@ -7,12 +7,14 @@ description: >-
   into an actionable revision checklist, (2) de-anonymize and order authors for the
   camera-ready, (3) fix figure/formatting issues reviewers flagged, (4) make the PDF
   pass the submission system's compliance checks (Type 3 font rejection, page limits,
-  embedded fonts), and (5) produce the plain-text abstract the submission form needs.
+  embedded fonts), (5) produce the plain-text abstract the submission form needs, and
+  (6) build a self-contained, symlink-free arXiv source package from the LaTeX project.
   Trigger on: "camera ready", "camera-ready", "final version", "process the decision",
   "decision folder", "reviewer comments/审稿意见", "submit to IROS/ICRA/RA-L/RSS/CoRL",
   "PaperCept/RAS submission", "处理审稿意见", "准备终稿/相机就绪版", "去匿名/添加作者",
-  "Type 3 字体", "提交摘要", "开源链接" — even if the user only hands over a decision
-  folder and a paper directory without naming the full workflow. Generated documents
+  "Type 3 字体", "提交摘要", "开源链接", "打包 arXiv", "arXiv 投稿/提交", "submit to arXiv",
+  "package for arXiv", "arXiv tarball/zip", "投预印本" — even if the user only hands over a
+  decision folder and a paper directory without naming the full workflow. Generated documents
   default to Chinese and are written into the decision folder.
 ---
 
@@ -38,11 +40,44 @@ sees the full picture, then act on the parts they approve.
 - **Faithfulness over completeness.** Never invent experimental numbers, results, or claims to satisfy a reviewer. If a request needs data you don't have, say so and route it to the right checklist bucket (see below). This is the single most important rule — a camera-ready that fabricates is worse than one that honestly defers.
 - **Recompile and verify after every paper edit.** Don't trust that an edit is correct; rebuild the PDF and check the rendered result.
 
+## Shared helpers (resolve once, before Step 5 or Step 8)
+
+Two shared-runtime helpers back this skill. Resolve them with the standard chain
+(see [`../shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2)
+— never hardcode `tools/…`, and never hand-roll their logic:
+
+```bash
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null) || true
+fi
+if [ -z "${ARIS_REPO:-}" ] && [ -f "$HOME/.aris/repo" ]; then
+    ARIS_REPO=$(cat "$HOME/.aris/repo" 2>/dev/null) || true
+fi
+resolve_helper() {   # $1 = helper filename -> echoes path, or empty
+  local h p=".aris/tools/$1"
+  [ -f "$p" ] || p="tools/$1"
+  [ -f "$p" ] || { [ -n "${ARIS_REPO:-}" ] && p="$ARIS_REPO/tools/$1"; }
+  [ -f "$p" ] && printf '%s' "$p"
+}
+FONT_FLATTENER="$(resolve_helper flatten_pdf_fonts.sh)"   # Step 5
+ARXIV_PACKER="$(resolve_helper pack_arxiv.sh)"            # Step 8
+```
+
+**Failure policy — degrade, don't block.** `$FONT_FLATTENER` unresolved → you can still *audit* with
+`pdffonts <file>.pdf | grep -i "Type 3"`, but do **not** hand-roll the flatten step; a bare
+`gs -dNoOutputFonts` pass can silently leave a Type 3 font behind, and the helper's whole point is
+that it refuses to overwrite when that happens. Report the broken install instead (repair:
+`bash tools/install_aris.sh`). `$ARXIV_PACKER` unresolved → tell the user the arXiv package cannot be
+built safely and stop that step; do **not** improvise a `zip` of the paper directory (it will carry
+symlinks and miss the `.bbl`). Neither failure affects Steps 1–4, 6, 7.
+
 ## Workflow
 
-Steps 2–7 are independent; do whichever the user asks for. Step 1 always comes first.
+Steps 2–8 are independent; do whichever the user asks for. Step 1 always comes first.
 **Step 5 (PDF compliance) is reactive** — run it only when the submission system flags a problem
-or the user explicitly asks, never as part of the default pass.
+or the user explicitly asks, never as part of the default pass. **Step 8 (arXiv packaging) is
+on-request** — a camera-ready and an arXiv preprint are separate deliverables.
 
 ### 1. Identify the venue and load its requirements
 
@@ -121,14 +156,20 @@ and outlining a figure is a change you don't want to make unless it's actually n
 step only when the submission system rejects the PDF (e.g., "This document has Type 3 fonts on page 6")
 or the user explicitly asks for a compliance check.
 
-- **Type 3 fonts** (auto-rejected by IEEE/PaperCept): run `scripts/check_pdf_fonts.sh <main>.pdf`.
-  If any are found, locate the offending figure by running the same script on each figure PDF
-  (`scripts/check_pdf_fonts.sh Images/*.pdf`). The usual culprit is a matplotlib-exported figure
-  (matplotlib defaults to Type 3). Fix it with `scripts/outline_fonts.sh <figure>.pdf`, which uses
-  Ghostscript `-dNoOutputFonts` to convert the figure's text to vector outlines — no font objects,
-  no quality loss, bounding box preserved — and backs up the original. Then recompile and re-run
-  the check until it reports 0 Type 3. (Long-term source fix: regenerate with
-  `matplotlib.rcParams['pdf.fonttype'] = 42`.)
+- **Type 3 fonts** (auto-rejected by IEEE/PaperCept): audit and fix with the shared helper
+  `tools/flatten_pdf_fonts.sh`, resolved as `$FONT_FLATTENER` above.
+
+  ```bash
+  bash "$FONT_FLATTENER" --check <main>.pdf          # audit only, exit 1 if Type 3 present
+  bash "$FONT_FLATTENER" --check Images/*.pdf        # locate the offending figure (batch)
+  bash "$FONT_FLATTENER" <figure>.pdf                # flatten in place, keeps <figure>.orig.pdf
+  ```
+
+  The usual culprit is a matplotlib-exported figure (matplotlib defaults to Type 3). Flattening
+  converts the figure's text to vector outlines — no font objects, no quality loss, bounding box
+  preserved. The helper refuses to overwrite if a Type 3 font survives the pass, so a silent
+  no-op cannot slip through. Then recompile and re-run `--check` until it reports 0 Type 3.
+  (Long-term source fix: regenerate with `matplotlib.rcParams['pdf.fonttype'] = 42`.)
 - **Embedded fonts / paper size**: per the venue reference, likewise only when flagged.
 
 Page count is different — it's a natural consequence of editing, so check it after substantive
@@ -172,10 +213,39 @@ acceptance". Treat the link as a small state machine:
 The submission abstract md is created **only** once the link question is resolved one way or the other
 (provided or explicitly declined). Until then, no abstract file — and no draft — is produced.
 
+### 8. arXiv preprint package (on request)
+
+Posting the accepted version to arXiv is a separate deliverable from the camera-ready. **Never
+assemble the archive by hand** (`zip -r paper.zip paper/` is wrong three different ways) — use the
+canonical packer resolved above:
+
+```bash
+bash "$ARXIV_PACKER" --paper <paper-dir> --main <main-basename>
+```
+
+It exists because arXiv re-compiles your source on its own machines, so the package must be
+self-contained. The script builds once to refresh `main.fls`, reads the recorder file to learn
+**exactly which files LaTeX opened** (rather than grepping `\input`/`\includegraphics`), adds the
+`.bib`/`.bst` that bibtex needs but `.fls` never lists, copies everything into a clean staging dir
+with `cp -L` so no symlink survives (arXiv silently drops symlinks and you get a broken build), then
+**recompiles the staged copy in isolation** and fails loudly if it does not stand alone. It also
+warns on `.eps`/`.ps` figures that pdfLaTeX cannot embed.
+
+Notes for the user:
+- **Keep the `.bbl`.** The packer ships it deliberately. On arXiv's "Review Files" screen the `.bbl`
+  is auto-suggested for deletion — uncheck it. It is the exact bibliography that passed the
+  clean-room build; deleting it makes the reference list depend on arXiv re-running bibtex.
+  The `.bib` ships too, which is what their "a .bib file is preferred" note is really asking for.
+- Upload the resulting archive only — delete any previously uploaded PDF first (arXiv rejects
+  TeX-produced PDFs).
+- Useful flags: `--targz` (instead of the default `.zip`), `--out <file>`, `--keep-staging`
+  (inspect what was collected), `--no-verify` (skip the clean-room recompile — not recommended).
+
 ## Files in this skill
 
 - `assets/checklist_template.md` — the revision-checklist template (with the categorized Checklist).
 - `assets/abstract_plaintext_template.md` — the submission-form abstract template.
 - `references/ras-papercept.md` — IROS/ICRA/RA-L/CASE (PaperCept) requirements. Add siblings for other venues.
-- `scripts/check_pdf_fonts.sh` — list fonts in a PDF, flag Type 3 (exit 1 if any).
-- `scripts/outline_fonts.sh` — outline a PDF's fonts via Ghostscript to remove Type 3 (backs up original).
+
+Shared-runtime helpers this skill invokes (resolved, not vendored): `tools/flatten_pdf_fonts.sh`
+(Step 5), `tools/pack_arxiv.sh` (Step 8). See [`../../tools/README.md`](../../tools/README.md).
