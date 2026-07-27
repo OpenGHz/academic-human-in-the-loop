@@ -327,6 +327,41 @@ Soft-fail slot: `subtitles.skipReason ∈ {"whisper-failed", "alignment-merge-fa
 - `render` writes the output MP4 atomically (`.tmp` then `replace`).
 - `preflight`, `parse`, `narrate`, `verify` never mutate the source `slides/main.pdf` or `slides/TALK_SCRIPT.md`.
 
+## Re-rendering after an edit (`tools/render_slides_video.sh`)
+
+Once the deck has rendered successfully, a subsequent "I tweaked the narration, redo the video"
+does **not** need the full skill workflow. The shared-runtime wrapper `tools/render_slides_video.sh`
+runs Phase 2 + Phase 3 in one command, with the slides dir resolved from `--slides` / `--paper` /
+`$OVERLEAF_PAPER_DIR` / `$PAPER_DIR` / `.overleaf-sync.conf` / `./paper` → `<paper>/slides`. Only the
+slides whose narration text changed are re-synthesized; the rest hit the audio + PNG cache.
+
+```bash
+# Resolve via the standard chain (shared-references/integration-contract.md §2)
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills.txt 2>/dev/null) || true
+fi
+if [ -z "${ARIS_REPO:-}" ] && [ -f "$HOME/.aris/repo" ]; then
+    ARIS_REPO=$(cat "$HOME/.aris/repo" 2>/dev/null) || true
+fi
+SLIDES_RENDER_WRAPPER=".aris/tools/render_slides_video.sh"
+[ -f "$SLIDES_RENDER_WRAPPER" ] || SLIDES_RENDER_WRAPPER="tools/render_slides_video.sh"
+[ -f "$SLIDES_RENDER_WRAPPER" ] || { [ -n "${ARIS_REPO:-}" ] && SLIDES_RENDER_WRAPPER="$ARIS_REPO/tools/render_slides_video.sh"; }
+[ -f "$SLIDES_RENDER_WRAPPER" ] || SLIDES_RENDER_WRAPPER=""
+
+bash "$SLIDES_RENDER_WRAPPER" --slides <slides-dir>            # narration edit only
+bash "$SLIDES_RENDER_WRAPPER" --slides <slides-dir> --rebuild-pdf   # you also edited main.tex
+```
+
+The wrapper resolves `scripts/paper_slides_render.py` through the same chain this skill uses, so it
+is a shortcut into the same helper — never a second implementation. It enforces the same duration
+cap (`--max-seconds`, default 180, exit 4 on overflow) and runs the Phase 3 verify gate unless
+`--no-verify`. **Failure policy: fall back.** If it does not resolve, execute Phase 2 + Phase 3
+directly; the outcome is identical.
+
+Use the full workflow (not the wrapper) for a first render, or whenever Phase 1's parse-and-confirm
+step matters — the wrapper does not stop for confirmation.
+
 ## When to skip this skill
 
 - The user wants the slides themselves, not a video — use `/paper-slides` (with `/slides-polish` for per-page review).
