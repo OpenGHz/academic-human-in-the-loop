@@ -8,7 +8,26 @@
 % venues, so we set it unconditionally.
 \pdfminorversion=4
 
+% Margin compliance for RAS / PaperPlaza venues (ICRA, IROS, RA-L, CASE) on US
+% Letter: every page needs >= 0.75in (54pt) left/right/bottom margins, and the
+% first page >= 1in (72pt) at the top. Stock IEEEtran[conference] lays out a
+% 7.16in text block (0.68in sides) and starts the title at 0.75in, so it FAILS
+% the PaperPlaza margin check out of the box, by ~5pt per side and ~17pt at the
+% top of page 1. The official ieeeconf.cls shipped in the RAS Author's Kit
+% fixes \textwidth at 7.0in instead; these CLASSINPUT overrides reproduce that
+% geometry with ~2pt of slack, and MUST precede \documentclass. Harmless for
+% non-RAS IEEE conferences (IEEE's own print-area spec is narrower still), so
+% they are set unconditionally.
+\newcommand{\CLASSINPUTinnersidemargin}{56pt}
+\newcommand{\CLASSINPUToutersidemargin}{56pt}
+\newcommand{\CLASSINPUTtoptextmargin}{61pt}    % page-top floats sit ~5pt higher
+\newcommand{\CLASSINPUTbottomtextmargin}{56pt}
+
 \documentclass[conference]{IEEEtran}
+
+% Drop the title block so the first page clears its 1in top margin. IEEEtran
+% otherwise starts the title at the 0.75in body-text top, which overruns it.
+\renewcommand{\IEEEtitletopspaceextra}{11pt}
 
 % Math
 \usepackage{amsmath,amssymb,amsfonts,amsthm,mathtools}
