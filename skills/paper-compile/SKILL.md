@@ -166,7 +166,7 @@ If the compiled PDF exists, read it directly to check visual presentation:
 - Layout: no orphaned section headers, no awkward page breaks
 - Figures appear near their first text reference (not pages away)
 - Tables: aligned columns, consistent decimal precision
-- No overfull content visibly extending past margins
+- No overfull content visibly extending past margins (this catches protruding *lines*; it does **not** catch a mis-sized text block — see the margin check below)
 
 This is a quick visual scan, not a full review — the improvement loop does deeper visual review.
 
@@ -177,6 +177,7 @@ This is a quick visual scan, not a full review — the improvement loop does dee
 - [ ] No "??" in the PDF (undefined references — grep the log)
 - [ ] No "[?]" in the PDF (undefined citations — grep the log)
 - [ ] Figures are rendered (not missing image placeholders)
+- [ ] Margins satisfy the venue's print area (required for IEEE_CONF / RAS venues)
 
 ```bash
 # Check for undefined references
@@ -184,6 +185,19 @@ grep -c "LaTeX Warning.*undefined" compile.log
 
 # Check for missing citations
 grep -c "Citation.*undefined" compile.log
+
+# Margin check — measures the actual rendered ink per page, NOT the log.
+# A text block that is simply too wide or too high produces ZERO overfull
+# warnings: every line is legally set inside a misplaced frame, so the log
+# stays clean and the overfull check above cannot see it. Only the PDF
+# geometry can. Numbers below are for US Letter (612 x 792 pt).
+gs -dQUIET -dBATCH -dNOPAUSE -sDEVICE=bbox main.pdf 2>&1 | grep HiResBoundingBox
+# For each page "%%HiResBoundingBox: x0 y0 x1 y1":
+#   left = x0     right = 612 - x1     top = 792 - y1     bottom = y0
+# ICRA / IROS / RA-L (PaperPlaza): every value >= 54pt (0.75in),
+#   and top >= 72pt (1in) on page 1. Leave ~2pt of slack, do not land on 54.0.
+# If this fails with IEEEtran, the fix is in
+#   ../shared-references/venue-checklists.md -> "IROS / ICRA preferences".
 ```
 
 ### Step 6: Page Count Verification
