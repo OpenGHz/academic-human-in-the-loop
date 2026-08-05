@@ -47,7 +47,19 @@ Existing skills cover adjacent territory but none of this exact composition: `/r
 Three mandatory inputs:
 
 1. **`paper-base-dir`** — the polished paper at venue A's format. Must contain `main.tex` (or equivalent entry), `sec/` or `sections/`, `references.bib` (or equivalent), and a compiled `main.pdf` (used for visual review).
-2. **`— target-venue: <name>`** — one of: `iclr`, `icml`, `neurips`, `aaai`, `ijcai`, `colm`, `tmlr`, `uai`, or `other`. The skill expects venue style files at `<paper-base-dir>/templates/<venue>.{sty,tex,bst}` or in a recognized template directory. If `other`, the user passes `— target-style-dir: <path>`.
+2. **`— target-venue: <name>`** — one of: `iclr`, `icml`, `neurips`, `aaai`, `ijcai`, `colm`, `tmlr`, `uai`, `corl`, `icra`, `iros`, `ieee_conf`, or `other`. The skill expects venue style files at `<paper-base-dir>/templates/<venue>.{sty,tex,bst}` or in a recognized template directory. If `other`, the user passes `— target-style-dir: <path>`.
+
+   **Venue class matters, not just the style file.** Migrating venues is not only a `.sty` swap — each venue carries preamble requirements and submission-portal checks that the source venue never had. Resolve the target into a venue class and carry it through every phase:
+
+   | `target-venue` | class | template skeleton | portal |
+   |---|---|---|---|
+   | `iclr` `icml` `neurips` `aaai` `ijcai` `colm` `tmlr` `uai` | `ML` | `templates/<venue>.tex` | OpenReview / CMT |
+   | `corl` | `ML` | `templates/corl2026.tex` | OpenReview |
+   | `icra` `iros` `ieee_conf` | **`IEEE_CONF`** | `templates/ieee_conference.tex` | **PaperPlaza** (`icra`/`iros`) |
+   | `other` | `UNKNOWN` | `— target-style-dir` | user-declared |
+
+   `IEEE_CONF` is the class that most often loses configuration in migration, because its requirements live in the preamble and in the PDF binary rather than in the `.sty` — see Phase 0 step 7 and Phase 0.5's PDF-compliance block. When the class is `UNKNOWN`, do not silently proceed with ML defaults: ask the user which class the target behaves like, or emit `BLOCKED` with `reason_code: unknown_venue_class`.
+3. **`— review-corpus: <path>`** — directory containing prior venue's reviewer reports as `.txt` or `.md` files (one per reviewer, ideally). If `--review-corpus` is omitted, the skill emits `BLOCKED` with `reason_code: missing_review_corpus` because the whole point of resubmit is absorbing those concerns.
 3. **`— review-corpus: <path>`** — directory containing prior venue's reviewer reports as `.txt` or `.md` files (one per reviewer, ideally). If `--review-corpus` is omitted, the skill emits `BLOCKED` with `reason_code: missing_review_corpus` because the whole point of resubmit is absorbing those concerns.
 
 Optional:
@@ -89,7 +101,27 @@ mkdir -p "$NEW_VENUE_DIR/.aris"
 5. **Bibliography** — write `\bibliographystyle{<venue-bst>}` + `\bibliography{../references}` directly in the new `main.tex`. **Never** `\input` an existing `ref.tex` or `references.tex` that already contains its own `\bibliography{}` command (path resolution silently breaks).
 6. **`.aris/`** — create `$NEW_VENUE_DIR/.aris/` and write `assurance.txt` containing `submission` (matches the verifier's expected location).
 
-**Output of Phase 0**: a new sibling dir with all source files, no edits to text content yet, ready for compile.
+7. **Venue preamble requirements** — read [`../shared-references/venue-checklists.md`](../shared-references/venue-checklists.md) for the resolved target venue and apply its preamble requirements to the new `main.tex`. **This step is the one migration most often skips**, because these requirements live in the preamble, not in the `.sty` file that gets swapped — copying a venue's style file does not bring them along, and the source venue never needed them so they are absent from the base `main.tex`. Record every applied item in `.aris/venue_config.md` so Phase 4 can verify none was dropped.
+
+   For `IEEE_CONF` targets (`icra`, `iros`, `ieee_conf`) the required preamble is, at minimum:
+
+   ```latex
+   \pdfminorversion=4                                  % ICRA portal rejects PDF > 1.4
+   \newcommand{\CLASSINPUTinnersidemargin}{56pt}       % must precede \documentclass
+   \newcommand{\CLASSINPUToutersidemargin}{56pt}
+   \newcommand{\CLASSINPUTtoptextmargin}{61pt}
+   \newcommand{\CLASSINPUTbottomtextmargin}{56pt}
+   \documentclass[conference]{IEEEtran}
+   \renewcommand{\IEEEtitletopspaceextra}{11pt}        % clear the 1in first-page top
+   \usepackage{caption}                                % table captions -> sentence case
+   \captionsetup[table]{font=footnotesize, labelfont=normalfont, textfont=normalfont}
+   ```
+
+   Starting from `templates/ieee_conference.tex` gives you all of this already. Do not hand-assemble the preamble from the base venue's `main.tex` — that path is exactly how `\pdfminorversion` and the margin overrides get lost. `venue-checklists.md` is authoritative if it and this list ever diverge.
+
+   Structural conventions in that checklist also apply on migration and are **not** text microedits, so they are legal under the Phase 2 whitelist as venue-format work: ICRA/IROS wants limitations folded into Conclusion (no standalone `\section{Limitations}`) and results folded into Experiments (no standalone `\section{Results}`). A paper coming from an ML venue very likely has both. Flag them at Phase 0 and surface to the user — do not silently restructure, since section moves interact with the page budget.
+
+**Output of Phase 0**: a new sibling dir with all source files, `.aris/venue_config.md` recording the applied venue requirements, no edits to text content yet, ready for compile.
 
 ### Phase 0.5: Health Check + Anonymity Scan (still zero text edits)
 
@@ -109,9 +141,20 @@ Page count vs venue limit (measure first; do not assume):
 
 ```bash
 PAGES=$(pdfinfo main.pdf | awk '/^Pages:/ {print $2}')
-LIMIT=$(grep -oE "page_limit: [0-9]+" "$NEW_VENUE_DIR/templates/$TARGET_VENUE.tex" | awk '{print $2}')
+LIMIT=$(grep -oE "page_limit: [0-9]+" "$NEW_VENUE_DIR/templates/$TARGET_VENUE.tex" 2>/dev/null | awk '{print $2}')
+
+# Never let an unresolved limit fall through: `$((PAGES - LIMIT))` with an empty
+# LIMIT is a bash arithmetic error, and a `-le ""` test silently passes. This
+# bites `other` and any venue whose template carries no `page_limit:` marker.
+if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: could not resolve a page limit for target-venue '$TARGET_VENUE'." >&2
+    echo "Pass it explicitly (— page-limit: <int>) or add 'page_limit: <int>' to the template." >&2
+    exit 1   # -> BLOCKED, reason_code: page_limit_unresolved
+fi
 echo "Pages: $PAGES, Limit: $LIMIT, Delta: $((PAGES - LIMIT))"
 ```
+
+**What counts toward the limit is venue-class-dependent.** For `ML`, the limit covers the main body only (references and appendix are excluded). For `IEEE_CONF`, **references count**: ICRA/IROS is typically 6 pages of content + up to 2 paid extra pages, hard cap **8 pages including references and appendix**. A paper that fit a 9-page ML limit can therefore overflow an ICRA 8-page cap even though the number went down — check the current year's CFP and set `— page-limit` accordingly.
 
 If `PAGES > LIMIT`, queue Phase 2 to honor a page-shrink heuristic (see "Page-Shrink Heuristic" below).
 
@@ -131,7 +174,37 @@ If **any of the 5 layers** triggers a hit, emit `RESUBMIT_REPORT.json` with `ver
 
 Search for `\revise{...}`, `\fix{...}`, `\new{...}`, `\todo{...}`, `\todonotes{...}`, `\textcolor{red}{...}` leftovers from camera-ready cycles. List them; user decides whether to keep (some venues accept revision-marker boxes) or strip.
 
-**Output of Phase 0.5**: `BASELINE.md` with initial page count, anonymity-scan summary, residual-color list, overfull-hbox count.
+**PDF compliance scan** (venue-class-dependent; MANDATORY and blocking when class is `IEEE_CONF`):
+
+Run this at Phase 0.5, **not** Phase 4. These are properties of the compiled PDF that the target portal rejects outright, and the source venue never checked them — so a paper can arrive from ICLR carrying all three defects with a perfectly clean history. Two of the three are expensive to fix late: Type 3 fonts mean going back to the plotting scripts and re-exporting every affected figure, and a margin fix reflows pagination, which invalidates any page-shrink work Phase 2 already did.
+
+```bash
+cd "$NEW_VENUE_DIR"
+
+# (a) Type 3 fonts -> PaperPlaza auto-reject, reported by page number.
+#     Usual source: matplotlib's default PDF export embeds DejaVu as Type 3.
+#     Migration drags this in via `cp -r Figure/`, so check per-figure too.
+pdffonts main.pdf | grep "Type 3" && echo "FAIL: Type 3 fonts present"
+for f in Figure/*.pdf figures/*.pdf; do
+    [ -e "$f" ] && pdffonts "$f" 2>/dev/null | grep -q "Type 3" && echo "  culprit: $f"
+done
+
+# (b) All fonts embedded -> non-embedded is also an auto-reject.
+pdffonts main.pdf | awk 'NR>2 && $(NF-3)=="no" {print "FAIL: not embedded: "$1}'
+
+# (c) Margins. US Letter (612x792): every page needs >=54pt on all four sides,
+#     and >=72pt at the top of page 1. This is INVISIBLE to overfull-hbox
+#     counting -- a mis-sized text block sets every line legally inside a
+#     misplaced frame, so the log stays clean at zero overfulls.
+gs -dQUIET -dBATCH -dNOPAUSE -sDEVICE=bbox main.pdf 2>&1 | awk '/HiResBoundingBox/{
+    n++; l=$2; b=$3; r=612-$4; t=792-$5; req=(n==1?72:54)
+    if (l<54||r<54||b<54||t<req) { printf "FAIL p%d: L%.1f R%.1f T%.1f B%.1f\n",n,l,r,t,b; f++ }
+} END{ printf "%d pages, %d margin failures\n", n, f+0 }'
+```
+
+Any FAIL → emit `RESUBMIT_REPORT.json` with `verdict: BLOCKED`, `reason_code: pdf_compliance_failed`, and the per-page / per-figure list. Fix before Phase 1: margin failures are a preamble fix (Phase 0 step 7 — most likely the venue config was skipped), Type 3 is a figure re-export (`matplotlib.rcParams['pdf.fonttype'] = 42`) or a Ghostscript outline pass via the shared `tools/flatten_pdf_fonts.sh` helper. For non-`IEEE_CONF` classes, run the scan advisory-only: report findings in `BASELINE.md` but do not block, since OpenReview-style portals do not enforce these.
+
+**Output of Phase 0.5**: `BASELINE.md` with initial page count, anonymity-scan summary, residual-color list, overfull-hbox count, and the PDF-compliance scan result (per-page margin table + font findings).
 
 ### Phase 1: Audit (zero edits)
 
@@ -200,8 +273,14 @@ The load-bearing phase. `/auto-paper-improvement-loop` is invoked with **two saf
      - new_bibitem                    # blocks \bibitem{...} additions
      - new_theorem_env                # blocks \begin{theorem|lemma|proposition|corollary} additions
      - numerical_claim                # blocks adding numbers / percentages / metrics not present in original
+     - preamble_edit                  # main.tex is writable for text, but its PREAMBLE is frozen:
+                                      # the venue config applied in Phase 0 step 7 (\pdfminorversion,
+                                      # CLASSINPUT margins, caption overrides) must survive Phase 2.
+                                      # Phase 4 diffs main.tex against .aris/venue_config.md to catch drift.
    rationale: "Resubmit mode: text-only microedits, paper structure frozen by user constraint."
    ```
+
+   Note `main.tex` is in `allowed_paths` because section includes and text live there, but everything above `\begin{document}` is off-limits per `preamble_edit` — a reviewer-driven "fix the table caption style" or "reduce whitespace" suggestion is exactly the kind of edit that would otherwise strip a venue requirement mid-loop.
 
 2. **Per-round diff gate via auto-loop's HUMAN_CHECKPOINT** — `/auto-paper-improvement-loop` does not accept `--rounds`, `--reviewer-model`, or `--resume-after-round-checkpoint` flags (those are not in its CLI). It uses the `MAX_ROUNDS = 2` constant and `REVIEWER_MODEL = gpt-5.6-sol` defaults, with an existing `HUMAN_CHECKPOINT` mechanism for round gating. Resubmit-pipeline therefore invokes the loop **once** with `HUMAN_CHECKPOINT = true` so each round pauses for the orchestrator to inspect the diff:
 
@@ -289,10 +368,32 @@ If extra round queue is non-empty AND user-budget allows: one extra Phase 2 roun
 **Final compile**:
 
 ```bash
-/paper-compile $NEW_VENUE_DIR/main.tex --venue $TARGET_VENUE
+# /paper-compile takes a paper DIRECTORY and no venue flag -- it reads MAX_PAGES
+# from its own constants. Passing `--venue <x>` silently does nothing, so the
+# venue-specific gates below must be re-asserted here rather than delegated.
+/paper-compile $NEW_VENUE_DIR
 ```
 
-`/paper-compile` checks page limit, font, bib resolve, figure overflow, and emits `COMPILE_REPORT.json`. If page limit exceeded → trigger page-shrink heuristic (see below).
+`/paper-compile` compiles, resolves the bibliography, checks undefined refs/citations, counts pages against its `MAX_PAGES`, and scans for overfull content. If page limit exceeded → trigger page-shrink heuristic (see below).
+
+**Re-assert the venue gates after the final compile** (do not assume Phase 0.5 still holds — Phase 2 microedits reflow the document, and a section that moved to the top of a page can newly break the top margin):
+
+```bash
+# Same three checks as Phase 0.5's PDF compliance scan, on the FINAL pdf.
+# Blocking for IEEE_CONF; advisory otherwise.
+cd "$NEW_VENUE_DIR"
+pdffonts main.pdf | grep "Type 3" && echo "FAIL: Type 3 fonts"
+pdffonts main.pdf | awk 'NR>2 && $(NF-3)=="no" {print "FAIL: not embedded: "$1}'
+gs -dQUIET -dBATCH -dNOPAUSE -sDEVICE=bbox main.pdf 2>&1 | awk '/HiResBoundingBox/{
+    n++; l=$2; b=$3; r=612-$4; t=792-$5; req=(n==1?72:54)
+    if (l<54||r<54||b<54||t<req) { printf "FAIL p%d: L%.1f R%.1f T%.1f B%.1f\n",n,l,r,t,b; f++ }
+} END{ printf "%d pages, %d margin failures\n", n, f+0 }'
+
+# Verify no venue requirement recorded in Phase 0 was lost during Phase 2.
+diff <(grep -oE '\\(pdfminorversion|CLASSINPUT[a-z]+|IEEEtitletopspaceextra)' main.tex | sort -u) \
+     <(grep -oE '\\(pdfminorversion|CLASSINPUT[a-z]+|IEEEtitletopspaceextra)' .aris/venue_config.md | sort -u) \
+  || echo "FAIL: main.tex preamble drifted from .aris/venue_config.md"
+```
 
 **Final paper-claim-audit zero-context pass**:
 
@@ -393,6 +494,9 @@ The skill emits one of 7 verdicts (the 6 from the assurance contract + a `USER_D
 | `USER_DECISION` | `awaiting_phase_<N>_checkpoint` | Skill paused at a Phase 0.5 anonymity-fix checkpoint, Phase 2 round-end diff gate, Phase 3 escalation queue, or Phase 4 page-shrink approval | User responds to the checkpoint prompt; skill resumes with the user's decision recorded in the master ledger |
 | `BLOCKED` | `phase_0_setup_blocked` | New venue dir already exists, or template files not found | User resolves the conflict; rerun |
 | `BLOCKED` | `phase_0_5_compile_failed` | Initial compile fails on new venue's style | User fixes compile error before audits run |
+| `BLOCKED` | `unknown_venue_class` | `— target-venue: other` (or unrecognized) and the user has not declared which venue class it behaves like | User declares the class, or picks a named venue |
+| `BLOCKED` | `page_limit_unresolved` | No `page_limit:` in the target template and no `— page-limit:` passed | User passes `— page-limit: <int>` |
+| `BLOCKED` | `pdf_compliance_failed` | Phase 0.5 or Phase 4 found Type 3 fonts, non-embedded fonts, or margin violations on an `IEEE_CONF` target | User re-exports the offending figures / restores the venue preamble, then reruns |
 | `BLOCKED` | `anonymity_scan_failed` | Phase 0.5 hits surface-identifier or self-citation patterns the user must approve | User approves fixes or passes `— skip-anonymity-scan` (only for non-double-blind) |
 | `BLOCKED` | `missing_review_corpus` | `--review-corpus` not provided AND not detected | User provides the prior reviews |
 | `BLOCKED` | `page_shrink_failed_under_constraints` | Page-shrink heuristic exhausted, paper still overflows | User relaxes a constraint or picks a different venue |
