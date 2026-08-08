@@ -1073,47 +1073,66 @@ def _rasterize_pdf(
 ) -> tuple[list[Path], str | None]:
     png_dir = _render_root(workspace) / "png"
     png_dir.mkdir(parents=True, exist_ok=True)
-    pdf_mtime = pdf.stat().st_mtime
     dpi = _raster_dpi(pdf, target_w, target_h)
 
-    # Dir-level params cache: re-rasterize all pages when the DPI or output
-    # resolution changes (aspect-agnostic; no width-only heuristics).
+    # Per-page content-hash cache: rasterize each page to a temp path, hash the
+    # (downscaled) PNG bytes, and only replace the on-disk PNG when its content
+    # has actually changed. Unchanged pages keep their mtime, which lets the
+    # segment-compose step (below) skip ffmpeg for slides whose PNG + WAV are
+    # both unchanged even after the PDF itself was rebuilt.
     meta_path = png_dir / ".raster.json"
     want = {"dpi": dpi, "target_w": target_w, "target_h": target_h}
     try:
-        params_match = json.loads(meta_path.read_text(encoding="utf-8")) == want
+        existing_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        params_match = (
+            existing_meta.get("dpi") == want["dpi"]
+            and existing_meta.get("target_w") == want["target_w"]
+            and existing_meta.get("target_h") == want["target_h"]
+        )
+        stored_hashes: dict[str, str] = (
+            existing_meta.get("page_hashes", {}) if params_match else {}
+        )
     except (OSError, json.JSONDecodeError):
-        params_match = False
+        stored_hashes = {}
 
+    new_hashes: dict[str, str] = {}
     paths: list[Path] = []
     for n in range(1, slide_count + 1):
         out = png_dir / f"slide_{n:02d}.png"
-        cached = params_match and out.is_file() and out.stat().st_mtime >= pdf_mtime
-        if not cached:
-            # pdftoppm writes <prefix>-<N>.png by default; we use -singlefile
-            # so the output goes directly to <prefix>.png.
-            prefix = png_dir / f"slide_{n:02d}"
-            cmd = [
-                "pdftoppm", "-r", str(dpi), "-png", "-singlefile",
-                "-f", str(n), "-l", str(n), str(pdf), str(prefix),
-            ]
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            if proc.returncode != 0:
-                return [], f"pdftoppm failed on page {n}: {proc.stderr.strip()[-800:]}"
-            if not out.is_file():
-                # Some pdftoppm versions append -1 even with -singlefile when -f/-l is set.
-                alt = png_dir / f"slide_{n:02d}-1.png"
-                if alt.is_file():
-                    alt.replace(out)
-            if not out.is_file():
-                return [], f"pdftoppm produced no PNG for page {n}"
-            # Downscale the supersampled raster to the output size once, so each
-            # compose scales ~1:1 instead of resampling a huge image every frame.
-            _downscale_png_to_fit(out, target_w, target_h)
+        tmp = png_dir / f"slide_{n:02d}.__tmp.png"
+        # Always rasterize to a temp file so we can compare content hashes.
+        prefix = png_dir / f"slide_{n:02d}.__tmp"
+        cmd = [
+            "pdftoppm", "-r", str(dpi), "-png", "-singlefile",
+            "-f", str(n), "-l", str(n), str(pdf), str(prefix),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            tmp.unlink(missing_ok=True)
+            return [], f"pdftoppm failed on page {n}: {proc.stderr.strip()[-800:]}"
+        if not tmp.is_file():
+            # Some pdftoppm versions append -1 even with -singlefile when -f/-l is set.
+            alt = png_dir / f"slide_{n:02d}.__tmp-1.png"
+            if alt.is_file():
+                alt.replace(tmp)
+        if not tmp.is_file():
+            return [], f"pdftoppm produced no PNG for page {n}"
+        # Downscale before hashing so the stored hash reflects the exact bytes
+        # that will be fed to ffmpeg (compose scales ~1:1 from the downscaled PNG).
+        _downscale_png_to_fit(tmp, target_w, target_h)
+        new_hash = _sha256_file(tmp)
+        if stored_hashes.get(out.name) == new_hash and out.is_file():
+            # Content unchanged — discard temp, leave existing PNG (and mtime) intact.
+            tmp.unlink(missing_ok=True)
+        else:
+            tmp.replace(out)
+        new_hashes[out.name] = new_hash
         paths.append(out)
 
     try:
-        meta_path.write_text(json.dumps(want), encoding="utf-8")
+        meta_path.write_text(
+            json.dumps({**want, "page_hashes": new_hashes}), encoding="utf-8"
+        )
     except OSError:
         pass
     return paths, None
@@ -1983,6 +2002,7 @@ def cmd_render(args: argparse.Namespace) -> int:
 
     # Phase 6: per-slide compose
     segments_dir = _render_root(workspace) / "segments"
+    segments_dir.mkdir(parents=True, exist_ok=True)
     segments: list[Path] = []
     per_slide_drift: list[dict[str, Any]] = []
     slides_by_num = {s.slide_number: s for s in slides}
@@ -1992,6 +2012,39 @@ def cmd_render(args: argparse.Namespace) -> int:
         wav, _ = _audio_paths(workspace, slide_num)
         seg = segments_dir / f"slide_{slide_num:02d}.mp4"
         compose_info: dict[str, Any] | None = None
+
+        # Skip recompose when seg is newer than both its PNG and WAV inputs.
+        # Only valid for still-image slides (no inline video); inplace/video
+        # slides depend on video_clips that may change independently.
+        is_still = not (
+            (slide is not None and slide.video_mode == "inplace" and slide.video_clips)
+            or (slide is not None and slide.video_clip is not None)
+        )
+        if is_still and seg.is_file() and wav.is_file() and png.is_file():
+            seg_mtime = seg.stat().st_mtime
+            if seg_mtime >= wav.stat().st_mtime and seg_mtime >= png.stat().st_mtime:
+                ok = True
+                err = None
+                compose_mode = "still"
+                segments.append(seg)
+                actual = _ffprobe_duration(seg)
+                planned = next(
+                    (s.planned_seconds for s in slides if s.slide_number == slide_num), 0.0
+                )
+                drift_entry: dict[str, Any] = {
+                    "slide_number": slide_num,
+                    "title": next((s.title for s in slides if s.slide_number == slide_num), ""),
+                    "planned_seconds": round(planned, 3),
+                    "actual_seconds": round(actual, 3),
+                    "drift_seconds": round(actual - planned, 3),
+                    "audio_cached": slide_record.get("cached", False),
+                    "content_hash": slide_record.get("content_hash"),
+                    "compose_mode": compose_mode,
+                    "segment_cached": True,
+                }
+                per_slide_drift.append(drift_entry)
+                continue
+
         if slide is not None and slide.video_mode == "inplace" and slide.video_clips:
             ok, compose_info, err = _ffmpeg_compose_inplace_slide(
                 png, slide.video_clips, wav, seg, width, height, fps,
@@ -2107,7 +2160,9 @@ def cmd_render(args: argparse.Namespace) -> int:
             # match the helper's "never block on subtitles" contract.
             subtitles_info["skipped"] = True
             subtitles_info["skipReason"] = "whisper-missing"
-            warnings.append("whisper not available; --with-subtitles requested but skipped (preflight should have caught this)")
+            msg = "whisper not available; --with-subtitles requested but skipped (install: pip install openai-whisper)"
+            warnings.append(msg)
+            print(f"\033[33m⚠ {msg}\033[0m", file=sys.stderr)
         else:
             subtitles_info["available"] = True
             srt_dir = _render_root(workspace) / "srt"
@@ -2196,6 +2251,13 @@ def cmd_render(args: argparse.Namespace) -> int:
         "checkedAt": _now(),
     }
     _print_and_dump(payload, args)
+
+    # Print warnings to stderr so they're visible in terminal output
+    if warnings:
+        print("\n\033[33m⚠ Warnings:\033[0m", file=sys.stderr)
+        for w in warnings:
+            print(f"  • {w}", file=sys.stderr)
+
     return 0
 
 
