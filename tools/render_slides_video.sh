@@ -42,7 +42,19 @@ set -euo pipefail
 PROXY="http://127.0.0.1:7890"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CONF="$REPO_ROOT/.overleaf-sync.conf"
+
+# Walk up from $PWD to find .overleaf-sync.conf; fall back to script's repo root.
+_find_conf() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" && -n "$dir" ]]; do
+    [[ -f "$dir/.overleaf-sync.conf" ]] && { printf '%s' "$dir/.overleaf-sync.conf"; return 0; }
+    dir="$(dirname "$dir")"
+  done
+  [[ -f "/.overleaf-sync.conf" ]] && { printf '%s' "/.overleaf-sync.conf"; return 0; }
+  [[ -f "$REPO_ROOT/.overleaf-sync.conf" ]] && { printf '%s' "$REPO_ROOT/.overleaf-sync.conf"; return 0; }
+  return 1
+}
+CONF="$(_find_conf || true)"
 
 # Capture any env override before we touch these names.
 ENV_PAPER="${OVERLEAF_PAPER_DIR:-${PAPER_DIR:-}}"
@@ -89,7 +101,7 @@ done
 
 # ---- Resolve slides dir -------------------------------------------------------
 read_conf_paper() {
-  [ -f "$CONF" ] || return 1
+  [ -n "$CONF" ] && [ -f "$CONF" ] || return 1
   ( set +u +e; PAPER_DIR=""; . "$CONF" >/dev/null 2>&1; printf '%s' "$PAPER_DIR" )
 }
 
@@ -101,7 +113,7 @@ if [ -z "$SLIDES_DIR" ]; then
   [ -z "$paper" ] && [ -d "$PWD/paper" ] && paper="$PWD/paper"
   if [ -z "$paper" ]; then
     echo "ERROR: could not resolve a paper dir." >&2
-    echo "       Tried: --paper / --slides, \$OVERLEAF_PAPER_DIR or \$PAPER_DIR, PAPER_DIR= in $CONF, ./paper" >&2
+    echo "       Tried: --paper / --slides, \$OVERLEAF_PAPER_DIR or \$PAPER_DIR, PAPER_DIR= in .overleaf-sync.conf (walked up from \$PWD), ./paper" >&2
     exit 2
   fi
   SLIDES_DIR="$paper/slides"
@@ -114,12 +126,25 @@ if [ -n "${CLAUDE_SKILL_DIR:-}" ] && [ -f "$CLAUDE_SKILL_DIR/scripts/paper_slide
   HELPER="$CLAUDE_SKILL_DIR/scripts/paper_slides_render.py"
 fi
 if [ -z "$HELPER" ]; then
-  for cand in \
-    "$REPO_ROOT/.claude/skills/paper-slides-render/scripts/paper_slides_render.py" \
-    "$REPO_ROOT/.aris/tools/paper_slides_render.py" \
-    "$REPO_ROOT/tools/paper_slides_render.py"; do
-    [ -f "$cand" ] && HELPER="$cand" && break
-  done
+  # Walk up from $PWD to find a project-local skill install, then fall back to
+  # the script's own repo root (for users who keep the skill there).
+  _find_helper() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" && -n "$dir" ]]; do
+      local cand="$dir/.claude/skills/paper-slides-render/scripts/paper_slides_render.py"
+      [[ -f "$cand" ]] && { printf '%s' "$cand"; return 0; }
+      dir="$(dirname "$dir")"
+    done
+    # Fallback candidates in the script's own repo root.
+    for cand in \
+      "$REPO_ROOT/.claude/skills/paper-slides-render/scripts/paper_slides_render.py" \
+      "$REPO_ROOT/.aris/tools/paper_slides_render.py" \
+      "$REPO_ROOT/tools/paper_slides_render.py"; do
+      [[ -f "$cand" ]] && { printf '%s' "$cand"; return 0; }
+    done
+    return 1
+  }
+  HELPER="$(_find_helper || true)"
 fi
 [ -n "$HELPER" ] && [ -f "$HELPER" ] || { echo "ERROR: paper_slides_render.py not found." >&2; exit 2; }
 
@@ -158,9 +183,9 @@ args=( render
 [ "$ALLOW_OVER" = 1 ] && args+=( --allow-over-cap )
 [ "$SUBTITLES" = 1 ]  && args+=( --with-subtitles --subtitle-source "$SUBTITLE_SOURCE" )
 
-# Silence the helper's own stdout/stderr; this script formats all output itself
-# and reads details back from $RENDER_JSON (written via --json-out) on failure.
-do_render() { set +e; python3 "$HELPER" "${args[@]}" >/dev/null 2>&1; local r=$?; set -e; return $r; }
+# Silence the helper's stdout (JSON) but preserve stderr (warnings, errors).
+# This script formats output itself and reads details from $RENDER_JSON.
+do_render() { set +e; python3 "$HELPER" "${args[@]}" >/dev/null; local r=$?; set -e; return $r; }
 
 echo "→ rendering (only changed slides re-synthesize) …"
 do_render && rc=0 || rc=$?
