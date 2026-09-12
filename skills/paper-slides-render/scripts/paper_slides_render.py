@@ -1268,8 +1268,14 @@ def _locate_anchor_box(
     rendered slide, via multi-scale normalized cross-correlation.
 
     The still is placed on the slide at a size decided by LaTeX (\\includegraphics
-    [height=...]); we don't know that size, so we sweep template heights from 6%
-    to 30% of the slide height and keep the best-correlating placement.
+    [height=...]); we don't know that size, so we sweep template heights and keep
+    the best-correlating placement. The sweep spans 6%-95% of slide height: a
+    figure slide is often mostly figure (/paper-slides mandates >=60% of slide
+    area for figure slides), so a narrow ceiling both misses those anchors and
+    invites a small false-positive match elsewhere on the page.
+
+    Two passes keep that range affordable: a coarse stride to bracket the scale,
+    then a fine stride around the winner.
 
     Returns ((x, y, w, h), score) in slide-pixel space, or (None, best_score) if
     nothing clears `min_score`.
@@ -1283,21 +1289,37 @@ def _locate_anchor_box(
     slide_gray = cv2.cvtColor(slide_bgr, cv2.COLOR_BGR2GRAY)
     anchor_gray = cv2.cvtColor(anchor_bgr, cv2.COLOR_BGR2GRAY)
 
-    best: tuple[float, int, int, int, int] | None = None
-    # Sweep target heights in pixels; step keeps this ~60 matchTemplate calls.
-    for frac in range(60, 301, 4):
-        th = int(round(sh * frac / 1000.0))
+    def _probe(frac_permille: int) -> tuple[float, int, int, int, int] | None:
+        th = int(round(sh * frac_permille / 1000.0))
         if th < 16:
-            continue
+            return None
         scale = th / ah
         tw = int(round(aw * scale))
-        if tw < 16 or tw >= sw or th >= sh:
-            continue
+        if tw < 16 or tw > sw or th > sh:
+            return None
         tmpl = cv2.resize(anchor_gray, (tw, th), interpolation=cv2.INTER_AREA)
         res = cv2.matchTemplate(slide_gray, tmpl, cv2.TM_CCOEFF_NORMED)
         _, maxv, _, maxloc = cv2.minMaxLoc(res)
-        if best is None or maxv > best[0]:
-            best = (float(maxv), int(maxloc[0]), int(maxloc[1]), tw, th)
+        return (float(maxv), int(maxloc[0]), int(maxloc[1]), tw, th)
+
+    best: tuple[float, int, int, int, int] | None = None
+    coarse_best_frac = 0
+    # Pass 1 — coarse bracket across 6%..95% of slide height (~45 calls).
+    for frac in range(60, 951, 20):
+        cand = _probe(frac)
+        if cand is None:
+            continue
+        if best is None or cand[0] > best[0]:
+            best, coarse_best_frac = cand, frac
+
+    # Pass 2 — refine +/- one coarse step around the winner (~20 calls).
+    if best is not None:
+        for frac in range(max(60, coarse_best_frac - 20), min(950, coarse_best_frac + 20) + 1, 2):
+            cand = _probe(frac)
+            if cand is None:
+                continue
+            if cand[0] > best[0]:
+                best = cand
 
     if best is None:
         return None, None
