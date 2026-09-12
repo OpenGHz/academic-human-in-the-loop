@@ -175,6 +175,101 @@ Submission attachment for CoRL / ICRA / RSS / NeurIPS-supp. **Not a live-audienc
 
 **Critical**: ❌ no anticipated-Q&A, ❌ no "thank the chair", ❌ no separate related-work slide. ✅ at least 2 of the result slides should carry a `[VIDEO: ...]` marker pointing at a qualitative rollout (e.g. `figures/grasp.mp4`). ✅ slide-1 pitch must land the headline result in the first 15 seconds.
 
+> **Slide 1's "headline result" may need to be qualitative.** If the paper's
+> headline is a *ratio scaled by task magnitude* (operations saved / total
+> operations, latency cut / total latency) and the evaluated tasks were chosen at
+> one end of that range, a number on the title card reads as a constant property
+> of the method. Lead with the capability claim and keep the number beside the
+> per-task table. Ask the user if unsure — they know how the task suite was picked.
+
+##### Prepare video assets before drafting the LaTeX
+
+Survey the raw footage first; it determines what the results slides can claim:
+
+```bash
+find paper/raw_data -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mov"
+ffprobe -v error -show_entries format=duration \
+        -show_entries stream=width,height -of csv=p=0 <clip>   # webm needs format=, not stream=
+```
+
+- **A before/after pair of the same subject is the strongest asset for any paper
+  whose claim is a reduction.** If the raw footage contains a baseline rollout and
+  a method rollout of the same object, scene, or input, pre-stitch them
+  side-by-side (`hstack`) into one clip and reference it with a single marker —
+  the render helper composes one clip per anchor, so a side-by-side must be built
+  upstream.
+- **Frame-hold the shorter panel** (`tpad=stop_mode=clone:stop_duration=N`) so
+  neither side goes black while the other still plays, and pad both to at least
+  the slide's narration length.
+- **Slow down to reveal, don't speed up to fit.** When the difference the slide
+  claims is *temporal* (a step removed, a recovery, a failure), high playback
+  speed makes it unverifiable — the clip becomes decoration. Prefer 0.5×-1.25×
+  (`setpts=N*PTS`) and let the clip loop.
+- **Label panels in LaTeX, not in the clip.** Anchored overlays replace only the
+  matched still box, so LaTeX badges survive and match deck typography. This also
+  avoids `drawtext` escaping pain — `ffmpeg` filtergraph parsing breaks on `:`,
+  em-dashes, and font paths inside `-filter_complex`.
+- **Cut poster stills from the finished clip** (`ffmpeg -ss <t> -frames:v 1`) so
+  the render helper's template matching is exact.
+- **Verify before handing off**: `paper_slides_render.py parse --talk-script ...
+  --slides-pdf ...` must report `slide_count == pdf_page_count`, no
+  `parse_errors`, and no `gaps_seconds`; then `preflight` must report `ok: true`
+  with every clip's `exists` and `anchor_exists` true.
+- **When a slide needs footage the repo does not contain, ask the user — do not
+  quietly substitute.** The absence of a clip in `raw_data/` means it is not
+  checked in, not that it does not exist: it may sit on a lab machine, in a
+  Feishu/Drive folder, on the robot's recording disk, or be cheap to re-record.
+  Only the user knows. Surface the gap explicitly — name the slide, the claim it
+  must support, and the clip you looked for — and offer the options:
+
+  1. point you at the file (or drop it into `figures/`),
+  2. record it,
+  3. proceed with the nearest available clip, **labeled on screen** as
+     illustrative of a different condition,
+  4. scope the slide's claim down to the condition the available footage shows.
+
+  Substituting silently is the failure mode to avoid: a clip from one condition
+  under a statistic from another misleads a reviewer even when the caption is
+  technically accurate, because viewers read the moving image as the measurement.
+  Raise this during the Phase 1 outline checkpoint if possible — that is when
+  reshooting is cheapest and before the deck is built around the substitute.
+
+##### Keep the derived docs in sync when the slide count changes
+
+Merging or deleting a slide touches five files. `TALK_SCRIPT.md` is the one that
+breaks the build silently — a stale `## Slide N` header makes the render emit more
+segments than the PDF has pages:
+
+1. `main.tex` — the frame itself
+2. `TALK_SCRIPT.md` — delete the segment, **and re-chain every following
+   `[MM:SS - MM:SS]` header** so no timing gap remains
+3. `speaker_notes.md` — per-slide entries and durations
+4. `SLIDE_OUTLINE.md` — mark it as the approved plan and update the as-built table
+   rather than rewriting history
+5. `SLIDES_STATE.json` — `slide_count`, narration totals, and any now-unreferenced
+   assets
+
+Then re-run `parse` and confirm `slide_count == pdf_page_count` with empty
+`gaps_seconds`. Leave orphaned clips in `figures/` (noted in state) rather than
+deleting them, in case the cut slide is restored.
+
+Recount narration from the actual `\note{}` blocks after any edit — do not carry
+forward a stale word count:
+
+```bash
+python3 - <<'EOF'
+import re
+src=open('slides/main.tex').read()
+tot=0
+for i,n in enumerate(re.findall(r'\\note\{%(.*?)\n\\end\{frame\}',src,re.S),1):
+    b=n.split('\\par\\medskip')[0]
+    b=re.sub(r'\\[a-zA-Z]+\{([^}]*)\}',r'\1',b); b=re.sub(r'[{}%]','',b)
+    w=len(b.split()); tot+=w
+    print(f"slide {i}: {w:3d} words -> {w/155*60:5.1f}s")
+print(f"TOTAL {tot} words -> {tot/155*60:.1f}s (cap 180s)")
+EOF
+```
+
 #### Oral (15-22 slides)
 
 | Slide | Purpose | Content Source | Figure? |
@@ -236,10 +331,20 @@ Slide-by-slide outline:
 3. [Problem statement — 1 min]
 ...
 
+⚠️ Missing assets (only when something is genuinely absent):
+- Slide [N] ([claim it must support]) wants [described clip/figure]; not found in
+  [paths searched]. Point me at it, record it, use [nearest available] labeled as
+  a different condition, or narrow the slide's claim?
+
 Proceed to drafting? Or adjust the outline?
 ```
 
 **⛔ STOP HERE and wait for user response.** This is the most critical checkpoint — the outline determines the entire talk flow.
+
+List any missing clip or figure **here**, not after the deck is built. This is the
+point at which recording is still cheap and no slide has been designed around a
+substitute. Never silently downgrade a planned asset to whatever happens to be on
+disk.
 
 Options:
 - **"go"** → proceed to Phase 2
@@ -267,6 +372,27 @@ For each slide in the outline, draft the actual content.
 | **Consistent across analogous slides** | Same-role boxes/panels keep identical size & style on every slide; fix alignment by **repositioning (centering), not resizing**. Keep parallel items parallel (e.g. every posed question ends with `?`) |
 | **One idea per line** | Never weld two unrelated ideas with a `·` / `;` separator (a `·` is only for a short list of *parallel* items) — split to separate lines. Drop redundant conditionals that make a posed question self-answering (`unlock first if locked?` → `unlock first?`) |
 | **Task-intro slides show real I/O** | For a "what is the task" slide, build a concrete `Question → Model → Answer` panel from the paper's actual prompt + choice list (Appendix prompt tables) and show the explored attempt as frames — beats abstract bullets for conveying the task |
+| **Closing line earns its space** | Before adding a take-away line to the final slide, check it is not the title slide's tagline verbatim. A restatement that adds no information the findings do not already carry belongs in the narration, where it works as spoken closure. Repetition *is* legitimate for a recurring motif or a deliberate callback — the test is whether the repeat does work, not whether it repeats |
+| **Precise verbs over impressive ones** | Say what changed, not what it evokes. An adverb like "directly" or "instantly" implies a stronger mechanism (one-shot, straight-line) than most methods claim. Check every verb and adverb on the title slide against what the method actually guarantees, and name the thing that was removed instead |
+| **Drop sub-captions that restate the title** | If a title-slide sub-caption paraphrases the subtitle in weaker words, delete it rather than rewording. One tagline, nothing competing |
+| **Badges must not reuse the frametitle color** | A colored label at the top of a figure in `primary` reads as title spillover. Give same-slide badges their own hue (and match any in-clip divider to it) |
+
+### Claim scope on slides (highest-value review category)
+
+Slides compress, and compression is where claims silently widen. Every number
+must carry the scope it was measured under. Check each of these before Phase 5:
+
+| Failure | Rule |
+|---------|------|
+| Oracle number attributed to the deployed system | An upper-bound / oracle / ground-truth-fed result is never "ours" unqualified. When the deployed variant recovers only a fraction of the oracle's gain, the slide must name which variant each number belongs to |
+| Averaged number shown beside a single example | A per-trial mean displayed next to one rollout needs `averaged over trials` on screen, or the viewer reads the clip as the measurement |
+| Condition-specific rate stated as global | Name the condition **as a condition**: "on the *X* task", not a bare "on *X*" — a bare noun reads as an object or dataset, which is the wrong referent for a rate measured over one experimental setting |
+| Guardrail promoted to result | If the paper's axis is efficiency and success is a non-regression check, success stays a guardrail in every slide title and bullet. Do not headline an incidental success improvement |
+| Absolute phrasing for a soft mechanism | A design with a fallback path does not guarantee an outcome. Prefer "can skip", "typically", "preserved" over "always", "every time", "never regresses" — and drop an unqualified "never regresses" outright if any cell in the table moved at all |
+| Ratio metric on the title slide | A percentage that is a *fraction of a task's own magnitude* (operations saved / operations total) varies with task length. If the evaluated tasks were chosen short-horizon, a headline % on slide 1 invites reading it as a constant property of the method — keep it beside the per-task table and lead with a qualitative claim |
+
+Record the surviving distinctions as a short *claim-scope notes* section at the
+end of `TALK_SCRIPT.md`, so a later edit does not undo them.
 
 **For each slide, produce**:
 1. `\frametitle{}`
@@ -386,6 +512,64 @@ pdfinfo slides/main.pdf | grep Pages
 
 If page count differs significantly from outline (>2 slides off), investigate.
 
+#### Vertical fit: measure, don't guess
+
+`Overfull \vbox` on a beamer frame is a layout bug, not a warning to tolerate —
+it means content is running past the frame edge or into the frametitle. Treat
+zero overfull boxes as the completion bar, and drive it by measurement:
+
+```bash
+# Which frames overflow, and by how much (line = \end{frame} of that slide)
+grep -n "Overfull" slides/main.log
+
+# Where the ink actually sits on a page: title band, figure band, body bands
+pdftoppm -r 150 -png -f 3 -l 3 -gray slides/main.pdf /tmp/pg
+python3 -c "
+from PIL import Image; import numpy as np
+im=np.array(Image.open('/tmp/pg-3.png').convert('L')); h,w=im.shape
+ink=(im<235).sum(axis=1); rows=[i for i,v in enumerate(ink) if v>0]
+bands=[]; start=prev=rows[0]
+for r in rows[1:]:
+    if r-prev>4: bands.append((start,prev)); start=r
+    prev=r
+bands.append((start,prev))
+for i,(a,b) in enumerate(bands):
+    gap='' if i==0 else '  gap above=%d' % (a-bands[i-1][1])
+    print('band y=%4d..%4d h=%3d%s' % (a,b,b-a,gap))"
+```
+
+The band gaps tell you what a screenshot cannot: whether a figure is *centered*
+in its slot or merely *fits*. A figure with an 11px gap above and 38px below is
+crowding the title while wasting space underneath — the fix is to grow the figure
+*and* add leading above it, not to shrink it.
+
+**Iterate on the real number.** When a height overshoots, the log reports the
+exact excess (`Overfull \vbox (0.87pt too high)`); step down until it clears and
+record the ceiling you found. A value that overflows by under ~1pt is one
+increment above the maximum for that layout, not a reason to restructure.
+
+**Rules of thumb learned from practice**:
+
+- **Title collision has one cause and one fix.** A figure whose `height` leaves
+  no leading will touch the frametitle. Add `\vspace{0.5em}` above the
+  `\includegraphics` *and* cap the height; on 16:9 at 14pt base, a figure plus
+  two bullet lines tops out near `0.65\textheight`.
+- **Negative `\vspace` is a debt marker.** If you inserted `\vspace{-0.2em}` to
+  squeeze something in, and later delete the element that forced it, go back and
+  restore positive spacing. Otherwise the leftover negative space reads as
+  "content jammed against the title" long after the cause is gone.
+- **Do not pay for fit with the results table's font.** Shrinking a data table to
+  `\scriptsize` to clear an overflow is a readability regression on a slide whose
+  whole purpose is the numbers. Restructure the table instead — collapsing
+  `baseline / ours` row pairs into a single `before → after` arrow column halves
+  the rows and lets the font stay up.
+- **Trading a bullet for figure size is usually right.** Bullets that restate the
+  narration are the cheapest thing on a figure slide. Cutting four to two funds a
+  meaningfully larger figure.
+- **`latexmk` caches within a shell.** After edits it may report
+  `Nothing to do for 'main.tex'`; use `latexmk -g` to force a rebuild before
+  believing a page count or an overfull-box result.
+
 **State**: Write `SLIDES_STATE.json` with `phase: 4`.
 
 ### Phase 5: Codex MCP Review
@@ -421,7 +605,47 @@ mcp__codex__codex:
     - Overall: Ready to present? (Yes / Needs revision / Major issues)
 ```
 
+**Tell the reviewer the format's constraints, or it will grade against the wrong
+rubric.** For `supplementary-video`, state in the prompt that there is no
+audience and no Q&A, so the absence of a Q&A section, chair greeting, and
+thank-you slide is deliberate. Also give it the render-time facts it cannot see
+from the LaTeX: which slides carry clips, that the PDF shows a poster still, the
+TTS word rate, and the paper's contribution axis (efficiency vs. success rate).
+Without these it will penalize correct choices and miss the real defects.
+
 Apply fixes. Recompile if LaTeX was changed.
+
+#### Triage the review; do not apply it wholesale
+
+The reviewer sees the source and the outline, not the rendered pages, and it
+cannot know the project's constraints. Sort its findings before acting:
+
+- **Claim-scope findings: apply them.** These are the highest-value output of the
+  review and the easiest to get wrong when compressing a paper. See the claim-scope
+  table in Phase 2.
+- **Legibility findings: apply the cheap version.** "Enlarge the figure" is cheap
+  and usually right. "Redraw the paper figure as bespoke slide panels" forks the
+  visual language between paper and deck — enlarge first, and only escalate to
+  `/paper-illustration` if it still fails at full screen.
+- **Structural findings: check them against the format contract first.** A
+  suggestion like "cold-open on footage before the title card" is a project-page
+  convention that conflicts with a review attachment's expected cadence. When the
+  underlying concern is valid (muted-playback legibility) but the proposed fix is
+  not, address the concern another way (put the headline metric on the title card).
+- **Findings that add a slide against a hard cap**: reject if the content is
+  already carried elsewhere.
+
+Write every declined suggestion into `SLIDES_REVIEW.md` with the reason. A later
+pass (or a later session) will otherwise re-raise it, and the reasoning is not
+recoverable from the deck alone.
+
+**Expect a later user pass to supersede a review fix.** The reviewer optimizes
+each slide locally; the user knows things about the work that the paper does not
+state — how the evaluation suite was chosen, which framing invites a
+misreading, what a term implies to their community. When a user instruction
+reverses a review fix, keep the review's underlying concern if it still applies,
+move the content rather than deleting the distinction, and note the supersession
+in `SLIDES_REVIEW.md` instead of silently overwriting the earlier entry.
 
 > ⚠️ If `mcp__codex__codex` is not available (no OpenAI API key), skip external review and proceed to Phase 6. Note the skip in `SLIDES_STATE.json`.
 
@@ -435,7 +659,23 @@ For each slide, ensure a `\note{}` block exists with:
 
 1. **What to say** (2-3 complete sentences, conversational tone)
 2. **Timing hint** (e.g., "spend 1 minute here", "quick — 20 seconds")
-3. **Transition phrase** to the next slide (e.g., "So how do we actually implement this? Let me show you...")
+3. **Transition phrase** to the next slide (e.g., "So how do we actually implement this? Let me show you...") — **live-audience talk types only** (`oral`, `spotlight`, `poster-talk`, `invited`). Omit for `supplementary-video`; see below.
+
+> **No transition lines in `supplementary-video` mode.** A transition serves a
+> speaker who pauses, advances the slide, and needs a bridge across the gap. A
+> submission video has no audience, no pause, and one continuous audio track, so
+> the next slide's opening sentence *is* the transition. Worse, the render helper
+> speaks only quoted text — a `→ *Transition*: ...` line is never voiced, so it is
+> pure annotation, and in practice it tends to paraphrase the very sentence that
+> follows it ("three modules realize this." immediately before "Three modules
+> realize the framework."). Write the bridge *into* the next slide's opening line
+> instead, and state in the script's header that only quoted text is spoken.
+
+**Derive timing hints from measured word counts, not from the outline's estimates.**
+The planned per-slide seconds drift as narration is edited; recount from the
+actual `\note{}` blocks (script in Phase 1's supplementary-video section) and write
+the measured value. A note that says "13 s" over 18 s of text mis-budgets every
+downstream slide.
 
 Also generate `slides/speaker_notes.md` as a standalone backup:
 
@@ -660,8 +900,6 @@ When the user picked `supplementary-video`, the template above does **not** appl
 
 **Why "We present + full title"**: it's the standard conference-talk opening cadence (subject-verb-object, TTS-friendly), and the reviewer has not yet built up any short-form nickname for the paper — using the verbatim title grounds them in the work in the first three seconds. Do NOT open with "This video is an overview of …" (metadiscourse — describes the video instead of the work) or with a bare noun phrase like "An overview of <nickname>" (no main verb; sounds clipped under TTS).
 
-→ *Transition*: "Here's the problem."
-
 ---
 
 ## Slide 2: Problem & Why It Matters [0:15 - 0:40]   ≈25 s
@@ -669,8 +907,6 @@ When the user picked `supplementary-video`, the template above does **not** appl
 "[One sentence framing the real-world problem.] [One sentence stating why the existing state of the art falls short — the *gap*, not a literature dump.]"
 
 *[A single grounding figure or short clip of the failure mode is ideal.]*
-
-→ *Transition*: "Our idea."
 
 ---
 
@@ -680,8 +916,6 @@ When the user picked `supplementary-video`, the template above does **not** appl
 
 *[Method teaser figure.]*
 
-→ *Transition*: "How it works."
-
 ---
 
 ## Slide 4: Method-in-One-Picture [1:05 - 1:30]   ≈25 s
@@ -689,8 +923,6 @@ When the user picked `supplementary-video`, the template above does **not** appl
 "[Single sentence describing the architecture or pipeline.] [Single sentence describing the training or inference loop, whichever is the contribution.]"
 
 *[Hero method diagram. No equations unless one *is* the contribution.]*
-
-→ *Transition*: "Results."
 
 ---
 
@@ -739,6 +971,7 @@ Example shape (one of 2–4 result slides):
 **Differences vs. the default oral template — call these out explicitly to keep the LLM from drifting back to the oral arc:**
 
 - ❌ **No anticipated-Q&A section.** A reviewer cannot ask follow-ups.
+- ❌ **No `→ Transition:` lines.** Not spoken (only quoted text is), and they end up paraphrasing the next slide's opening sentence. Put the bridge in that sentence.
 - ❌ **No "thank the chair" intro, no "thank the audience" outro.** There is no audience.
 - ❌ **No standalone related-work slide.** The *gap* belongs in Slide 2; a literature dump does not belong in 3 minutes.
 - ✅ **Problem + Key Idea + Method each get a real slide.** This is what differentiates a 3-min overview from a results reel.
@@ -803,6 +1036,8 @@ needed (re-run `/paper-slides` instead).
 - **Minimal change on edits.** When the user asks to fix one thing, change only that — "adjust position, keep the size" means reposition (e.g., center), not resize; don't restyle or refactor unrequested elements across the deck.
 - **Task-intro slides demonstrate, not describe.** Prefer a concrete `Question → Model → Answer` panel (drawn from the paper's prompt + choices) plus the explored attempt as frames, over abstract bullets.
 - **Do NOT fabricate data.** All numbers must come from `paper/sections/*.tex`.
+- **Ask, don't substitute, when an asset is missing.** A clip or figure absent from the repo may still exist on a lab machine or be cheap to re-record — only the user knows. Name the slide, the claim, and what you searched, then offer: point you at it / record it / use the nearest clip labeled as a different condition / narrow the claim. Raise it at the Phase 1 checkpoint.
+- **Only quoted text is spoken.** The render helper voices quoted lines and ignores everything else, so a `→ Transition:` line is annotation, not narration. Include transitions for live talk types; omit them in `supplementary-video`, where the next slide's opening sentence is the bridge. Keep `\note{}` timing hints in sync with measured word counts.
 - **Bullet points only** — never full sentences on slides. Sentence fragments are fine.
 - **Figure slides: figure ≥60% of slide area.** The figure IS the content.
 - **Progressive disclosure**: Use `\pause` or `\onslide` for complex method slides.
@@ -810,6 +1045,13 @@ needed (re-run `/paper-slides` instead).
 - **Do NOT hallucinate citations.** Reference only papers cited in the paper.
 - **Opening hook matters**: Never start with "In this paper, we..." — start with the problem or a provocative question.
 - **Font size minimums**: Title ≥28pt, body ≥20pt, footnotes ≥14pt.
+- **Zero overfull boxes is the completion bar.** `Overfull \vbox` on a frame means content crosses the frame edge or the frametitle. Measure ink bands (Phase 4) instead of eyeballing a screenshot, and iterate on the excess the log reports.
+- **Verify layout claims by rasterizing.** "The figure now clears the title" is a claim about pixels. `pdftoppm` the page and look, or measure the band gaps; do not infer it from the LaTeX you just wrote. And after edits, force `latexmk -g` — it caches and will report `Nothing to do`.
+- **Never state a number without its scope.** Oracle vs. deployed, per-trial mean vs. single example, per-task rate vs. global, guardrail vs. result. See the claim-scope table in Phase 2; record the surviving distinctions in `TALK_SCRIPT.md`.
+- **A closing line must earn its space.** Check a final-slide take-away is not the title tagline verbatim; if it adds nothing the findings already carry, keep it in the narration. Deliberate callbacks are fine — restatement for its own sake is not.
+- **Say what the method guarantees, not what sounds strong.** Check each title-slide verb against the mechanism: a soft-bias/fallback design does not license "directly", "always", or "never".
+- **Slide count changes touch five files.** `main.tex`, `TALK_SCRIPT.md` (re-chain the timing headers), `speaker_notes.md`, `SLIDE_OUTLINE.md`, `SLIDES_STATE.json`. Re-run the render `parse` and confirm `slide_count == pdf_page_count` with no `gaps_seconds`.
+- **Record declined review suggestions with reasons.** Otherwise the next pass re-raises them and the reasoning is unrecoverable.
 - **Feishu notifications are optional.** If `~/.claude/feishu.json` exists, send notifications. If absent, skip.
 
 ## Parameter Pass-Through
