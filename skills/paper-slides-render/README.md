@@ -1,6 +1,6 @@
 # `/paper-slides-render`
 
-Bridge skill between [`/paper-slides`](../paper-slides/SKILL.md) (PDF + script) and [`/paper-video`](../paper-video/SKILL.md) (venue-gated MP4). Synthesizes per-slide narration with `edge-tts`, rasterizes the deck with `pdftoppm`, composes per-slide ffmpeg segments, concatenates into a single 1080p30 H.264 MP4, and optionally burns word-aligned subtitles via `whisper`.
+Bridge skill between [`/paper-slides`](../paper-slides/SKILL.md) (PDF + script) and [`/paper-video`](../paper-video/SKILL.md) (venue-gated MP4). Synthesizes per-slide narration with `edge-tts`, rasterizes the deck with `pdftoppm`, composes per-slide ffmpeg segments, concatenates into a single 1080p30 H.264 MP4, and burns in subtitles by default (from the script's own narration text; `whisper` word-alignment is opt-in).
 
 This README maps the **material flow** — which file feeds which, what each subcommand reads vs. writes, where caches live, and what the final deliverable depends on. For the operational manual (constants, phase prompts, failure policies), see [`SKILL.md`](SKILL.md).
 
@@ -29,8 +29,8 @@ This README maps the **material flow** — which file feeds which, what each sub
 │    render     ─► slides/render/png/slide_NN.png    (rasterize cache)        │
 │                ─► slides/render/segments/slide_NN.mp4                       │
 │                ─► slides/render/presentation.mp4   ⭐ no-subs MP4 first     │
-│                ─► slides/render/srt/slide_NN.srt   (optional, post-concat)  │
-│                ─► slides/render/subtitles.srt      (merged)                 │
+│                ─► slides/render/srt/slide_NN.srt   (default, post-concat)   │
+│                ─► slides/render/subtitles.srt      (merged, editable)       │
 │                ─► slides/render/presentation.mp4   ⭐ subtitles burned in   │
 │                                                       (atomic replace)      │
 │    verify     ─► slides/render/verify.json                                  │
@@ -152,8 +152,11 @@ The three compose paths converging on identical codec parameters is what lets co
                          └────────────────┬───────────────────────┘
                                           ▼
                          ┌────────────────────────────────────────┐
-                         │ 8. (--with-subtitles only)             │
-                         │    whisper align per slide             │
+                         │ 8. subtitles (DEFAULT; skipped only    │
+                         │    with --no-subtitles)                │
+                         │    script source: narration text timed │
+                         │       across each slide's audio        │
+                         │    whisper source (opt-in): ASR align  │
                          │       → SRT + cumulative offset        │
                          │    merge → subtitles.srt               │
                          │    burn-in re-encode pass              │
@@ -166,13 +169,13 @@ The three compose paths converging on identical codec parameters is what lets co
 **Two notes on this ordering**:
 
 1. **Step 5 (projection)** halts before compose if `--max-seconds` is set and TTS already overflows. Catches venue-cap problems in ~30 s instead of 5 min.
-2. **Step 8 (subtitles)** runs *after* the no-subs MP4 is on disk. The user can play it immediately; subtitles are non-blocking. If whisper crashes mid-align, the no-subs version stays as the final deliverable.
+2. **Step 8 (subtitles)** runs *after* the no-subs MP4 is on disk. The user can play it immediately; subtitles are non-blocking. If the burn fails, the no-subs version stays as the final deliverable — which is why the step is on the default path yet cannot break a render. The flip side: a skipped burn is **invisible in the artifact**, so `render.json.subtitles` must be read before reporting the deck as captioned.
 
 ---
 
 ## Output layout
 
-After a successful `render` (with `--with-subtitles` requested):
+After a successful `render` (default settings, i.e. subtitles on):
 
 ```
 slides/render/
@@ -196,7 +199,7 @@ slides/render/
 │   ├── slide_01.mp4
 │   └── …
 │
-├── srt/                      # ── only if --with-subtitles
+├── srt/                      # ── skipped only with --no-subtitles
 │   ├── slide_01.srt          #    per-slide whisper alignment
 │   └── …
 │
@@ -221,11 +224,13 @@ The two-tier cache means: edit slide 3's quoted text → `render` re-runs **only
 ## Where each subcommand lives in the chain
 
 ```
-preflight ─► reads:  workspace path, --with-subtitles flag,
+preflight ─► reads:  workspace path, subtitle decision (default on;
+                     --no-subtitles opts out) + --subtitle-source,
                      optionally TALK_SCRIPT.md (for clip probe)
-            writes: preflight.json (no artifacts)
+            writes: preflight.json (no artifacts; echoes withSubtitles +
+                    subtitleSource so the caller can confirm the decision)
             gate:   edge-tts + pdftoppm + ffmpeg + ffprobe + writable dir
-                    (+ whisper if --with-subtitles)
+                    (+ whisper ONLY if --subtitle-source whisper)
                     (+ every [VIDEO:…] clip exists + trim in bounds
                        if --talk-script given)
 
@@ -296,10 +301,11 @@ TALK_SCRIPT.md
 
 ```
 preflight    ┬─ missing edge-tts / pdftoppm / ffmpeg / ffprobe ─► exit 1 (hard)
-             ├─ missing whisper AND --with-subtitles requested ─► exit 1 (hard)
+             ├─ missing whisper AND --subtitle-source whisper  ─► exit 1 (hard)
              ├─ output dir not writable                        ─► exit 1 (hard)
              ├─ clip file missing / trim out of bounds         ─► exit 1 (hard)
-             └─ whisper missing WITHOUT --with-subtitles       ─► not checked
+             └─ whisper missing, default script source         ─► not checked
+                (the default subtitle path needs no whisper)
 
 parse        ┬─ malformed slide header                         ─► exit 1
              ├─ inverted trim range                            ─► exit 1
@@ -339,7 +345,7 @@ The only soft-fail in the entire skill is the subtitle path. Everything else fai
 | `slides/render/audio/slide_NN.meta.json` | `render` step 4 | cache check on rerun | atomically replaced |
 | `slides/render/segments/slide_NN.mp4` | `render` step 6 | `render` step 7 (concat) | overwritten every render |
 | `slides/render/concat.txt` | `render` step 7 | `ffmpeg -f concat` | regenerated, ephemeral |
-| `slides/render/srt/slide_NN.srt` | `render` step 8 (`--with-subtitles`) | `render` step 8 (merge) | regenerated on rerun |
+| `slides/render/srt/slide_NN.srt` | `render` step 8 (default; skipped with `--no-subtitles`) | `render` step 8 (merge) | regenerated on rerun |
 | `slides/render/subtitles.srt` | `render` step 8 (merged) | `render` step 8 (burn-in), manual proofreading | overwritten |
 | **`slides/render/presentation.mp4`** | **`render` step 7 + (optional) step 8** | `verify`, `/paper-video` | ⭐ **final deliverable** |
 | `slides/render/render.json` | `render` (end) | downstream orchestrator, drift report | overwritten |

@@ -492,6 +492,7 @@ ln -sf ../paper/figures/*.png slides/figures/ 2>/dev/null
 - No navigation symbols
 - Frame numbers in bottom-right
 - Clean white background (no gradients, no decorative elements)
+- **Keep the bottom ~8 % of every frame free of content.** If the deck is ever narrated into a video, burned-in captions occupy a band at the bottom edge, and anything sitting there gets covered. A frame number is fine (it is a narrow right-hand column, clear of centered caption text); a line of body text, a table's last row, or a figure caption is not. This costs nothing in a slides-only deck and saves a re-layout later.
 
 ### Phase 4: Compile Slides
 

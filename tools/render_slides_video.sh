@@ -21,7 +21,8 @@
 #   --no-cap             Disable the duration cap
 #   --rate <+N%|-N%>     edge-tts speed delta, e.g. +2% (keeps wording, helps fit the cap)
 #   --allow-over-cap     Render even if projected total exceeds --max-seconds
-#   --with-subtitles     Burn subtitles (default source: script)
+#   --with-subtitles     Burn subtitles (on by default; this flag re-asserts it)
+#   --no-subtitles       Ship without burned-in subtitles
 #   --subtitle-source <s>  script (default; exact narration text, no whisper) | whisper (ASR)
 #   --voice <name>       edge-tts voice (default: en-US-AvaNeural)
 #   --resolution <WxH>   Output resolution (default: 1920x1080)
@@ -65,7 +66,7 @@ SLIDES_DIR=""
 MAX_SECONDS="180"
 RATE=""
 ALLOW_OVER=0
-SUBTITLES=0
+SUBTITLES=1                # on by default (reviewers often watch muted); --no-subtitles opts out
 SUBTITLE_SOURCE="script"   # script = exact narration text timed from audio (no whisper); or "whisper"
 VOICE="en-US-AvaNeural"
 RESOLUTION="1920x1080"
@@ -87,6 +88,7 @@ while [ $# -gt 0 ]; do
     --rate)           RATE="${2:?--rate needs e.g. +2%}"; shift 2;;
     --allow-over-cap) ALLOW_OVER=1; shift;;
     --with-subtitles) SUBTITLES=1; shift;;
+    --no-subtitles)   SUBTITLES=0; shift;;
     --subtitle-source) SUBTITLE_SOURCE="${2:?--subtitle-source needs whisper|script}"; SUBTITLES=1; shift 2;;
     --voice)          VOICE="${2:?--voice needs a name}"; shift 2;;
     --resolution)     RESOLUTION="${2:?--resolution needs WxH}"; shift 2;;
@@ -181,7 +183,15 @@ args=( render
 [ -n "$MAX_SECONDS" ] && args+=( --max-seconds "$MAX_SECONDS" )
 [ -n "$RATE" ]        && args+=( --rate "$RATE" )
 [ "$ALLOW_OVER" = 1 ] && args+=( --allow-over-cap )
-[ "$SUBTITLES" = 1 ]  && args+=( --with-subtitles --subtitle-source "$SUBTITLE_SOURCE" )
+# Pass the subtitle decision EXPLICITLY in both directions. The helper's own
+# default is on, so omitting a flag here would silently re-enable subtitles on
+# --no-subtitles; and passing --with-subtitles keeps this wrapper correct even
+# against an older helper whose default was off.
+if [ "$SUBTITLES" = 1 ]; then
+  args+=( --with-subtitles --subtitle-source "$SUBTITLE_SOURCE" )
+else
+  args+=( --no-subtitles )
+fi
 
 # Silence the helper's stdout (JSON) but preserve stderr (warnings, errors).
 # This script formats output itself and reads details from $RENDER_JSON.
@@ -222,6 +232,22 @@ fi
 TOTAL=$(python3 -c "import json;print(json.load(open('$RENDER_JSON'))['totals']['actual_seconds'])" 2>/dev/null || echo '?')
 SIZE=$(python3 -c "import json;print(json.load(open('$RENDER_JSON'))['totals']['size_mb'])" 2>/dev/null || echo '?')
 echo "✅ rendered: $OUT_MP4  (${TOTAL}s, ${SIZE} MB)"
+
+# Subtitles are on by default and the burn is the one soft-fail step in the
+# pipeline: the MP4 still plays, so a skipped burn is invisible unless reported.
+python3 - "$RENDER_JSON" <<'PY' || true
+import json, sys
+try:
+    s = json.load(open(sys.argv[1])).get("subtitles") or {}
+except Exception:
+    sys.exit(0)
+if not s.get("requested"):
+    print("   subtitles: none (--no-subtitles)")
+elif s.get("skipped") or not s.get("available"):
+    print(f"   ⚠️  subtitles: SKIPPED ({s.get('skipReason') or 'unknown'}) — this is the no-subs cut")
+else:
+    print(f"   subtitles: burned in (source: {s.get('source')})")
+PY
 
 # ---- Verify -------------------------------------------------------------------
 if [ "$DO_VERIFY" = 1 ]; then

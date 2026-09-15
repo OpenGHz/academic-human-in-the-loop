@@ -74,7 +74,13 @@ ALLOWED_VIDEO_CODECS = {"h264", "hevc", "av1"}
 ALLOWED_AUDIO_CODECS = {"aac", "ac3", "opus"}
 REQUIRED_PIXEL_FORMAT = "yuv420p"
 
-# Subtitle style defaults (used when --with-subtitles is set).
+# Subtitles are ON by default: a narrated deck is usually a submission attachment
+# or a shared link, and reviewers commonly watch muted. `--no-subtitles` opts out.
+# The default source is `script` (exact narration text), so this costs no extra
+# dependency — whisper is only needed for `--subtitle-source whisper`.
+DEFAULT_WITH_SUBTITLES = True
+
+# Subtitle style defaults (used unless --no-subtitles).
 # Threaded through both whisper (output line shaping) and ffmpeg (libass force_style).
 DEFAULT_SUBTITLE_FONT = "DejaVuSans"               # CJK needs "Noto Sans CJK SC" or similar
 DEFAULT_SUBTITLE_SIZE = 46                         # TRUE pixels @ 1080p (we set PlayResY=height)
@@ -588,6 +594,19 @@ def _probe_clip(clip_path: Path) -> tuple[dict[str, Any] | None, str | None]:
     }, None
 
 
+# ── Subtitle opt-out resolution ───────────────────────────────────────────────
+
+def _resolve_with_subtitles(args: argparse.Namespace) -> bool:
+    """Subtitles default to DEFAULT_WITH_SUBTITLES; `--no-subtitles` opts out and
+    `--with-subtitles` opts in. Both flags are accepted so callers written against
+    either default keep working; argparse rejects passing both at once."""
+    if getattr(args, "no_subtitles", False):
+        return False
+    if getattr(args, "with_subtitles", False):
+        return True
+    return DEFAULT_WITH_SUBTITLES
+
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
 
 def cmd_preflight(args: argparse.Namespace) -> int:
@@ -598,7 +617,8 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     pdftoppm = shutil.which("pdftoppm")
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
-    whisper_info = _check_whisper() if args.with_subtitles else {"python_module": False, "cli_path": None, "available": False, "kind": None}
+    with_subtitles = _resolve_with_subtitles(args)
+    whisper_info = _check_whisper() if with_subtitles else {"python_module": False, "cli_path": None, "available": False, "kind": None}
 
     can_write = False
     try:
@@ -612,7 +632,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
 
     warnings: list[str] = []
     whisper_required_missing = (
-        bool(args.with_subtitles)
+        with_subtitles
         and (getattr(args, "subtitle_source", "script") == "whisper")
         and not whisper_info["available"]
     )
@@ -692,7 +712,8 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         "whisper": whisper_info,
         "outputDir": str(out_dir),
         "outputDirWritable": can_write,
-        "withSubtitles": bool(args.with_subtitles),
+        "withSubtitles": with_subtitles,
+        "subtitleSource": getattr(args, "subtitle_source", "script") if with_subtitles else None,
         "talkScript": str(Path(args.talk_script).resolve()) if args.talk_script else None,
         "clips": clips_info,
         "warnings": warnings,
@@ -712,8 +733,9 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         errors.append(f"output directory not writable: {out_dir}")
     if whisper_required_missing:
         errors.append(
-            "--with-subtitles was requested but whisper is not available "
-            "(pip install openai-whisper, or drop --with-subtitles)"
+            "--subtitle-source whisper was requested but whisper is not available "
+            "(pip install openai-whisper, or use --subtitle-source script, "
+            "or --no-subtitles)"
         )
     errors.extend(clip_errors)
     if errors:
@@ -1898,7 +1920,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     allow_over_cap = bool(getattr(args, "allow_over_cap", False))
     width, height = (int(x) for x in args.resolution.lower().split("x"))
     fps = int(args.fps)
-    with_subtitles = bool(args.with_subtitles)
+    with_subtitles = _resolve_with_subtitles(args)
     sub_font = getattr(args, "subtitle_font", None) or DEFAULT_SUBTITLE_FONT
     sub_size = int(getattr(args, "subtitle_size", None) or DEFAULT_SUBTITLE_SIZE)
     sub_position = getattr(args, "subtitle_position", None) or DEFAULT_SUBTITLE_POSITION
@@ -2400,7 +2422,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pre = sub.add_parser("preflight", help="Check edge-tts / pdftoppm / ffmpeg / ffprobe and writable output dir")
     pre.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
-    pre.add_argument("--with-subtitles", action="store_true", help="Also probe whisper availability")
+    pre_subs = pre.add_mutually_exclusive_group()
+    pre_subs.add_argument("--with-subtitles", action="store_true",
+                          help=f"Plan for subtitles (default: {'on' if DEFAULT_WITH_SUBTITLES else 'off'}); only probes whisper when --subtitle-source whisper")
+    pre_subs.add_argument("--no-subtitles", action="store_true",
+                          help="Opt out of subtitles (skips the whisper probe entirely)")
     pre.add_argument("--subtitle-source", choices=("script", "whisper"), default="script",
                      help="Subtitle source: 'script' (default; cues from TALK_SCRIPT.md narration, no ASR, spelling-perfect) or 'whisper' (ASR, word-aligned but mis-transcribes domain jargon)")
     pre.add_argument("--talk-script", default=None, help="Optional TALK_SCRIPT.md path; when given, probe any [VIDEO: ...] clip references")
@@ -2428,7 +2454,11 @@ def _build_parser() -> argparse.ArgumentParser:
     ren.add_argument("--resolution", default=DEFAULT_RESOLUTION, help=f"WxH (default: {DEFAULT_RESOLUTION})")
     ren.add_argument("--fps", type=int, default=DEFAULT_FPS, help=f"Output fps (default: {DEFAULT_FPS})")
     ren.add_argument("--workspace", default=".", help="Project workspace root (default: cwd)")
-    ren.add_argument("--with-subtitles", action="store_true", help="Burn subtitles (source per --subtitle-source)")
+    ren_subs = ren.add_mutually_exclusive_group()
+    ren_subs.add_argument("--with-subtitles", action="store_true",
+                          help=f"Burn subtitles, source per --subtitle-source (default: {'on' if DEFAULT_WITH_SUBTITLES else 'off'})")
+    ren_subs.add_argument("--no-subtitles", action="store_true",
+                          help="Ship the narrated MP4 without burned-in subtitles")
     ren.add_argument("--subtitle-source", choices=("script", "whisper"), default="script",
                      help="script (default) = exact narration text from TALK_SCRIPT.md timed across each slide's audio (no whisper, jargon spelled correctly); whisper = ASR word-alignment (needs whisper; mis-transcribes domain terms)")
     ren.add_argument("--subtitle-text-color", default=None, help="Hex RGB for subtitle text (default white)")
