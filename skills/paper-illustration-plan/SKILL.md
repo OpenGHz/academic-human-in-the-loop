@@ -1,7 +1,7 @@
 ---
 name: paper-illustration-plan
 description: "Read a paper PDF, method note, or project brief and draft ready-to-render prompts for both a teaser (Figure 1) and an architecture/pipeline figure, with shared terminology and palette. Iterates via dialogue with the user, then hands off to /paper-illustration-image2 for rendering. Use when user says '生成论文配图描述', 'plan paper figures', 'draft figure prompts', 'plan teaser and architecture', 'two-figure plan', 'figure plan for paper'."
-argument-hint: [paper-pdf-or-method-file]
+argument-hint: "[paper-pdf-or-method-file]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
