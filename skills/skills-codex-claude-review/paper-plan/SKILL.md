@@ -19,8 +19,8 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `claude-review`** — Claude reviewer invoked through the local `claude-review` MCP bridge. Set `CLAUDE_REVIEW_MODEL` if you need a specific Claude model override.
-- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences).
-- **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise. **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; IEEE conference ≈ 5-8 pages total (including references).
+- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (6 pages + 2 paid, double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
+- **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; IEEE conference ≈ 5-8 pages total (including references).
 
 ## Inputs
 
@@ -39,7 +39,7 @@ If none exist, ask the user to describe the paper's contribution in 3-5 sentence
 Keep the existing workflow and outputs, but use the shared references below to improve the quality of the story and outline:
 
 - Read `../shared-references/writing-principles.md` when framing the Abstract, Introduction, Related Work, or hero figure
-- Read `../shared-references/venue-checklists.md` before freezing the outline for a specific venue
+- Read `../shared-references/venue-checklists.md` before freezing the outline for a specific venue. **When `TARGET_VENUE = IEEE_CONF` AND the narrative/topic mentions IROS, ICRA, robot, manipulation, locomotion, navigation, teleoperation, sim2real, or embodied agent**, also apply the `IROS / ICRA preferences` sub-section: fold limitations + future work into Conclusion (no standalone `\section{Limitations}`), fold results into Experiments as subsections (no standalone `\section{Results}`), add the `\captionsetup[table]{...normalfont...}` override so table captions render in sentence case (IEEEtran's `\scshape` default renders as ALL-CAPS and does NOT match IROS/ICRA proceedings), plan a real-robot / hardware experiment story, and plan a video supplementary
 - Load these references only when they help; they are support material, not a new workflow phase
 
 ## Workflow

@@ -2,7 +2,7 @@
 name: paper-video
 description: "Produce a paper-submission demonstration video (CoRL / ICRA / RSS / NeurIPS-supp / project-page) under hard size + duration gates. Default target: H.264 MP4, ≤180 s, ≤250 MB (CoRL ceiling). Claude plans narration + shot list, ffmpeg assembles raw clips, helper enforces gates, optional zip-package emits the full supplementary bundle. Use when user says \"做 supplementary video\", \"做投稿 demo 视频\", \"CoRL video\", \"demo video\", \"supp 视频\", or wants the recorded experiments turned into a submission-ready clip."
 argument-hint: "[paper-dir-or-raw-clips] [— mode: submission|showcase|teaser] [— venue: CORL|ICRA|RSS|NEURIPS|GENERIC] [— max-mb: N] [— max-seconds: N] [— with-subtitles] [— with-narration]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
 # Paper Video: Submission-Ready Demonstration Video

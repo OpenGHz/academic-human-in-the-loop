@@ -2,7 +2,7 @@
 name: reference-backfill
 description: "Diagnose-then-fill workflow for adding missing citations to a paper when MIN_REFERENCES floor is unmet. Use whenever the user hits `GAP_REFERENCES`, `under_min_references`, `reference floor`, says \"补引用\", \"引用不够\", \"reference count is low\", \"need more citations\", \"paper-write blocked by reference floor\", or any layer of the paper pipeline (paper-plan / paper-write / citation-audit / auto-paper-improvement-loop) refuses to advance because the unique cite-key count fell below the floor. Drives the full loop: locate the structural gap, pick the right search backend per topic, add real-context citations (not filler), and re-verify the floor — instead of letting Claude just dump random papers into the bib."
 argument-hint: "[paper-dir] [— target: <N>] [— focus: <section>]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Skill, Agent
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Skill
 ---
 
 # Reference Backfill: Close the Citation Floor Gap
