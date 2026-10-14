@@ -26,7 +26,7 @@ If none of these exist, ask the user for a one-paragraph description of the pape
 
 ## Venue Resolution
 
-Priority: `— venue:` CLI arg > input document's `## Target Venue` section > `DEFAULT_VENUE`. Parse case-insensitively; strip year suffix (`"ICRA 2026"` → `IEEE_CONF` with robotics flag; `"CoRL 2026"` → `CORL`).
+Priority: `— venue:` CLI arg > input document's `## Target Venue` section > `DEFAULT_VENUE`. Parse case-insensitively; strip year suffix (`"ICRA 2026"` → `IEEE_CONF` with robotics flag; `"CoRL 2026"` → `CORL`). **RA-L exception:** `paper-plan` and `paper-write` draft RA-L papers as `IEEE_CONF`, but **do not** use `ICRA_CONTROLLED` for `RA-L` / `RAL`. RA-L wants 2–5 keywords beneath the abstract, and the first two must come from RA-L's own predefined set, which is selected in PaperPlaza. Treat RA-L as the `IEEE_JOURNAL` case under "When NOT to Use": point the user to the RA-L keyword list in PaperPlaza, and never apply the ICRA 3-tier rule.
 
 Set `VOCABULARY_MODE` from the resolved venue:
 

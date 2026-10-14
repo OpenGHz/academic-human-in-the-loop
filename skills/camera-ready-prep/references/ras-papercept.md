@@ -26,7 +26,7 @@
 ## 2. 页数上限（含参考文献）
 
 - **ICRA / IROS**：正文通常 **6 页**，允许 **+2 页** 付费加页，**硬上限 8 页**（含参考文献与附录）。
-- **RA-L**：通常 **8 页**（含参考文献）。
+- **RA-L**：**6 页**免费，最多 **+2 页**（每页 $175），**硬上限 8 页**（超过 8 页 PaperPlaza 不收）。官方原文是 "These page limits include everything needed for publication, e.g., figures, tables, and any appendices"，图、表、附录和参考文献都算在页数内。详见 `shared-references/venue-checklists.md` 中的 RA-L 一节。
 - 加入大段内容（如新段落 + 公式）易顶破页数；若超限，向用户报告并给出具体删减建议，或把新增内容用 `% ` 注释保留待定，不要静默截断。
 - 具体数字按年份/版本可能调整，提交前核对当年 CFP。
 
@@ -40,7 +40,7 @@
 
 ## 4. 评审模式与 camera-ready 去匿名
 
-- 投稿初审通常**匿名**（作者、单位、致谢隐去；常以注释形式保留在源码中）。
+- RA-L、ICRA、IROS 投稿初审都是**双盲**（RAS 双盲规则，期刊自 2025-01-01 起）。审稿稿里不能出现作者、单位、致谢、基金和能暴露身份的链接；这些信息常以注释形式保留在源码中。
 - **Camera-ready 去匿名**：恢复真实作者/单位/邮箱；启用致谢与基金声明；按 eCF 加 IEEE 版权脚注。
 
 ## 5. 查重（CrossCheck / iThenticate）
@@ -53,3 +53,19 @@
 - IEEE 版权声明（按 eCopyright 流程产生的文字）。
 - 视频附件（如有）：分辨率/时长/编码按当年要求。
 - 最终 PDF 通过 PaperCept 的 PDF 检查/IEEE PDF eXpress（视会议）。
+
+## 7. RA-L 录用后（与 IROS/ICRA 不同的地方）
+
+核对日期 2026-10-14，来源是 RA-L Final Submission Checklist 和 Information for Authors：
+
+- **换模板**：投稿时用 RAS 会议格式（`ieeeconf`）；录用后改为 `\documentclass[letterpaper, 10 pt, journal, twoside]{ieeetran}`。RA-L 的 Information for Authors 页面链接了官方样例 `RA-L-Template-YY.tex` / `.pdf`，建议从它起步，不要从 `ieee_journal.tex` 起步。
+- **补上录用后才有的内容**：
+  - 页眉：`IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MONTH, YEAR`。
+  - 首页脚注："Manuscript received: ...; Revised: ...; Accepted: ..."，"This paper was recommended for publication by Editor ... upon evaluation of the Associate Editor and Reviewers' comments."，然后是基金、单位与邮箱，以及 "Digital Object Identifier (DOI): see top of this page."
+- **换格式后重新数页数**：journal 版式和 `ieeeconf` 不同，内容会重新排版，8 页上限要在终稿格式下依然满足。
+- **不放作者简介和照片**：Letters 和 Transactions 不同，没有 `IEEEbiography`。
+- **恢复作者信息**：恢复作者和单位、IEEE 会员等级、致谢和基金。按双盲规则，这些在审稿阶段都必须隐去。
+- **文件大小**：PDF ≤ 5 MB，源文件 zip ≤ 10 MB，多媒体 zip ≤ 50 MB（每篇只能有一个视频）。
+- **版权与期限**：先完成 IEEE 电子版权转让，再提交终稿；终稿在录用通知后 **14 天内**提交。第 7、8 页按每页 $175 收费。
+- **arXiv**：录用后在预印本上加 IEEE 版权声明；正式发表后，换成 DOI 引用，或换成录用版加版权声明和 Xplore 链接。
+- **到会议宣讲**：录用后通过 PaperPlaza 转到 ICRA、IROS 或 CASE。论文只出现在 RA-L，不进会议论文集。ICRA 2027 的转入截止日是 2026-12-31。
