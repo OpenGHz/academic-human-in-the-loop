@@ -99,7 +99,7 @@ Planning implications:
 
 - IEEE journals are typically **not anonymous** — include full author names, affiliations, and IEEE membership status from submission.
 - Use `\documentclass[journal]{IEEEtran}` with `\cite{}` (numeric citations via `cite` package). Do NOT use `natbib`.
-- References **count toward the page limit**. IEEE Transactions typically allow 12-14 pages total; IEEE Letters (e.g., WCL, CL, SPL) typically allow 4-5 pages total. Check the specific journal's author guidelines.
+- References **count toward the page limit**. IEEE Transactions typically allow 12-14 pages total; IEEE Letters (e.g., WCL, CL, SPL) typically allow 4-5 pages total. Check the specific journal's author guidelines. **RA-L differs:** it allows 6 + 2 pages, is reviewed double-anonymous, and is first submitted in conference format. See the RA-L section below.
 - Include an `\begin{IEEEkeywords}` block immediately after the abstract.
 - The bibliography style must be `IEEEtran.bst` (produces numeric `[1]` style citations).
 - IEEE journals may require a biosketch (`\begin{IEEEbiography}`) for each author in the camera-ready version.
@@ -118,7 +118,7 @@ Final-check implications:
 
 Planning implications:
 
-- Most IEEE conferences are **not anonymous** (except some like IEEE S&P). Include full author information.
+- Most IEEE conferences are **not anonymous** (except some like IEEE S&P, and the RAS conferences ICRA and IROS — see IROS / ICRA below). Include full author information.
 - Use `\documentclass[conference]{IEEEtran}` with `\cite{}` (numeric citations).
 - References **count toward the page limit**. Typical limit: 5-6 pages (e.g., ICC, GLOBECOM), some allow up to 8 pages (e.g., INFOCOM). Extra pages may incur additional charges.
 - Include `\begin{IEEEkeywords}` after the abstract.
@@ -166,7 +166,65 @@ IROS and ICRA are submitted through PaperPlaza, whose automated check enforces a
 - Multimedia attachments (video) are encouraged and submitted via PaperPlaza alongside the PDF.
 - **Keywords must be picked from the IEEE RAS controlled vocabulary.** PaperPlaza requires authors to select from a fixed keyword tree (~300 terms across 30 categories). The `\begin{IEEEkeywords}` block in the PDF should mirror the PaperPlaza selection so the area chair routes the paper correctly. See [`icra-keywords.md`](icra-keywords.md) for the full vocabulary and selection heuristics; run `/pick-keywords` to auto-select 3–5 terms from an abstract.
 - Hardware experiments, real-robot validation, and a clear problem-setup figure are strongly weighted by reviewers.
+- **ICRA and IROS are double-anonymous.** The ICRA 2027 CFP says: "ICRA applies the double anonymous review process as defined by RAS", and IROS uses double-anonymous review as well. Follow the RAS rules listed in the RA-L section below: no names or affiliations, no acknowledgments or funding until acceptance, neutral self-citations, and no identifying links, logos or faces.
 - **AI-content disclosure in Acknowledgments (ICRA policy).** If AI systems generated any text, figures, images, or code in the paper, disclose it in the `\section*{Acknowledgments}` (or `\section*{Acknowledgment}`) section. Grammar/editing polish by AI does NOT require disclosure — only *generated content*. Example wording: "Portions of the [text / figures / code] were generated with the assistance of [system name]; all content was reviewed and verified by the authors." Do NOT bury the disclosure in the appendix, a footnote, or a paragraph before the acknowledgments — reviewers/PC look for it inside the acknowledgments section specifically. The acknowledgments section itself does not count against the page limit at IROS/ICRA (it sits between the last content section and references).
+
+## RA-L (IEEE Robotics and Automation Letters)
+
+Checked 2026-10-14 against the RAS pages: RA-L *Information for Authors*, *FAQ* and *Final Submission Checklist*; *Rules for the Double-Anonymous Review Process*; *Guidelines for Generative AI Usage*; and the ICRA 2027 Call for Papers. RAS revises these, so re-check them before submitting.
+
+RA-L is a journal, but the version you submit for review is formatted as a RAS **conference** manuscript. The generic "IEEE Journal" section above does not apply until after acceptance.
+
+Planning implications:
+
+- **Two formats for one paper.** For the initial submission, use `\documentclass[letterpaper, 10 pt, conference]{ieeeconf}`. RA-L says: "For compatibility reasons, the first submission to the Letters will be formatted as a RAS conference manuscript." In ARIS, start from `ieee_conference.tex` (`IEEE_CONF`), **not** `ieee_journal.tex`. That template is `IEEEtran` with overrides that reproduce `ieeeconf`'s page geometry (see IROS / ICRA above), and RA-L is uploaded through the same PaperPlaza system (`ras.papercept.net/journals/ral`). PaperPlaza checks the uploaded PDF, not which class produced it. If you want no risk at all, use the official `ieeeconf.zip` linked from RA-L's page. Only after acceptance do you switch to `\documentclass[letterpaper, 10 pt, journal, twoside]{ieeetran}` (see Camera-ready below).
+- **Page budget: 6 pages, everything included.** RA-L says: "Letters are six pages long in two-column IEEE format ... with up to two extra pages allowed at a charge ($175 per extra page)". It also says: "These page limits include everything needed for publication, e.g., figures, tables, and any appendices", so references are not exempt. PaperPlaza rejects files longer than 8 pages. Plan the paper for 6 pages, and use pages 7–8 only if the authors have agreed to pay for them. This budget differs from the 4–5 pages typical of communications Letters mentioned in the IEEE Journal section.
+- **Double-anonymous review.** RAS has applied this to its fully sponsored journals since 2025-01-01, and a violation can lead to a desk rejection. It overrides "IEEE journals are typically not anonymous" above, so set `ANONYMOUS = true` for RA-L until acceptance. Rules:
+  - Do not include a cover page. Leave space for the author byline, but leave it empty.
+  - Do not put names or affiliations anywhere, including the supplementary material and the PDF metadata. Watch out for `\hypersetup{pdfauthor=...}`.
+  - Include acknowledgments to people or funding agencies only after acceptance.
+  - Cite your own work in neutral wording ("In previous work [x]"), never "In our earlier work".
+  - Remove lab names and logos from figures and videos, and blur people's faces.
+  - Hide individual robot names unless the robot is widely known.
+  - Do not link to anything that reveals identity, such as YouTube, GitHub or lab pages.
+  - Posting on arXiv is allowed. Reviewers are told not to search for it.
+- **Keywords.** Put 2–5 keywords just beneath the abstract. The first two must come from the predefined RA-L set, which you select in PaperPlaza. Do not assume the RA-L set matches the conference list in [`icra-keywords.md`](icra-keywords.md). The ICRA 2027 rule of exactly 3 keywords, one per tier, does not apply to RA-L.
+- **Only videos as extra material.** The RA-L FAQ says: "Multimedia materials (i.e. videos) are the only extra material allowed." Do not submit a supplementary PDF, and do not plan an appendix that would push the paper past 8 pages. Each submission may include only one video, packed in a single zip archive of at most 50 MB. The video falls under the anonymity rules too. You may post datasets online and cite them by URL, as long as the URL does not reveal identity during review.
+- **No deadlines; presenting at a conference is a transfer after acceptance.** RA-L has no submission deadlines. It guarantees a final decision within 6 months and averages 4. The FAQ advises submitting at least 4 months before a conference's transfer deadline. For ICRA 2027, PaperPlaza transfers RA-L papers directly, and the transfer deadline is **31 December 2026**. Transferred papers appear in RA-L on Xplore, not in the conference proceedings. RAS marks the older "RA-L + conference option" scheme, where a paper rejected by RA-L could still become a conference paper, as outdated after IROS 2022. Do not plan around it.
+- **Review timeline.** The first decision comes within about 3 months, and a revision is due within 30 days of it. Submit only a stable version: RA-L says "Incremental updates are typically not allowed." When resubmitting a rejected paper, give the previous submission number in PaperPlaza. Also upload one PDF made of the authors' response followed by the revised paper with the changes highlighted.
+- **Extending a conference paper.** RA-L may accept an extension of an IEEE conference paper under the "evolutionary paradigm". It notes, however, that this is "difficult" for Letters, because a Letter is about as long as a conference paper.
+- **arXiv statement.** The preprint must carry: "This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible." After acceptance, add the IEEE copyright notice. After publication, replace the preprint with the DOI citation, or with the accepted version plus the copyright notice and a link to Xplore.
+- **Generative AI (RAS policy).**
+  - Disclose AI-generated text, figures, images or code in the acknowledgments section. Using AI for editing and grammar does not need disclosure.
+  - AI-generated illustrative figures must name the tool and give the prompt **in the caption**.
+  - AI cannot be listed as an author.
+  - These rules collide with the rule above that acknowledgments appear only after acceptance, and neither RAS page says how to resolve that at review time. Our working reading, which is not stated by RAS: at submission, keep an `Acknowledgment` section that contains only the AI disclosure, and add people and funding after acceptance.
+
+Final-check implications (initial submission):
+
+- The document class is `ieeeconf`, or `IEEEtran[conference]` with the margin overrides. The paper size is US Letter, and the bbox margin check in `paper-compile` passes.
+- The paper is at most 6 pages including references, or at most 8 if the authors have agreed to pay for the extra pages.
+- Nothing identifies the authors:
+  - the byline is empty;
+  - `pdfinfo main.pdf` shows no Author field;
+  - the acknowledgments contain no people or funding, and no grant numbers appear in footnotes;
+  - self-citations use neutral wording;
+  - no GitHub, YouTube or lab URLs appear;
+  - figures and the video have no logos, and faces are blurred.
+- 2–5 keywords appear beneath the abstract, and the first two are from the RA-L set.
+- All fonts are embedded and none are Type 3 (see `camera-ready-prep/references/ras-papercept.md`).
+
+Camera-ready (after acceptance):
+
+- Reformat to `\documentclass[letterpaper, 10 pt, journal, twoside]{ieeetran}`. RA-L's Information for Authors links an official sample (`RA-L-Template-YY.tex` / `.pdf`); start from it rather than from `ieee_journal.tex`.
+- Fill in the parts that only exist after acceptance:
+  - the running header `IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MONTH, YEAR`;
+  - a first-page footnote containing "Manuscript received: ...; Revised: ...; Accepted: ..." and "This paper was recommended for publication by Editor ... upon evaluation of the Associate Editor and Reviewers' comments.", followed by the funding, the affiliations and e-mails, and "Digital Object Identifier (DOI): see top of this page."
+- Re-check the page count after converting. The journal class lays text out differently from `ieeeconf`, so the 8-page cap must hold in the final format, not only in the submitted one.
+- **Do not include author biographies or photos.** Letters exclude them, unlike Transactions, so drop any `IEEEbiography` blocks.
+- Restore the authors and their IEEE membership status, the acknowledgments and the funding.
+- Size limits: the PDF must be at most 5 MB, the zipped sources at most 10 MB, and the zipped multimedia at most 50 MB.
+- Complete the IEEE electronic copyright form before the final submission. Final files are due within **14 days** of acceptance, and pages 7–8 are billed at $175 each.
 
 ## Minimal Submission Checklist
 
