@@ -2,7 +2,7 @@
 name: figures-prep
 description: "Prepare the `figures/` directory needed by `/paper-writing` by extracting structured JSON data from sources the NARRATIVE_REPORT.md explicitly cites. The Figures section of NARRATIVE_REPORT.md is the authoritative spec — this skill never modifies the narrative, only follows its references. Hard-blocks on missing data so downstream `/paper-figure` never silently skips a figure. Use when user says \"准备 figures 数据\", \"figures prep\", \"抽取实验数据\", \"figure data extraction\", \"从 narrative 抽 figures\", or has a NARRATIVE_REPORT.md but no figures/ yet."
 argument-hint: "[narrative-report-path] [— gate: strict|advisory]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
 # Figures Prep: NARRATIVE → figures/
@@ -146,6 +146,8 @@ Hand the inventory + sources to Codex and ask for a merge plan:
 
 ```
 mcp__codex__codex:
+  model: gpt-5.5
+  config: {"model_reasoning_effort": "xhigh"}
   prompt: |
     Given these figure inventories and resolved sources, propose a merge plan.
 
@@ -332,7 +334,7 @@ Each `mcp__codex__codex` call (Phase 1 parse, Phase 2 source-resolution disambig
 
 ## Integration with narrative-bridge
 
-`/narrative-bridge` invokes this skill in its Phase 1.5 (after NARRATIVE is synthesized or confirmed unchanged) via the `Skill` tool. The contract:
+`/narrative-bridge` invokes this skill in its Phase 6 (after NARRATIVE is synthesized or confirmed unchanged) via the `Skill` tool. The contract:
 
 - `/figures-prep` exits zero iff `figures/MANIFEST.md` was written cleanly
 - On non-zero exit, `/narrative-bridge` surfaces `GATE_REPORT.md` to the user and exits without printing "ready for /paper-writing"

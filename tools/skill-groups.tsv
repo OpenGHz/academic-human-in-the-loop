@@ -82,17 +82,24 @@ skill	paper-plan	paper-core	-	论文大纲生成
 skill	paper-write	paper-core	-	按大纲逐节写 LaTeX
 skill	paper-compile	paper-core	-	LaTeX 编译修错出 PDF
 skill	paper-figure	paper-core	-	从实验结果出论文图表
+skill	figures-prep	paper-core	-	按 NARRATIVE_REPORT 抽取图表数据(figures/*.json)
+skill	narrative-bridge	paper-core	figures-prep	W2.5:review 结果→NARRATIVE_REPORT
 skill	citation-audit	paper-core	render-html	引用真实性/正确性核查
 skill	citation-crosscheck	paper-core	-	双盲 bib-vs-web 字段级交叉核对（作者顺序/年份/venue/DOI）
 skill	paper-claim-audit	paper-core	render-html	论文数字与原始结果核对
 skill	integrity-forensics	paper-core	-	投稿前诚信取证扫描
 skill	auto-paper-improvement-loop	paper-core	proof-checker,paper-claim-audit,kill-argument	论文 review→润色→重编译循环
+skill	paper-writing-polish-loop	paper-core	-	写作润色循环(全局→逐节,Claude×Codex)
+skill	reference-backfill	paper-core	research-lit	补齐缺失引用(本地优先,网络补漏)
+skill	title-decider	paper-core	-	论文标题讨论与定稿
+skill	pick-keywords	paper-core	-	按 venue 选论文关键词
 skill	writing-systems-papers	paper-core	-	系统方向论文写作要领
 skill	specification-writing	paper-core	embodiment-description,figure-description	技术规格文档撰写
 skill	overleaf-sync	paper-core	-	本地↔Overleaf 双向同步
 skill	render-html	paper-core	-	MD/JSON 工件渲染成 HTML 报告
 skill	paper-illustration	paper-visuals	-	AI 生成论文插图(Gemini)
 skill	paper-illustration-image2	paper-visuals	-	AI 插图备选(Codex 原生画图)
+skill	paper-illustration-plan	paper-visuals	-	规划 teaser/架构图的出图 prompt
 skill	figure-spec	paper-visuals	-	确定性矢量架构/流程图(SVG)
 skill	mermaid-diagram	paper-visuals	-	Mermaid 流程/时序/类图
 skill	pixel-art	paper-visuals	-	像素画生成
@@ -101,8 +108,12 @@ skill	paper-poster-html	paper-visuals	-	学术海报生成(HTML 版)
 skill	paper-slides	paper-visuals	-	会议幻灯(beamer→PDF+PPTX)
 skill	paper-talk	paper-visuals	paper-slides,slides-polish	演讲稿+幻灯一体
 skill	slides-polish	paper-visuals	-	幻灯片打磨
+skill	paper-slides-render	paper-visuals	-	幻灯+讲稿合成带配音的 MP4
+skill	paper-video	paper-visuals	-	投稿演示视频打包与合规检查
 skill	rebuttal	submission	render-html	W4:审稿意见解析与安全回复
 skill	resubmit-pipeline	submission	auto-paper-improvement-loop,proof-checker,paper-claim-audit,citation-audit,kill-argument,paper-compile,integrity-forensics	被拒后重投全流程
+skill	camera-ready-prep	submission	-	录用后终稿准备(审稿意见/合规/arXiv 包)
+skill	arxiv-metadata	submission	-	生成 arXiv 提交元数据
 skill	grant-proposal	submission	research-lit,novelty-check,research-review	基金申请书(NSFC/NSF/科研費等)
 skill	patent-pipeline	patent	prior-art-search,patent-novelty-check,invention-structuring,claims-drafting,specification-writing,patent-review,jurisdiction-format	专利撰写全流程
 skill	invention-structuring	patent	-	粗 idea 结构化成发明披露

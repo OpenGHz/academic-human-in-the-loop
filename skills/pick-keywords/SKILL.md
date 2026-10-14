@@ -2,7 +2,7 @@
 name: pick-keywords
 description: "Suggest paper keywords for the `\\keywords{}` / `\\begin{IEEEkeywords}` block. Venue-aware: for `IEEE_CONF` targeting IROS/ICRA it picks 3–5 terms from the IEEE RAS controlled vocabulary (`shared-references/icra-keywords.md`); for CoRL/NeurIPS/ICLR/CVPR it proposes free-form terms that match the paper's actual contribution. Use when user says \"选关键词\", \"pick keywords\", \"IEEEkeywords\", \"suggest keywords\", or is filling in the keyword block during paper-write."
 argument-hint: "[abstract-or-narrative-path] [— venue: <venue>]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
 # Pick Keywords: Venue-Aware Keyword Selection

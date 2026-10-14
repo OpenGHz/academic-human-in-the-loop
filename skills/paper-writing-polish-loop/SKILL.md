@@ -82,6 +82,10 @@ If `skills/embodied-ai-paper-writer/SKILL.md` cannot be resolved (e.g., the subm
 
 ```bash
 PAPER_DIR="$1"  # parsed from $ARGUMENTS
+# Make it absolute now: the craft-manual resolver below cds to the repo root,
+# and every later step reads "$PAPER_DIR/..." from there.
+[ -n "$PAPER_DIR" ] && PAPER_DIR=$(cd "$PAPER_DIR" 2>/dev/null && pwd) \
+  || { echo "ERROR: paper directory not found: '$1'" >&2; exit 1; }
 
 # Parse --- editor: <claude|codex> --- (default claude).
 # Accepts: "— editor: codex", "—editor:codex", "--editor codex" (case-insensitive value).
@@ -112,7 +116,8 @@ EAPW=".aris/skills/embodied-ai-paper-writer/SKILL.md"
   echo "       or run: git submodule update --init skills/embodied-ai-paper-writer" >&2
   exit 1
 }
-EAPW_DIR=$(dirname "$EAPW")           # e.g. /home/.../skills/embodied-ai-paper-writer
+EAPW_DIR=$(cd "$(dirname "$EAPW")" && pwd)   # absolute, e.g. /home/.../skills/embodied-ai-paper-writer
+EAPW="$EAPW_DIR/SKILL.md"
 EAPW_REFS="$EAPW_DIR/references"      # playbook directory — pass to both Claude and Codex
 echo "Craft manual resolved: $EAPW"
 ```
@@ -169,7 +174,7 @@ Also check for `\title{...}` in `main.tex` — if present, the title is in scope
 
 No suggestion-count parameter — both sides are instructed to find every craft issue within `<FOCUS>`.
 
-**Mechanism: spawn an Agent with `run_in_background: true` that wraps the `mcp__codex__codex` call.** The Agent returns Codex's JSON output to a file. Claude continues to its own analysis immediately. When the Agent completes, Claude is notified automatically (do not poll, do not sleep) and proceeds to overlap detection.
+**Mechanism: spawn an Agent with `run_in_background: true` that wraps the `mcp__codex__codex` call.** This is the one reason the skill grants `Agent` (see [`fan-out-pattern.md`](../shared-references/fan-out-pattern.md) for the grant policy). The Agent is transport only: it relays Codex's output verbatim and never drafts or judges suggestions itself. The Agent returns Codex's JSON output to a file. Claude continues to its own analysis immediately. When the Agent completes, Claude is notified automatically (do not poll, do not sleep) and proceeds to overlap detection.
 
 In the same message, issue both:
 

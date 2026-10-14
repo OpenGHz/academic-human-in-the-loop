@@ -1,7 +1,7 @@
 ---
 name: title-decider
 description: Interactively decide and lock a paper's title through discussion, then persist the decision so downstream skills inherit it. Use whenever the user wants to choose, propose, critique, compare, refine, or finalize a paper/manuscript title, or name the method/framework — triggers include "确定标题", "定标题", "标题怎么取", "取个标题", "起个名字", "方法叫什么", "decide title", "finalize title", "lock the title", "paper title", "title suggestions", "name the paper", "name my method/framework", "which title is better". Use proactively when the user is weighing title candidates even if they don't say the word "title". NOT for section headings, figure captions, slide titles, or naming non-paper artifacts.
-argument-hint: [optional seed title or positioning note]
+argument-hint: "[optional seed title or positioning note]"
 allowed-tools: Bash(*), WebSearch, WebFetch, Read, Glob, Grep, Edit, Write, AskUserQuestion
 ---
 

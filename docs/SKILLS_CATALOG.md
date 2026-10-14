@@ -1,6 +1,6 @@
 # ARIS Skills Catalog
 
-Every skill that ships with ARIS, grouped by role. **85 skills** as of the
+Every skill that ships with ARIS, grouped by role. **96 skills** as of the
 latest update; new skills land via PR and get added to the table below.
 
 - Each `Skill` link goes to the canonical `SKILL.md` (the LLM-readable spec).
@@ -121,14 +121,21 @@ LaTeX generation, figure / diagram production, prose polishing.
 |---|---|---|
 | [`/paper-plan`](../skills/paper-plan/SKILL.md) | Generate a structured paper outline from review conclusions + experiment results — claims-evidence matrix, section structure, figure plan, citation scaffolding | None |
 | [`/paper-write`](../skills/paper-write/SKILL.md) | Section-by-section LaTeX generation (ICLR / NeurIPS / ICML / IEEE / ACL / AAAI / CVPR / ACM MM). Anti-hallucination BibTeX via DBLP / CrossRef | None |
+| [`/narrative-bridge`](../skills/narrative-bridge/SKILL.md) | Workflow 2.5 bridge: synthesizes `NARRATIVE_REPORT.md` from the auto-review loop's outputs (`AUTO_REVIEW.md`, `CLAIMS_FROM_RESULTS.md`, `EXPERIMENT_LOG.md`), then delegates to `/figures-prep` so `/paper-writing` has both inputs | Codex MCP |
+| [`/title-decider`](../skills/title-decider/SKILL.md) | Interactively decide and lock the paper title (and method name) through discussion; checks coined names against the web and persists the decision for downstream skills | None |
+| [`/pick-keywords`](../skills/pick-keywords/SKILL.md) | Venue-aware keywords for `\keywords{}` / `IEEEkeywords` — IEEE RAS controlled vocabulary for ICRA / IROS (ICRA 2027 one-per-tier rule), free-form for CoRL / ML venues | None |
+| [`/reference-backfill`](../skills/reference-backfill/SKILL.md) | Diagnose-then-fill missing citations when the `MIN_REFERENCES` floor is unmet — local-first search (Zotero / Obsidian / PDFs) via `/research-lit`, web only for the gaps, verified BibTeX | None |
 | [`/paper-figure`](../skills/paper-figure/SKILL.md) | Publication-quality matplotlib / seaborn plots + LaTeX comparison tables from experiment results | matplotlib / seaborn |
+| [`/figures-prep`](../skills/figures-prep/SKILL.md) | Extract the structured `figures/*.json` data that `NARRATIVE_REPORT.md` cites, with source resolution and merge planning; hard-blocks on missing data so `/paper-figure` never silently skips a figure | Codex MCP |
 | [`/figure-spec`](../skills/figure-spec/SKILL.md) | Deterministic JSON → SVG renderer for architecture / workflow / pipeline / audit-cascade diagrams. Shape-aware edge clipping, self-loops, CJK width estimation | None |
 | [`/paper-illustration`](../skills/paper-illustration/SKILL.md) | AI architecture + method illustrations via Gemini image generation, with Claude-supervised iterative refinement | `GEMINI_API_KEY` |
 | [`/paper-illustration-image2`](../skills/paper-illustration-image2/SKILL.md) | Codex-native image generation alternative — uses ChatGPT Plus / Pro quota via local Codex app-server bridge (no Gemini key) | Codex app-server + `codex-image2` MCP bridge |
+| [`/paper-illustration-plan`](../skills/paper-illustration-plan/SKILL.md) | Draft ready-to-render prompts for the teaser (Figure 1) and the architecture figure from a paper PDF or method note, with shared terms and palette; hands off to `/paper-illustration-image2` | Codex MCP |
 | [`/mermaid-diagram`](../skills/mermaid-diagram/SKILL.md) | Generate Mermaid diagrams from requirements — flowcharts, sequence, class, ER, Gantt, with syntax verification | None |
 | [`/pixel-art`](../skills/pixel-art/SKILL.md) | Generate pixel-art SVG illustrations for READMEs, docs, slides | None |
 | [`/paper-compile`](../skills/paper-compile/SKILL.md) | Compile LaTeX paper to PDF — auto-fix errors, submission readiness checks | LaTeX (`latexmk`, `pdfinfo`) |
 | [`/auto-paper-improvement-loop`](../skills/auto-paper-improvement-loop/SKILL.md) | 2-round content review + format check — typical 4 / 10 → 8.5 / 10 score lift. `--edit-whitelist` mode for resubmits | Codex MCP |
+| [`/paper-writing-polish-loop`](../skills/paper-writing-polish-loop/SKILL.md) | Writing-craft-only polish loop (global pass → per-section → optional global pass); Claude and Codex propose suggestions in parallel, the user approves batches. Tuned for robotics / embodied-AI papers | Codex MCP |
 | [`/proof-writer`](../skills/proof-writer/SKILL.md) | Draft rigorous mathematical proofs for ML / AI theory — theorems, lemmas, propositions, corollaries; fill in missing steps; formalize sketches | None |
 | [`/writing-systems-papers`](../skills/writing-systems-papers/SKILL.md) | Paragraph-level structural blueprint for 10-12 page systems papers — page allocation, paragraph templates, writing patterns for OSDI / SOSP / ASPLOS / NSDI / EuroSys | None |
 | [`/grant-proposal`](../skills/grant-proposal/SKILL.md) | Structured grant proposal drafting — KAKENHI (JP), NSF (US), NSFC (CN including 面上 / 青年 / 优青 / 杰青 / 海优 / 重点), ERC (EU), DFG (DE), more | None |
@@ -141,10 +148,12 @@ After-paper outputs and venue porting.
 |---|---|---|
 | [`/paper-slides`](../skills/paper-slides/SKILL.md) | Conference presentation — Beamer LaTeX → PDF (+ editable PPTX on demand) + speaker notes + full talk script. PPTX export is deferred until the deck is final; pass `— with-pptx: true` to build it upfront. Talk types: `poster-talk` / `spotlight` / `oral` / `invited` (live audience) and `supplementary-video` (≈3 min self-contained overview for submission attachments — CoRL / ICRA / RSS / NeurIPS-supp; hands off to `/paper-slides-render` + `/paper-video --mode submission`) | LaTeX, python-pptx |
 | [`/paper-slides-render`](../skills/paper-slides-render/SKILL.md) | Bridge between `/paper-slides` (PDF + script) and `/paper-video` — TTS via `edge-tts`, rasterize via `pdftoppm`, compose per-slide ffmpeg segments, optional whisper-aligned SRT burn-in; per-slide `[VIDEO: path]` markers swap the still PNG for a clip with auto-loop / silent-pad | `edge-tts`, `pdftoppm`, `ffmpeg`, optional `openai-whisper` |
+| [`/paper-video`](../skills/paper-video/SKILL.md) | Submission demo video (CoRL / ICRA / RSS / NeurIPS-supp / project page) under hard size and duration gates — H.264 MP4, ≤180 s, ≤250 MB by default; optional supplementary zip | ffmpeg |
 | [`/slides-polish`](../skills/slides-polish/SKILL.md) | Per-page Codex review + targeted python-pptx / Beamer fixes (font scaling, frame resize, banner-as-tcolorbox, italic leak guard, em-dash spacing, CJK font hint, anonymity placeholder discipline) | Codex MCP, python-pptx |
 | [`/paper-poster-html`](../skills/paper-poster-html/SKILL.md) | **Default** conference poster — single HTML/CSS file with measurement-driven hard gates (two-hue tokens, real paper figures with provenance, anti-patch-loop fix vocabulary) → print-ready PDF via headless Chromium | Playwright (Chromium), PyMuPDF |
 | [`/paper-poster`](../skills/paper-poster/SKILL.md) | DEPRECATED — redirect stub to `/paper-poster-html` (legacy LaTeX pipeline retired; in git history) | — |
 | [`/arxiv-metadata`](../skills/arxiv-metadata/SKILL.md) | arXiv submission-form metadata from the paper source — Title / Authors / Abstract / Comments / Report-no / Journal-ref / DOI / ACM-class / MSC-class + suggested category. Enforces arXiv's real rules per [prep.html](https://info.arxiv.org/help/prep.html): ASCII-only fields (Unicode → TeX accents, not the reverse), 1920-char abstract hard gate, macro expansion, affiliation parenthesized format, archive-gated ACM/MSC. Blocks on anonymized author lists | `pdfinfo` (page count) |
+| [`/camera-ready-prep`](../skills/camera-ready-prep/SKILL.md) | After an accept / revise decision: review checklist, de-anonymization, PaperCept / RAS compliance (Type 3 fonts, margins, page limits), plain-text abstract, self-contained arXiv source package | LaTeX, Ghostscript |
 
 (Orchestrators `/paper-talk` for the talk pipeline and `/resubmit-pipeline`
 for venue porting live under [Workflow Orchestrators](#%EF%B8%8F-workflow-orchestrators).)
