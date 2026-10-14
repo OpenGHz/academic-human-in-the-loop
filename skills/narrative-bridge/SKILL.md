@@ -2,7 +2,7 @@
 name: narrative-bridge
 description: "Workflow 2.5: Bridge between auto-review loop and paper writing. Synthesizes NARRATIVE_REPORT.md from `review-stage/AUTO_REVIEW.md`, `CLAIMS_FROM_RESULTS.md`, `EXPERIMENT_LOG.md`, and `figures/` data, then delegates to `/figures-prep` to materialize the `figures/*.json` data files — together these are the two inputs `/paper-writing` expects. Honors a strict idempotency rule: an existing NARRATIVE_REPORT.md is never overwritten or re-synthesized, only figures-prep runs against it. Use when user says \"写 NARRATIVE_REPORT\", \"narrative report\", \"从 review 到 narrative\", \"准备投稿叙事\", \"bridge W2 to W3\", or has finished `/auto-review-loop` and needs the narrative report (and figures/ data) before invoking `/paper-writing`."
 argument-hint: "[topic-or-claim-override] [— style-ref: <source>] [— venue: <venue>]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Skill, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
 # Workflow 2.5: Narrative Bridge
@@ -197,6 +197,7 @@ Send the draft to Codex for a single-pass adversarial read:
 
 ```
 mcp__codex__codex:
+  model: gpt-5.5
   config: {"model_reasoning_effort": "xhigh"}
   prompt: |
     You are auditing a NARRATIVE_REPORT.md draft that will feed /paper-plan and downstream /paper-write.

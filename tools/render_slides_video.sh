@@ -137,9 +137,11 @@ if [ -z "$HELPER" ]; then
       [[ -f "$cand" ]] && { printf '%s' "$cand"; return 0; }
       dir="$(dirname "$dir")"
     done
-    # Fallback candidates in the script's own repo root.
+    # Fallback candidates in the script's own repo root. The canonical copy under
+    # skills/ covers installs that link skills elsewhere (e.g. Codex .agents/skills).
     for cand in \
       "$REPO_ROOT/.claude/skills/paper-slides-render/scripts/paper_slides_render.py" \
+      "$REPO_ROOT/skills/paper-slides-render/scripts/paper_slides_render.py" \
       "$REPO_ROOT/.aris/tools/paper_slides_render.py" \
       "$REPO_ROOT/tools/paper_slides_render.py"; do
       [[ -f "$cand" ]] && { printf '%s' "$cand"; return 0; }

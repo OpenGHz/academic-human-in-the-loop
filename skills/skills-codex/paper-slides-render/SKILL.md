@@ -1,0 +1,551 @@
+---
+name: paper-slides-render
+description: "Render a narrated presentation MP4 from a compiled slide deck plus its talk script. Synthesizes per-slide audio via edge-tts, rasterizes slides via pdftoppm, composes per-slide ffmpeg segments, concatenates into 1080p30 H.264, and burns in subtitles by default. Bridges /paper-slides (emits PDF + TALK_SCRIPT.md) and /paper-video (gates a venue-ready MP4). Use when user says \"把幻灯片做成视频\", \"生成讲解视频\", \"render slides to video\", \"narrate the slides\", \"slide narration video\", or \"PPT 讲解视频\". NOT for recorded demos (use /paper-video) or for producing the slides themselves (use /paper-slides)."
+argument-hint: "[slides-dir-or-pdf] [— voice: en-US-AvaNeural] [— no-subtitles] [— resolution: 1920x1080] [— fps: 30] [— workspace: .]"
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob
+---
+
+# Paper Slides Render: Slides → Narrated MP4
+
+Turn a compiled slide deck plus its talk script into a watchable narrated MP4: **$ARGUMENTS**
+
+The executor (main Codex agent) is the **orchestrator**; a self-contained Python helper does the work: TTS (`edge-tts`), rasterization (`pdftoppm`), per-slide ffmpeg compose, concat, subtitle burn-in. The output drops at `slides/render/presentation.mp4` and is ready to feed into `/paper-video` for venue gating.
+
+## Why this skill exists
+
+`/paper-slides` produces `slides/main.pdf` plus `slides/TALK_SCRIPT.md`. `/paper-video` packages and venue-gates a finished MP4. Nothing in between turned the slides + script into the actual video the user can watch — which is exactly the gap the [Paper2Video](https://github.com/showlab/Paper2Video) project addresses for AI papers. This bridge fills that gap with a single helper script, no GPU required.
+
+## Constants
+
+- **DEFAULT_VOICE = `en-US-AvaNeural`** — Edge TTS neural voice. Override with `— voice: <name>`. Common alternatives: `en-US-GuyNeural`, `en-GB-RyanNeural`, `zh-CN-XiaoxiaoNeural`. Full list: `edge-tts --list-voices`.
+- **DEFAULT_RESOLUTION = `1920x1080`** — 1080p; downscale if PDF is larger.
+- **DEFAULT_FPS = `30`** — 30 fps.
+- **TARGET_CODEC = `libx264 + aac (faststart)`** — Same codec target as `/paper-video` for compatibility.
+- **DURATION_TOLERANCE = `0.15`** — `verify` allows up to ±15 % drift between actual and planned duration. TTS variance makes a fixed-seconds tolerance too loose for short talks and too tight for long ones; fractional tolerance is the right knob.
+- **WITH_SUBTITLES = on (default)** — Subtitles are burned in unless the user asks otherwise. A narrated deck is nearly always watched as a submission attachment or a shared link, and reviewers commonly watch **muted** — so captions are the default, not the upgrade. Pass `— no-subtitles` to opt out (e.g. the user will add captions in their own editor, or the platform supplies them). Two sources via `--subtitle-source`:
+  - **`script`** (default; no extra deps) — builds the SRT from the **exact narration text** in TALK_SCRIPT.md, timed across each slide's audio. Spelling is always correct (ideal for jargon and numbers, which ASR reliably mangles); cue timing is proportional rather than force-aligned. Needs no whisper, so the default path has **no dependency beyond what a no-subtitle render already needs**.
+  - **`whisper`** (opt-in) — word-aligned subtitles via `whisper base.en` (ASR). More precise per-word timing, but mis-transcribes domain jargon. If whisper is missing **and** `--subtitle-source whisper`, preflight fails closed (`ok=false`, exit 1) — install whisper (`pip install openai-whisper`), or use `--subtitle-source script`, or `--no-subtitles`.
+  Either way, subtitles are rendered **after** the no-subs MP4 is on disk, so a subtitle failure never blocks the main deliverable.
+  `--with-subtitles` is still accepted (it just re-asserts the default) so older invocations keep working; passing both it and `--no-subtitles` is an argparse error rather than a silent precedence rule.
+- **SUBTITLE_FONT = `DejaVuSans`** — Font face for burned-in subtitles. CJK talks **must** override to a CJK font (e.g. `Noto Sans CJK SC`); DejaVuSans renders □ for Chinese/Japanese/Korean.
+- **SUBTITLE_SIZE = `46`** — Font size in **true output pixels** (the burn pins the ASS `PlayResX/Y` to the video resolution, so size & margin are real px, not the libass-default 384×288 virtual canvas — that default was the bug that made text huge and floated it to mid-frame). Range: 36–56 at 1080p.
+- **SUBTITLE_POSITION = `bottom`** — `bottom` (alignment=2) or `top` (alignment=8). Use `top` when experiment-video clips occupy the bottom of the frame.
+- **SUBTITLE_MARGIN_V = `16`** — Distance from the edge in **true pixels** at 1080p (sits low, on its band). At 1080p with `SUBTITLE_SIZE=46` the band occupies roughly the bottom **6 %** of the frame. Before accepting the default, **measure where the deck's own content stops** — see *Check the caption band against the deck* below. Raise it only to clear a footer; lowering it below ~12 crowds the frame edge.
+- **SUBTITLE caption band** — Subtitles render as **bold white text on a translucent band** (ASS `BorderStyle=3`), so they read cleanly over any slide content and look typeset (not auto-captions). The band color **auto-matches the deck**: the helper reads `\definecolor{primary}{HTML}{…}` from the sibling `main.tex` (falls back to neutral dark). Override with `--subtitle-box-color <hex>` / `--subtitle-box-opacity <0..1>` / `--subtitle-text-color <hex>`, or `--subtitle-no-box` for outline-only text.
+- **SUBTITLE_MAX_LINE_WIDTH = `48`** — Cues wrap at this character count. Narrower = more frequent cue changes; wider = denser per-cue text.
+- **SUBTITLE_MAX_LINE_COUNT = `1`** — Max lines per cue. `1` keeps each cue on the bottom edge (best when slides already have content low in the frame); raise to `2` for the broadcast-style denser text.
+- **OUTPUT_DIR = `slides/render/`** — All artifacts land here.
+- **RENDER_HELPER** — canonical name `paper_slides_render.py`, resolved per
+  [`shared-references/integration-contract.md`](../shared-references/integration-contract.md) §2
+  (Policy A — skill-local gate). Canonical location is
+  `skills/paper-slides-render/scripts/paper_slides_render.py` in the ARIS repo;
+  this skill is self-contained (Arch C, no shim in `tools/`). The Codex mirror
+  does not vendor the script — it resolves the canonical copy via the Codex-side
+  chain (layer 0 = self-contained owner skill, then the shared-runtime layers):
+
+  ```bash
+  RENDER_HELPER=""
+  cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+  if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills-codex.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills-codex.txt 2>/dev/null) || true
+  fi
+  # Layer 0: self-contained owner-skill location (canonical).
+  [ -n "${ARIS_REPO:-}" ] && [ -f "$ARIS_REPO/skills/paper-slides-render/scripts/paper_slides_render.py" ] && RENDER_HELPER="$ARIS_REPO/skills/paper-slides-render/scripts/paper_slides_render.py"
+  # Layers 1-2: shared-runtime chain.
+  [ -z "$RENDER_HELPER" ] && [ -n "${ARIS_REPO:-}" ] && [ -f "$ARIS_REPO/tools/paper_slides_render.py" ] && RENDER_HELPER="$ARIS_REPO/tools/paper_slides_render.py"
+  [ -z "$RENDER_HELPER" ] && [ -f tools/paper_slides_render.py ] && RENDER_HELPER="tools/paper_slides_render.py"
+  # Layer 3: Codex global skill install.
+  [ -z "$RENDER_HELPER" ] && [ -f ~/.codex/skills/paper-slides-render/scripts/paper_slides_render.py ] && RENDER_HELPER="$HOME/.codex/skills/paper-slides-render/scripts/paper_slides_render.py"
+  [ -z "$RENDER_HELPER" ] && {
+    echo "ERROR: paper_slides_render.py not resolved (layer 0: \$ARIS_REPO/skills/paper-slides-render/scripts/; layers 1-3: \$ARIS_REPO/tools/, tools/, ~/.codex/skills/paper-slides-render/scripts/)." >&2
+    echo "       /paper-slides-render cannot proceed. Fix: rerun install_aris_codex.sh (managed install) or export ARIS_REPO." >&2
+    exit 1
+  }
+  ```
+
+  All invocations below use `python3 "$RENDER_HELPER" <subcommand>`.
+
+## Scope
+
+| Use case | Fit |
+|---|---|
+| Turn `/paper-slides` output into a narrated MP4 | ✅ designed for this |
+| Conference-talk preview / dry-run video | ✅ |
+| Lab-meeting walkthrough video | ✅ |
+| Submission demo video from raw clips | ❌ use `/paper-video` |
+| Generate the slides themselves | ❌ use `/paper-slides` |
+| Cinematic project-page hero video | ❌ use `/paper-video — mode: showcase` |
+| Recorded talking-head presentation | ❌ this skill is TTS-only; no avatar render |
+
+## Inputs
+
+Required:
+
+- `slides/main.pdf` — compiled slide deck (one PDF page per slide).
+- `slides/TALK_SCRIPT.md` — talk script with the exact header format below.
+
+If `$ARGUMENTS` is a path to a slides directory or a PDF, the skill infers `TALK_SCRIPT.md` next to it (sibling file or parent directory).
+
+### TALK_SCRIPT.md format
+
+Each slide is introduced by an H2 header that names its number, title, and planned time range. The body holds quoted speech the narrator should say. The format matches what `/paper-slides` emits — Phase 8 of that skill is the upstream producer.
+
+```
+## Slide 1: Title and Headline [0:00 - 0:15]
+
+"Hi everyone. I'm presenting our work on <topic>. The headline result is <X>."
+
+→ *Transition*: "Let's start with the problem."
+
+---
+
+## Slide 2: Problem Statement [0:15 - 0:45]
+
+"The problem we tackle is <Y>. Existing methods struggle because <Z>."
+```
+
+Parsing rules (enforced by the helper):
+
+- Headers must match `## Slide N: <title> [MM:SS - MM:SS]` (hyphen, en-dash `–`, or em-dash `—` accepted). Trailing annotations after the bracket — e.g. `[0:00 - 0:15]  (~40 words)` or `· 5× [VIDEO: …]` — are tolerated and ignored, so `/paper-slides` output parses without hand-editing.
+- The body is everything between the header and the next `## Slide` header, or a horizontal-rule `---` line, whichever comes first.
+- **Only quoted text becomes narration**. Straight quotes (`"..."`) and curly quotes (`"..."`) are both detected.
+- `→ *Transition*: ...` markers are stripped.
+- Italicized stage directions (`*[Wait for chair...]*` lines) are stripped.
+- If no quotes are found, the helper falls back to the full body with markdown stripped, and flags the slide in `fallback_mode_slides`.
+- A slide body may carry `[VIDEO: ...]` marker(s). A bare `[VIDEO: path]` swaps the whole rasterized PNG for the clip (full-frame; one per slide). Anchored markers `[VIDEO: clip ON still.png]` overlay each clip onto the still it names, in place — **multiple per slide** — preserving the slide's own title/captions. See [Embedding experiment videos](#embedding-experiment-videos) for syntax + duration semantics.
+
+## Workflow: MUST EXECUTE ALL STEPS
+
+### Phase 0: Inputs + Preflight
+
+Render this checklist explicitly:
+
+```text
+📋 paper-slides-render checklist:
+   [ ] 1. Resolve $RENDER_HELPER via §2 resolver (above)
+   [ ] 2. Confirm slides/main.pdf + slides/TALK_SCRIPT.md exist
+   [ ] 3. mkdir -p slides/render/
+   [ ] 4. python3 "$RENDER_HELPER" preflight --workspace <cwd> [--no-subtitles] --json-out slides/render/preflight.json
+   [ ] 5. Confirm preflight JSON says ok=true (edge-tts + pdftoppm + ffmpeg + ffprobe + writable output dir)
+   [ ] 6. Phase 1 parse to preview the slide model (STOP for user confirmation)
+   [ ] 7. Phase 2 render via "$RENDER_HELPER" render ...
+   [ ] 8. Phase 3 verify via "$RENDER_HELPER" verify --video <mp4> --talk-script <md>
+```
+
+1. Confirm inputs exist:
+
+   ```bash
+   [ -f slides/main.pdf ] || { echo "ERROR: slides/main.pdf missing"; exit 1; }
+   [ -f slides/TALK_SCRIPT.md ] || { echo "ERROR: slides/TALK_SCRIPT.md missing"; exit 1; }
+   mkdir -p slides/render
+   ```
+
+2. Run preflight:
+
+   ```bash
+   python3 "$RENDER_HELPER" preflight \
+     --workspace . \
+     --talk-script slides/TALK_SCRIPT.md \
+     ${NO_SUBTITLES:+--no-subtitles} \
+     --json-out slides/render/preflight.json
+   ```
+
+   Subtitles are on by default, so **pass nothing** in the normal case; `--no-subtitles` is only for an explicit opt-out. Echo back `preflight.json`'s `withSubtitles` / `subtitleSource` rather than assuming — that pair is the record of what the run will actually burn.
+
+   The `--talk-script` flag is optional but recommended — it lets preflight probe any `[VIDEO: ...]` clip references and fail fast on missing files or out-of-bounds trim ranges, before any TTS or ffmpeg work starts. See [Embedding experiment videos](#embedding-experiment-videos) below.
+
+3. If `ok=false`, stop and surface the helper's error verbatim. The most common cause is `edge-tts` not installed: `pip install edge-tts`. For `pdftoppm`: `apt-get install poppler-utils` (Linux) or `brew install poppler` (macOS). For missing/invalid video clips, fix the referenced file or the trim range in `TALK_SCRIPT.md`.
+
+4. Write the initial `slides/render/RENDER_STATE.json` with `phase: 0`:
+
+   ```json
+   {
+     "phase": 0,
+     "status": "in_progress",
+     "voice": "en-US-AvaNeural",
+     "with_subtitles": true,
+     "subtitle_source": "script",
+     "resolution": "1920x1080",
+     "fps": 30,
+     "timestamp": "<now>"
+   }
+   ```
+
+### Phase 1: Parse & Preview (STOP for confirmation)
+
+```bash
+python3 "$RENDER_HELPER" parse \
+  --talk-script slides/TALK_SCRIPT.md \
+  --slides-pdf slides/main.pdf \
+  --json-out slides/render/parse.json
+```
+
+Then present a per-slide table to the user (slide number, title, planned duration, first 60 chars of speakable text, and **video clip** if a `[VIDEO: ...]` marker is present — show path + effective duration). If `parse.json.fallback_mode_slides` is non-empty, ⚠️ flag those slides — the helper used a markdown-stripped body instead of quoted speech, which usually means the talk script needs quotes. If any slide carries a `video_clip` whose `exists` is `false`, ⛔ stop and ask the user to fix the path.
+
+**⛔ STOP HERE**. Confirm with the user:
+
+- Slide count matches what `slides/main.pdf` actually contains.
+- No fallback-mode slides (or the user accepts the fallback).
+- Voice + subtitle flags are correct.
+- Video-clip-backed slides (if any) point at the intended clips and trim ranges.
+
+On "go", advance state to `phase: 1`.
+
+### Phase 2: Render
+
+```bash
+python3 "$RENDER_HELPER" render \
+  --slides-pdf slides/main.pdf \
+  --talk-script slides/TALK_SCRIPT.md \
+  --output slides/render/presentation.mp4 \
+  --voice "${VOICE:-en-US-AvaNeural}" \
+  --resolution "${RESOLUTION:-1920x1080}" \
+  --fps "${FPS:-30}" \
+  --workspace . \
+  ${VENUE_CAP:+--max-seconds $VENUE_CAP} \
+  ${RATE:+--rate "$RATE"} \
+  --subtitle-source "${SUBTITLE_SOURCE:-script}" \
+  ${NO_SUBTITLES:+--no-subtitles} \
+  --json-out slides/render/render.json
+  # Subtitles are ON by default; add --no-subtitles only when the user opts out.
+  # Subtitle style defaults are good (bold white on a deck-colored band, bottom, one line).
+  # Override only if needed: --subtitle-size 46 --subtitle-margin-v 16 --subtitle-box-color <hex>
+  #   --subtitle-box-opacity 0.82 --subtitle-position top --subtitle-no-box --subtitle-max-line-count 2
+```
+
+`--workspace` may be the paper dir (which contains `slides/`) **or** the slides dir itself — the helper auto-detects and never doubles the path.
+
+Pass `--max-seconds <cap>` whenever the talk has a venue ceiling (e.g. 180 for CoRL / NeurIPS-supp). The helper synthesizes all narration first, then **projects the final length before the expensive compose**, so an over-budget deck is caught early (see exit 4 below) rather than after a full render. `--rate +10%` (edge-tts speed delta) is the no-rewrite remedy when it overruns.
+
+> 💡 **Default**: `/paper-slides-render "slides/"` already burns subtitles (script source, DejaVuSans 46 px, bottom, one line ≤48 chars, deck-colored band).
+>
+> 💡 **CJK subtitle example**: `/paper-slides-render "slides/" — subtitle-font: "Noto Sans CJK SC" — subtitle-position: top` — a CJK font override is **mandatory** for Chinese/Japanese/Korean narration; the default face renders □. Since subtitles are now on by default, a CJK talk that passes no font override produces a full deck of tofu boxes: whenever the narration is CJK, set the font in the same breath.
+>
+> 💡 **Opt out**: `/paper-slides-render "slides/" — no-subtitles`
+
+This is long-running. Per slide it: looks up cached audio (content-hash on voice + text + rate) and PNG (mtime on PDF) → falls back to `edge-tts` and `pdftoppm` only on cache miss → projects total vs `--max-seconds` and halts if over (exit 4) → composes a per-slide MP4 segment (still slides held for exactly narration length; deterministic, no `-shortest` overshoot) → concatenates everything with `-movflags +faststart`. The **no-subs MP4 is now on disk** — the user can play it immediately. Then, unless `--no-subtitles`, the helper builds per-slide SRTs (script source: narration text timed across each slide's audio; whisper source: ASR alignment) → merges them with cumulative offsets → burns them into the final MP4 (atomic replace). A failure at this stage is soft-fail: the no-subs MP4 stays as the deliverable.
+
+Because subtitles are the default, the burn step is on the **critical path of every render**. It is also the only step that rewrites the finished MP4 in place, so a re-render to change only subtitle styling is cheap (audio + PNG caches both hit), but it does re-encode: expect the burn to add roughly the concat's own duration again in wall-clock time.
+
+On non-zero exit:
+
+- Exit 1 — parse / TTS / pdftoppm failed. Read `render.json.tts_errors` or `error` field, fix, rerun. Do NOT auto-retry; most failures are user-actionable (network drop, malformed script).
+- **Exit 4 — projected duration over `--max-seconds`** (halted after TTS, before any compose). The JSON carries `projected_seconds`, `cap_seconds`, `over_by_seconds`, and a `per_slide` breakdown. **STOP and ask the user** how to proceed: trim narration on the longest slides, re-render with `--rate +N%`, or re-run with `--allow-over-cap` to accept the overflow. Do not silently proceed.
+- Exit 3 — ffmpeg or whisper failed mid-render. Stderr is captured verbatim in the JSON. Read it before rerunning.
+
+Whisper-missing is a **preflight hard error** (exit 1) only when `--subtitle-source whisper` is explicitly requested. The default source is `script`, so the default subtitle path never touches whisper and a machine without it renders subtitles fine. Mid-render failures (script-SRT build, SRT merge, or the ffmpeg burn) are soft-fail: the no-subs MP4 stays as the deliverable (`render.json.subtitles.skipped=true`, `skipReason ∈ {"script-srt-failed", "whisper-failed", "whisper-missing", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`).
+
+**Never report a soft-failed subtitle burn as a subtitled deliverable.** Subtitles being the default makes this the one silent-degradation path in the skill: the MP4 exists, plays, and looks right, so the absence of captions is invisible unless `render.json.subtitles` is read. After every render, check `subtitles.available` and `subtitles.skipped` and state which cut the user actually has.
+
+Advance state to `phase: 2`.
+
+### Check the caption band against the deck
+
+Subtitles land on the slide, not beside it. Since they now burn by default, **every** render puts a band over the deck's lower edge — so verify it covers nothing before shipping, and prefer measuring over eyeballing.
+
+Do this **before** the render, on the rasterized PNGs (`slides/render/png/`, or the previous run's), so a clash is fixed by one flag rather than a re-burn:
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+import numpy as np, glob
+for p in sorted(glob.glob('slides/render/png/slide_*.png')):
+    im = np.array(Image.open(p).convert('L')); h, w = im.shape
+    ink = im < 200                       # non-white pixels
+    rows = ink.sum(axis=1)
+    # ignore near-empty rows (page numbers, hairlines) via a 0.2%-of-width floor
+    nz = np.nonzero(rows > w * 0.002)[0]
+    print(f'{p}: content ends at {nz[-1]/h*100:5.1f}% of height' if len(nz) else f'{p}: blank')
+PY
+```
+
+At 1080p with the default size/margin the band occupies roughly the bottom **6 %** (≈94–99 % of height). Read the numbers this way:
+
+| Content ends at | Verdict |
+|---|---|
+| ≤ 92 % | Default is safe. |
+| 92–94 % | Tight. Lower `--subtitle-margin-v`, or shrink `--subtitle-size`. |
+| > 94 % | Clash. Move content up in the deck (preferred — that is a layout bug the deck should own), or use `--subtitle-position top` if the lower frame is genuinely committed. |
+
+Two caveats the ink measurement will not catch:
+
+- **Frame numbers / footers** sit at the very bottom but occupy a narrow right-hand column. They trip the row test while never colliding with a centered cue. Check the horizontal span, not just the row, before treating one as a clash.
+- **In-place video overlays** (`[VIDEO: … ON …]`) replace a region of the still at compose time, so the PNG understates what the final frame shows. If a clip's anchor box reaches low, `--subtitle-position top` is usually right.
+
+To confirm placement **after** a render, difference a subtitled frame against the same timestamp of a no-subs cut — that isolates exactly the pixels the burn touched:
+
+```bash
+# needs a no-subs reference: cp the pre-burn cut aside, or re-render with --no-subtitles
+ffmpeg -loglevel error -ss 30 -i slides/render/presentation.mp4        -frames:v 1 -y /tmp/subs.png
+ffmpeg -loglevel error -ss 30 -i slides/render/presentation_nosubs.mp4 -frames:v 1 -y /tmp/nosubs.png
+python3 - <<'PY'
+from PIL import Image
+import numpy as np
+a = np.array(Image.open('/tmp/subs.png').convert('RGB')).astype(int)
+b = np.array(Image.open('/tmp/nosubs.png').convert('RGB')).astype(int)
+d = np.abs(a - b).sum(axis=2); h, w = d.shape
+rows = np.nonzero((d > 30).sum(axis=1) > w * 0.01)[0]
+if len(rows):
+    cols = np.nonzero((d[rows[0]:rows[-1]+1] > 30).sum(axis=0) > 0)[0]
+    print(f'band rows {rows[0]}-{rows[-1]} ({rows[0]/h*100:.1f}%-{rows[-1]/h*100:.1f}% of height), x {cols[0]}-{cols[-1]}')
+else:
+    print('no difference — burn did not happen, or no cue at this timestamp')
+PY
+```
+
+Sample several timestamps: "no difference" at a single instant may just mean a gap between cues. Keeping the pre-burn cut as `presentation_nosubs.mp4` costs one file copy and makes this check available later, so copy it aside before the burn when the deck is layout-sensitive.
+
+**Sample static slides only.** The two `ffmpeg -ss` seeks are independent, so on a slide carrying a `[VIDEO: …]` overlay they can land one frame apart — and consecutive clip frames genuinely differ, so the diff balloons to cover the whole clip region and buries the band. That reads exactly like a catastrophic mis-placement and is nothing of the kind. Measured on an animated slide: the neighbouring frame matched at mean |Δ| = 0.19 (0.03 % of pixels above threshold) while the frame one tick later read 4.13 (4.83 %) — same render, same alignment, different frame. Use `parse.json` to see which slides carry clips, and pick timestamps inside the still ones. If you must check an animated slide, compare against several consecutive no-subs frames and take the best match.
+
+### Phase 3: Verify
+
+```bash
+python3 "$RENDER_HELPER" verify \
+  --video slides/render/presentation.mp4 \
+  --talk-script slides/TALK_SCRIPT.md \
+  --duration-tolerance 0.15 \
+  --json-out slides/render/verify.json
+```
+
+Gates (all hard fails → exit 2):
+
+- `exists` — file present and non-zero size.
+- `video_codec` ∈ {`h264`, `hevc`, `av1`}.
+- `audio_codec` ∈ {`aac`, `ac3`, `opus`} **and** an audio stream must exist (narration is required for this skill).
+- `pixel_format == yuv420p`.
+- `faststart` — moov atom at file head.
+- `duration_match` — `|actual − planned_from_script| ≤ tolerance × planned`.
+- `fps ≤ 60`, `width × height ≤ 3840×2160`.
+
+Verify must produce `ok=true`. If `ok=false`, surface violations and stop.
+
+Then report to the user:
+
+- Path: `slides/render/presentation.mp4`
+- Total duration vs. planned + per-slide drift table (from `render.json.slides[].drift_seconds`).
+- Size in MB.
+- **Subtitle status, always** — read `render.json.subtitles` and say which cut this is: burned in (name the source, `script` or `whisper`), skipped (name the `skipReason`), or opted out. `verify` does not gate captions, so `ok=true` says nothing about whether they are present; the burn is a soft-fail path, and staying silent is how a caption-less MP4 gets handed over as a captioned one. Point at `subtitles.srt` as the editable copy.
+- If the user wants venue gating (CoRL / NeurIPS-supp / etc.), recommend `/paper-video — mode: showcase` or `— mode: teaser` next. Submission-mode is unlikely to be the right fit (a 10-min narrated talk overflows the 180 s CoRL cap; for that case render a teaser cut).
+
+Advance state to `phase: 3, status: "completed"`.
+
+## State Files
+
+`slides/render/RENDER_STATE.json` tracks progress across the four phases (mirrors `SLIDES_STATE.json` from `/paper-slides`):
+
+```json
+{
+  "phase": 2,
+  "status": "in_progress",
+  "voice": "en-US-AvaNeural",
+  "with_subtitles": true,
+  "resolution": "1920x1080",
+  "fps": 30,
+  "slide_count": 12,
+  "talk_script_sha256": "...",
+  "slides_pdf_sha256": "...",
+  "timestamp": "2026-05-21T15:00:00Z"
+}
+```
+
+Resume rule: if state exists with `status: "in_progress"`, `timestamp` is within the last 24 h, and the SHAs of `TALK_SCRIPT.md` + `main.pdf` still match → resume from `phase + 1`. Otherwise → fresh start, backing up the old `slides/render/` to `slides/render-backup-<ts>/` before clobbering.
+
+## Output Layout
+
+After a successful run:
+
+```
+slides/render/
+├── RENDER_STATE.json
+├── preflight.json
+├── parse.json
+├── narrate.json            # only if narrate was invoked standalone
+├── render.json
+├── verify.json
+├── audio/
+│   ├── slide_01.wav
+│   ├── slide_01.meta.json  # {voice, content_hash, generated_at}
+│   └── ...
+├── png/
+│   └── slide_01.png
+├── segments/
+│   └── slide_01.mp4        # per-slide ffmpeg output, kept for re-runs
+├── srt/                    # skipped only with --no-subtitles
+│   └── slide_01.srt
+├── subtitles.srt           # merged with cumulative timestamp offsets
+└── presentation.mp4        # ⭐ deliverable (subtitles burned in)
+```
+
+`subtitles.srt` is a first-class artifact, not scratch: it is the editable copy of the captions. To fix wording or a cue boundary, edit it and re-burn — no TTS or rasterization re-runs. Mention it when handing over, so the user can correct captions without a full re-render.
+
+## Failure Policy
+
+This skill follows **Policy A (skill-local gate)** per `shared-references/integration-contract.md` §2. Helper subcommand exit codes:
+
+| Subcommand | Non-`ok` consequence | Exit |
+|---|---|---|
+| `preflight` | Halt before render; surface missing dep | 1 |
+| `parse` | Halt; user fixes TALK_SCRIPT.md | 1 |
+| `narrate` | Continue per-slide; final `ok=false` if any slide failed | 1 if any failed |
+| `render` | Halt at failing step. Subtitles run **after** the no-subs MP4 is on disk; any mid-render subtitle failure is soft-fail (no-subs MP4 stays). | 1 (TTS / pdftoppm / parse), 3 (ffmpeg), 4 (over-cap) |
+| `render --max-seconds N` | Projected total over cap → halt after TTS, before compose; **orchestrator STOPs and asks user** | 4 |
+| `verify` | Report all violations | 2 |
+
+Soft-fail slot: `subtitles.skipReason ∈ {"script-srt-failed", "whisper-failed", "whisper-missing", "alignment-merge-failed", "ffmpeg-subtitle-burn-failed"}`. These only fire mid-render (after preflight passed); `whisper-missing` is caught by preflight whenever `--subtitle-source whisper` was requested, so it only reaches render if preflight was bypassed. Subtitle failure is the only soft-fail in the entire skill — and since subtitles now ship by default, it is also the only way to hand over a deliverable that silently lacks a requested feature. Always read `render.json.subtitles` before reporting.
+
+## Idempotency Contract
+
+- Re-running `render` with unchanged inputs **reuses** cached audio (per-slide content-hash on voice+text+rate) and PNGs (keyed on PDF mtime + DPI/resolution in `png/.raster.json`). Pages are rasterized at **≥ the output resolution** (supersampled, then downscaled once with lanczos) so text stays crisp instead of being upscaled from a low-DPI render; changing `--resolution` re-rasterizes. Changing `--rate` invalidates only the audio cache.
+- `edge-tts` calls a server-side voice; identical input text may produce slightly different waveform bytes across runs. Bit-identical MP4 is **not** guaranteed — `verify.json.ok=true` is the acceptance criterion.
+- `render` writes the output MP4 atomically (`.tmp` then `replace`).
+- `preflight`, `parse`, `narrate`, `verify` never mutate the source `slides/main.pdf` or `slides/TALK_SCRIPT.md`.
+
+## Re-rendering after an edit (`tools/render_slides_video.sh`)
+
+Once the deck has rendered successfully, a subsequent "I tweaked the narration, redo the video"
+does **not** need the full skill workflow. The shared-runtime wrapper `tools/render_slides_video.sh`
+runs Phase 2 + Phase 3 in one command, with the slides dir resolved from `--slides` / `--paper` /
+`$OVERLEAF_PAPER_DIR` / `$PAPER_DIR` / `.overleaf-sync.conf` / `./paper` → `<paper>/slides`. Only the
+slides whose narration text changed are re-synthesized; the rest hit the audio + PNG cache.
+
+```bash
+# Resolve via the Codex-side standard chain (shared-references/integration-contract.md §2)
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 1
+if [ -z "${ARIS_REPO:-}" ] && [ -f .aris/installed-skills-codex.txt ]; then
+    ARIS_REPO=$(awk -F'\t' '$1=="repo_root"{print $2; exit}' .aris/installed-skills-codex.txt 2>/dev/null) || true
+fi
+if [ -z "${ARIS_REPO:-}" ] && [ -f "$HOME/.aris/repo" ]; then
+    ARIS_REPO=$(cat "$HOME/.aris/repo" 2>/dev/null) || true
+fi
+SLIDES_RENDER_WRAPPER=""
+[ -n "${ARIS_REPO:-}" ] && [ -f "$ARIS_REPO/tools/render_slides_video.sh" ] && SLIDES_RENDER_WRAPPER="$ARIS_REPO/tools/render_slides_video.sh"
+[ -z "$SLIDES_RENDER_WRAPPER" ] && [ -f tools/render_slides_video.sh ] && SLIDES_RENDER_WRAPPER="tools/render_slides_video.sh"
+[ -z "$SLIDES_RENDER_WRAPPER" ] && [ -f ~/.codex/skills/paper-slides-render/render_slides_video.sh ] && SLIDES_RENDER_WRAPPER="$HOME/.codex/skills/paper-slides-render/render_slides_video.sh"
+
+bash "$SLIDES_RENDER_WRAPPER" --slides <slides-dir>            # narration edit only
+bash "$SLIDES_RENDER_WRAPPER" --slides <slides-dir> --rebuild-pdf   # you also edited main.tex
+```
+
+The wrapper resolves `scripts/paper_slides_render.py` from the ARIS repo it lives in (the canonical
+copy under `skills/paper-slides-render/scripts/`), so it is a shortcut into the same helper — never a
+second implementation. It enforces the same duration cap (`--max-seconds`, default 180, exit 4 on
+overflow) and runs the Phase 3 verify gate unless `--no-verify`. **Failure policy: fall back.** If it
+does not resolve, or exits with `paper_slides_render.py not found.`, execute Phase 2 + Phase 3
+directly with `$RENDER_HELPER`; the outcome is identical.
+
+Use the full workflow (not the wrapper) for a first render, or whenever Phase 1's parse-and-confirm
+step matters — the wrapper does not stop for confirmation.
+
+## When to skip this skill
+
+- The user wants the slides themselves, not a video — use `/paper-slides` (with `/slides-polish` for per-page review).
+- The user has raw experiment recordings and wants a submission video — use `/paper-video`.
+- The user wants a 15-min conference oral recording of themselves presenting — this skill is TTS-only; record manually.
+
+## Recommended follow-ups
+
+- `/paper-video` to gate the output against a venue's submission limits (mode = `showcase` for camera-ready, `teaser` for social, or `submission` if the talk fits).
+- Proofread `slides/render/subtitles.srt` and re-burn if a cue boundary lands badly. With the default `script` source spelling is already exact, so this is about **timing and line breaks**, not transcription; with `--subtitle-source whisper` check domain jargon too.
+
+## Defaults Summary
+
+| Setting | Default | Override |
+|---|---|---|
+| Voice | `en-US-AvaNeural` | `— voice: <edge-tts voice name>` |
+| Resolution | `1920x1080` | `— resolution: WxH` |
+| FPS | `30` | `— fps: N` |
+| Subtitles | **on** | `— no-subtitles` to opt out |
+| Subtitle source | `script` (exact narration text, no ASR) | `— subtitle-source: whisper` (word-aligned; needs whisper) |
+| Subtitle font | `DejaVuSans` | `— subtitle-font: "Noto Sans CJK SC"` (**required** for CJK narration) |
+| Narration rate | normal | `— rate: +10%` / `-5%` (edge-tts speed; remedy for over-cap decks) |
+| Duration cap | none | `— max-seconds: N` (halt after TTS if projected total over cap; exit 4) |
+| Duration tolerance | 15 % | `--duration-tolerance 0.10` (on the helper directly) |
+
+Edge TTS voice list: `edge-tts --list-voices` (200+ voices across 50+ locales).
+
+## Embedding experiment videos
+
+Robotics, manipulation, and animation work usually needs a moving demonstration on at least one slide — the static PDF page can't communicate "the arm grasps the unseen object in two seconds". This skill lets the talk script swap any slide's still PNG for a video clip at compose time, without touching the beamer source.
+
+### Syntax
+
+Add a `[VIDEO: path]` marker on its own line inside a slide body. Paths are resolved relative to `TALK_SCRIPT.md`'s directory; absolute paths are also allowed. A bare marker is **full-frame**: one per slide, extras ignored with a warning.
+
+```markdown
+## Slide 3: Grasping Demo [0:30 - 0:42]
+
+[VIDEO: figures/grasp.mp4]
+
+"Our policy executes the grasp on the unseen object in under two seconds."
+```
+
+Optional clip trim (start–end inside the source clip; seconds or `MM:SS`):
+
+```markdown
+[VIDEO: figures/grasp.mp4 @ 2.5-7.0]
+[VIDEO: figures/grasp.mp4 @ 0:02-0:07]
+```
+
+### In-place overlays (`ON <still>`) — multiple clips per slide
+
+When a slide already lays out several still thumbnails (e.g. a task gallery), anchor each clip to the still it should replace with `ON <still.png>`. **Multiple anchored markers per slide are allowed** — this is the only way to animate more than one region of a slide.
+
+```markdown
+## Slide 5: Five-task gallery [1:27 - 2:00]
+
+[VIDEO: figures/safe_rollout.mp4 ON figures/still_safe.png]
+[VIDEO: figures/lamp_rollout.mp4 ON figures/still_lamp.png]
+[VIDEO: figures/door_rollout.mp4 @ 0-1.5 ON figures/still_door.png]
+
+"EMT-QA spans five tasks..."
+```
+
+How it works: the helper rasterizes the slide, locates each named still on the page by **template matching** (cv2 normalized cross-correlation, multi-scale — so it recovers the LaTeX-decided box without manual coordinates), and overlays the clip there, looping/trimmed and muted. The slide's own title, captions, and layout are preserved because the rasterized page is the background; only the thumbnails come alive. Requires `opencv-python`; if absent the helper errors only for slides that use `ON` (bare full-frame markers are unaffected). `parse`/`preflight` report each clip's `anchor_path` + `anchor_exists`, and `render.json` logs per-overlay `box` + `match_score` and any `unmatched_overlays`.
+
+> Anchored overlays are still **one composite per slide** under the hood — exactly the "pre-stitch, reference once" pattern, but automated. Unlike a hand-built grid, the slide's real captions and structure survive.
+
+### Duration policy
+
+For a video-backed slide the helper computes `total = max(narration_dur, clip_effective_dur)` and:
+
+| Case | Behavior |
+|---|---|
+| `narration > clip` | Loop the clip until narration finishes. **No upper cap on loop count** — a 60 s narration over a 1 s clip plays 60 loops. Use trim to make the loop unit longer if that's a problem. |
+| `clip > narration` | Narration plays once at the start; remainder is silent until the clip finishes. |
+| `narration == clip` | Plays once. |
+
+Always: **the clip's source audio is muted** (motor whirr, ambient sound, etc. are discarded). Narration is the only audio track in the output. If you want clip audio mixed in, render the clip into the beamer PDF via `\movie` instead — this skill won't do dubbing.
+
+### Aesthetic notes
+
+- Video slides are letterboxed/pillarboxed against a **black** background to match `/paper-video`'s clip pipeline. Still-PNG slides use white. Mixing both in one deck is fine but the pad color visibly differs at clip boundaries.
+- The PDF still shows whatever figure beamer rendered — VIDEO markers are a render-time substitution, not a beamer change. Reviewers who only have the PDF (no MP4) still see the static figure.
+- **Subtitles burn over the clip too.** Captions are on by default and the band sits at the bottom, so a full-bleed or low-anchored clip gets a caption strip across its lower edge. When a clip's frame reaches into the bottom ~8 %, either move the anchor figure up in the deck or pass `--subtitle-position top`. Decide this per deck, not per slide: the position flag is global, so a deck with one bottom-heavy clip and five text slides is usually better served by fixing that one slide's layout.
+
+### Where `[VIDEO: ...]` markers do NOT take effect
+
+`[VIDEO: ...]` is a **render-time substitution for this skill's MP4 output only**. It is not a slide-embedding mechanism. In particular:
+
+- **`slides/main.pdf`** — beamer renders whatever the LaTeX source declared (typically `\includegraphics{...}` for a still). VIDEO markers are inside `TALK_SCRIPT.md`, not in the LaTeX, so the PDF is unchanged. If you want a playable clip inside the PDF, use beamer `\movie` / `media9` — but those depend on a video-capable PDF reader (Adobe Reader yes; Preview / zathura / most browsers no), which is why this skill bypasses them.
+- **`slides/presentation.pptx`** — the PPTX produced by `/paper-slides` Phase 7 uses `python-pptx`, which can write images, shapes, and text but **cannot embed video shapes**. So the same slide that displays a clip in `presentation.mp4` will display the still figure (or be empty) in `presentation.pptx`. If you need a playable clip inside the PPTX for live presentation, add the video manually in PowerPoint / Keynote after Phase 7 — that path is out of scope for this skill.
+
+In short: VIDEO markers are honored **only** in the MP4 produced by `python3 "$RENDER_HELPER" render`. They are silently inert in the PDF and PPTX outputs of `/paper-slides`.
+
+### Preflight (recommended)
+
+Pass `--talk-script` to preflight so missing files / out-of-bounds trim ranges fail before any TTS or ffmpeg work starts:
+
+```bash
+python3 "$RENDER_HELPER" preflight \
+  --workspace . \
+  --talk-script slides/TALK_SCRIPT.md \
+  --json-out slides/render/preflight.json
+```
+
+`preflight.json.clips[]` lists every referenced clip with `exists`, `source_duration_seconds`, `width`, `height`, and `effective_duration_seconds` (after trim). Non-zero exit on any missing clip or trim range exceeding the source duration.
+
+### When NOT to embed video here
+
+- **Whole project-page video / supplementary submission video** → use `/paper-video` directly. It's tuned for assembling raw clips with shot lists and venue gates.
+- **Multi-clip composition on one slide** (side-by-side rollouts, picture-in-picture) → pre-stitch into one MP4 via `/paper-video` or external tools, then reference it via a single VIDEO marker.
+- **Animated slide transitions** → out of scope; this skill renders each slide as a discrete segment and concatenates with cuts.
