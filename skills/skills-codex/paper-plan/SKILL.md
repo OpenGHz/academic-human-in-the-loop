@@ -21,7 +21,7 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via a secondary Codex agent for outline review. For `backend=codex`, use an OpenAI model.
-- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences).
+- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (6 pages + 2 paid, double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
 - **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total; IEEE conference ≈ 5-8 pages total (including references).
 
 ## Inputs
