@@ -48,9 +48,4 @@ compile.log
 *.zip
 EOF
 
-git add .
-git diff --cached --quiet || git commit -m "Add .gitignore to exclude specific directories and files"
-
 python3 .aris/tools/research_wiki.py init research-wiki/
-
-git add . && git commit -m "Add research wiki"
