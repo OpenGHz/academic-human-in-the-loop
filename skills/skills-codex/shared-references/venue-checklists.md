@@ -136,7 +136,7 @@ RA-L is a journal, but the version you submit for review is formatted as a RAS *
 Planning implications:
 
 - **Two formats for one paper.** For the initial submission, use `\documentclass[letterpaper, 10 pt, conference]{ieeeconf}`. RA-L says: "For compatibility reasons, the first submission to the Letters will be formatted as a RAS conference manuscript." In ARIS, start from `ieee_conference.tex` (`IEEE_CONF`), **not** `ieee_journal.tex`. That template is `IEEEtran` with overrides that reproduce `ieeeconf`'s page geometry (see IROS / ICRA above), and RA-L is uploaded through the same PaperPlaza system (`ras.papercept.net/journals/ral`). PaperPlaza checks the uploaded PDF, not which class produced it. If you want no risk at all, use the official `ieeeconf.zip` linked from RA-L's page. Only after acceptance do you switch to `\documentclass[letterpaper, 10 pt, journal, twoside]{ieeetran}` (see Camera-ready below).
-- **Page budget: 6 pages, everything included.** RA-L says: "Letters are six pages long in two-column IEEE format ... with up to two extra pages allowed at a charge ($175 per extra page)". It also says: "These page limits include everything needed for publication, e.g., figures, tables, and any appendices", so references are not exempt. PaperPlaza rejects files longer than 8 pages. Plan the paper for 6 pages, and use pages 7–8 only if the authors have agreed to pay for them. This budget differs from the 4–5 pages typical of communications Letters.
+- **Page budget: up to 8 pages by default, everything included.** RA-L says: "Letters are six pages long in two-column IEEE format ... with up to two extra pages allowed at a charge ($175 per extra page)". It also says: "These page limits include everything needed for publication, e.g., figures, tables, and any appendices", so references are not exempt. PaperPlaza rejects files longer than 8 pages. **Default to `MAX_PAGES = 8`**: any length up to 8 pages is acceptable. Do not cut the paper to 6 (or 7) pages on your own to avoid the charge; tighten to 6 or 7 only when the user explicitly asks for it. If the paper runs past 6 pages, note the $175-per-page charge once in the report, but do not shrink the paper because of it. This budget differs from the 4–5 pages typical of communications Letters.
 - **Double-anonymous review.** RAS has applied this to its fully sponsored journals since 2025-01-01, and a violation can lead to a desk rejection. It overrides the generic "IEEE is not anonymous" default, so set `ANONYMOUS = true` for RA-L until acceptance. Rules:
   - Do not include a cover page. Leave space for the author byline, but leave it empty.
   - Do not put names or affiliations anywhere, including the supplementary material and the PDF metadata. Watch out for `\hypersetup{pdfauthor=...}`.
@@ -161,7 +161,7 @@ Planning implications:
 Final-check implications (initial submission):
 
 - The document class is `ieeeconf`, or `IEEEtran[conference]` with the margin overrides. The paper size is US Letter, and the bbox margin check in `paper-compile` passes.
-- The paper is at most 6 pages including references, or at most 8 if the authors have agreed to pay for the extra pages.
+- The paper is at most 8 pages including references, or at most the 6 or 7 pages the user explicitly asked for. Pages 7–8 incur the $175-per-page charge: report it, do not cut for it.
 - Nothing identifies the authors:
   - the byline is empty;
   - `pdfinfo main.pdf` shows no Author field;
