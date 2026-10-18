@@ -15,7 +15,7 @@ Compile the LaTeX paper and fix any issues: **$ARGUMENTS**
 - **ENGINE = `pdflatex`** — LaTeX engine. Options: `pdflatex` (default), `xelatex` (for CJK/custom fonts), `lualatex`.
 - **MAX_COMPILE_ATTEMPTS = 3** — Maximum attempts to fix errors and recompile.
 - **PAPER_DIR = `paper/`** — Directory containing LaTeX source files.
-- **MAX_PAGES** — Page limit. ML conferences: main body to Conclusion end (excluding references & appendix). ICLR=9, NeurIPS=9, ICML=8. **IEEE venues: references ARE included in page count.** IEEE journal ≈ 12-14 pages, IEEE conference ≈ 5-8 pages (all inclusive).
+- **MAX_PAGES** — Page limit. ML conferences: main body to Conclusion end (excluding references & appendix). ICLR=9, NeurIPS=9, ICML=8. **IEEE venues: references ARE included in page count.** IEEE journal ≈ 12-14 pages, IEEE conference ≈ 5-8 pages (all inclusive). **RA-L: MAX_PAGES = 8** by default (all inclusive); use 6 or 7 only if the user explicitly asks, and do not shrink an RA-L paper of ≤ 8 pages to 6 on your own.
 
 ## Workflow
 
