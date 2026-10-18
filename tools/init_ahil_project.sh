@@ -13,7 +13,7 @@ third_party/
 .claude/
 .vscode/
 paper/raw_data/
-papers/
+/papers/
 # LaTeX build intermediates (latexmk / pdflatex / bibtex)
 *.aux
 *.bbl
