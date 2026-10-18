@@ -26,7 +26,7 @@
 ## 2. 页数上限（含参考文献）
 
 - **ICRA / IROS**：正文通常 **6 页**，允许 **+2 页** 付费加页，**硬上限 8 页**（含参考文献与附录）。
-- **RA-L**：**6 页**免费，最多 **+2 页**（每页 $175），**硬上限 8 页**（超过 8 页 PaperPlaza 不收）。官方原文是 "These page limits include everything needed for publication, e.g., figures, tables, and any appendices"，图、表、附录和参考文献都算在页数内。详见 `shared-references/venue-checklists.md` 中的 RA-L 一节。
+- **RA-L**：**6 页**免费，最多 **+2 页**（每页 $175），**硬上限 8 页**（超过 8 页 PaperPlaza 不收）。**默认按 8 页以内处理**：不超过 8 页就算合规，不要为了省加页费自行删到 6 页；只有用户明确要求 6 页或 7 页时才压缩。超过 6 页时，在报告里提一句加页费即可。官方原文是 "These page limits include everything needed for publication, e.g., figures, tables, and any appendices"，图、表、附录和参考文献都算在页数内。详见 `shared-references/venue-checklists.md` 中的 RA-L 一节。
 - 加入大段内容（如新段落 + 公式）易顶破页数；若超限，向用户报告并给出具体删减建议，或把新增内容用 `% ` 注释保留待定，不要静默截断。
 - 具体数字按年份/版本可能调整，提交前核对当年 CFP。
 
