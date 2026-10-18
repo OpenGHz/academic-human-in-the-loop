@@ -1,10 +1,13 @@
 set -ex
 
-# Reuse install_ahil.sh to restore git-ignored content (third_party/, .aris/,
-# .vscode/, .claude/, global skills). It resolves/clones the ARIS root from "$1".
-bash "$(dirname "$0")/install_ahil.sh" "$1"
-
-cat > .gitignore <<'EOF'
+# 只追加 .gitignore 里还没有的条目，不覆盖已有内容
+touch .gitignore
+# 已有文件末尾没有换行时先补一个，避免追加的第一行和原最后一行粘在一起
+[ -n "$(tail -c1 .gitignore)" ] && echo >> .gitignore
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  grep -qxF -- "$line" .gitignore || echo "$line" >> .gitignore
+done <<'EOF'
 third_party/
 .aris/
 .claude/
@@ -45,9 +48,8 @@ compile.log
 *.zip
 EOF
 
-git init
-
-git add . && git commit -m "Add .gitignore to exclude specific directories and files"
+git add .
+git diff --cached --quiet || git commit -m "Add .gitignore to exclude specific directories and files"
 
 python3 .aris/tools/research_wiki.py init research-wiki/
 
