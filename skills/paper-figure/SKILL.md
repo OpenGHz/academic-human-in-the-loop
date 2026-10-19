@@ -302,6 +302,7 @@ those two as binding, not overridable):**
 
 - [ ] Font size readable at printed paper size (not too small)
 - [ ] Colors distinguishable in grayscale (print-friendly)
+- [ ] **Tables have a short caption and no note paragraph below** — caveats are in the text plan (Key Rules)
 - [ ] **No title inside figures** — titles go only in LaTeX `\caption{}` (from pedrohcgs)
 - [ ] Legend does not overlap data
 - [ ] Axis labels have units where applicable
@@ -325,6 +326,7 @@ figures/
 ├── fig3_comparison.pdf
 ├── latex_includes.tex           # LaTeX snippets for all figures
 ├── TABLE_*.tex                  # standalone table LaTeX files
+├── TABLE_*_facts.tex            # macros for numbers the text needs (no note paragraphs under tables)
 ├── preview.tex                  # figures-and-tables-only document (Step 6.5)
 └── preview.pdf                  # rendered preview at printed size
 ```
@@ -341,6 +343,7 @@ figures/
 - **No titles inside figures** — captions are in LaTeX only
 - **Comparison tables count as figures** — generate them as standalone .tex files
 - **Always build the preview** — every run ends with an up-to-date `figures/preview.pdf` (Step 6.5) unless the user passed `— no-preview`
+- **Short table captions, no note paragraph below a table** — the caption (above the table in IEEE style) says only what a reader needs to read the table: metric and units, default conditions, what bold and symbols mean. At most one or two short lettered footnotes may mark a specific row. Protocol details, sample counts, caveats and definitions go into the paper text, not under the table: list each one with its target section in `PAPER_PLAN.md` for `/paper-write`, and write their numbers as macros (e.g. `figures/TABLE_<name>_facts.tex`) so the text never copies them by hand. This also applies when a reviewer asks for a caveat to "accompany" a table. Paragraph-length table notes are uncommon in robotics venues (RA-L, ICRA, IROS, CoRL) and cost space
 
 ## Figure Type Reference
 
