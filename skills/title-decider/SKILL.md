@@ -52,6 +52,7 @@ Run every candidate through the **title-craft checklist** — these are the fail
 - **Put the differentiator in the subtitle, not the name.** The one contrast vs the closest prior work (e.g. *language* abstraction vs *action* replay) is what defends novelty — make sure a reader sees it.
 - **Modifier hygiene.** Three stacked compound modifiers before one noun ("A-ing, B-Cross C-Oriented Memory") read as a pile-up. Move one to a head noun or a `for …`/`via …` phrase, or separate with a comma.
 - **Attach each modifier to the noun it actually describes.** If it's the *memory* that is cross-episode (not the *manipulation*), write "Cross-Episode … Memory for … Manipulation", not "… Memory for Cross-Episode … Manipulation" — the latter both misattributes and reads ambiguously.
+- **The title's head noun becomes the paper's term, so it must work everywhere.** Whatever the title calls the object or the compared options, the text, captions and tables have to use the same word. Test the candidate in their slots ("seeds per X", "interaction of X and Y", "controls within each X"). A comparison titled "… Keypose and Dense Action Prediction …" had to fall back on "modes" and "labels" in its tables and captions ("seeds per prediction" does not parse, and both sides predict the same way), so it was retitled "… Keypose and Dense Action Representations …".
 - **Scope honesty.** A narrow domain word (e.g. "articulated objects") signals a narrow contribution; include it only if you mean it. Conversely don't over-claim generality the experiments don't cover.
 
 Surface 4–8 candidates **grouped by what they emphasize** (e.g. "leads with efficiency" vs "leads with mechanism"), each with a one-line note on its trade-off. Name your top pick and *why*. Brevity and signal beat exhaustiveness — don't bury the user in 20 near-identical strings.
@@ -96,6 +97,7 @@ Capture **not just the title** but the discussion's durable residue — the reje
 
 ## Terminology rulings (use consistently across all downstream writing)
 - **Use:** <canonical term> — <one-line gloss>
+- **One term per concept** (binds the title, abstract, text, captions, table titles, legends, axis labels and plan drafts): <concept> → <term>, not <synonyms>. Cover the main object or the compared options **and** what is held fixed across them (e.g. the keypose/dense choice → "action representation", not label / mode / training target / prediction; what both arms share → "policy architecture", not network / model (reads as shared weights) / backbone (only the image encoder))
 - **The name means / does NOT mean:** <e.g. "Instance-Oriented Memory" stores image keys + language values; do NOT call it "Language Memory">
 - **Define on first use:** <e.g. "instance" = appearance-defined object instance/model>
 - **Avoid:** <term> — <why> (e.g. "exploration-efficient" misreads; "object-centric memory" collides with X; "exploration-free" contradicts the kept fallback)
@@ -128,3 +130,5 @@ After writing, tell the user the path and that downstream skills will pick it up
 ## Downstream contract (for skills that consume this)
 
 Downstream skills should `Read idea-stage/TITLE.md` before generating any title, framework name, abstract opening, or terminology, and treat its **Canonical title**, **Framework name**, and **Terminology rulings** as authoritative. If a downstream skill needs to deviate, it should surface the conflict to the user, not silently rename.
+
+When a later discussion (outline, figure captions, drafting) settles a term, add it to **Terminology rulings** right away and apply it to every artifact, not just the sentence under discussion. If the ruling conflicts with the title's wording, change the title (the ruling wins), re-run the collision check on the new title, and move the old title to **Rejected alternatives** with the reason. Records written earlier (experiment logs, review notes) and code identifiers may keep their wording; text taken from them into the paper is rewritten.
