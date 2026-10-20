@@ -33,6 +33,7 @@ The skill expects one or more of these in the project directory:
 3. **Experiment results** — JSON files in `figures/`, screen logs, tables
 4. **idea-stage/IDEA_REPORT.md** — from idea-discovery pipeline (if applicable) *(fall back to `./IDEA_REPORT.md` if not found)*
 5. **CLAIMS_FROM_RESULTS.md** — structured claim judgment from `/result-to-claim` (preferred if available)
+6. **`idea-stage/TITLE.md`** (if present, from `/title-decider`) — canonical title and **Terminology rulings**; authoritative. Use the ruled terms verbatim in the abstract draft, contribution sentence, section plan and caption drafts; never introduce a synonym for a ruled term. If a new term gets settled while you work, add it to the rulings (see `/title-decider`, Downstream contract) instead of only using it locally.
 
 If none exist, ask the user to describe the paper's contribution in 3-5 sentences.
 

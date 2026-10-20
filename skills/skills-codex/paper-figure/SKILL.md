@@ -47,6 +47,7 @@ Generate all figures and tables for a paper based on: **$ARGUMENTS**
 1. **PAPER_PLAN.md** — figure plan table (from `/paper-plan`)
 2. **Experiment data** — JSON files, CSV files, or screen logs in `figures/` or project root
 3. **Existing figures** — any manually created figures to preserve
+4. **`idea-stage/TITLE.md`** (if present, from `/title-decider`) — canonical title and **Terminology rulings**; authoritative. Use the ruled terms verbatim in captions, table titles, legends and axis labels; never introduce a synonym for a ruled term. If a new term gets settled while you work, add it to the rulings (see `/title-decider`, Downstream contract) instead of only using it locally.
 
 If no PAPER_PLAN.md exists, scan for data files and ask the user which figures to generate.
 
@@ -278,6 +279,10 @@ a clean result, but a deliberate, stated alternative may override them.
       difference in the caption
 - [ ] **State n and what was held fixed** — every panel with a summary mark
       says n and the unit of replication (panel or caption)
+- [ ] **Captions, table titles and legends use the paper's terms** — the ones in
+      `idea-stage/TITLE.md` Terminology rulings, one per concept; no synonym for the
+      compared options or for what was held fixed ("the same network" reads as
+      shared weights; "labels" in a caption reads as the plot's text labels)
 - [ ] **Render-then-verify** — the Step-5 self-check on the RENDERED PDF/PNG
       (not the script) actually happened: no clipped labels, no legend covering
       data, every number/label readable at final print size
