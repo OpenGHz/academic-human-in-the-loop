@@ -6,10 +6,14 @@ in all four installers. Drift between skills/ and the catalog silently
 degrades UX (uncataloged skills fall into the interactive "ungrouped"
 bucket), so completeness is enforced here.
 """
+import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))  # also runnable as `python tests/test_skill_groups.py`
+from tools.check_skills_inventory import submodule_dirs  # noqa: E402
+
 CATALOG = REPO_ROOT / "tools" / "skill-groups.tsv"
 SKILLS_DIR = REPO_ROOT / "skills"
 # Not skills: support dir + codex mirror trees (mirror reuses mainline names).
@@ -36,12 +40,16 @@ def parse_catalog():
 
 
 def upstream_skills():
+    # Git submodules (e.g. embodied-ai-paper-writer) are left out, as in
+    # tools/check_skills_inventory.py: they are checked out only in recursive clones.
+    external = submodule_dirs()
     return {
         p.name
         for p in SKILLS_DIR.iterdir()
         if (p / "SKILL.md").is_file()
         and p.name not in NON_SKILL_DIRS
         and not p.name.startswith("skills-codex")
+        and p.resolve() not in external
     }
 
 

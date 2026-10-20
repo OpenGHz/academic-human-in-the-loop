@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tools.check_skills_inventory import check_inventory
+from tools.check_skills_inventory import check_inventory, skill_names
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -14,10 +14,6 @@ MAIN_SKILLS = REPO_ROOT / "skills"
 CODEX_SKILLS = REPO_ROOT / "skills" / "skills-codex"
 CLAUDE_OVERLAY = REPO_ROOT / "skills" / "skills-codex-claude-review"
 GEMINI_OVERLAY = REPO_ROOT / "skills" / "skills-codex-gemini-review"
-
-
-def skill_names(root: Path) -> set[str]:
-    return {path.parent.name for path in root.glob("*/SKILL.md")}
 
 
 def read(path: Path) -> str:
@@ -37,6 +33,12 @@ def test_codex_skill_set_matches_mainline() -> None:
     codex_names = skill_names(CODEX_SKILLS)
     assert len(main_names) == 98
     assert main_names == codex_names
+
+
+def test_inventory_leaves_out_git_submodules() -> None:
+    # skills/embodied-ai-paper-writer is a git submodule, checked out only in recursive
+    # clones; counting it made the skill count depend on how the repository was cloned.
+    assert "embodied-ai-paper-writer" not in skill_names(MAIN_SKILLS)
 
 
 def test_codex_shared_reference_set_matches_mainline() -> None:
