@@ -33,6 +33,7 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 3. **Generated figures** — PDF/PNG files in `figures/` (from `/paper-figure`)
 4. **LaTeX includes** — `figures/latex_includes.tex` (from `/paper-figure`)
 5. **Bibliography** — existing `.bib` file, or will create one
+6. **`idea-stage/TITLE.md`** (if present, from `/title-decider`) — canonical title and **Terminology rulings**; authoritative. Use the ruled terms verbatim in every section, caption and table title; never introduce a synonym for a ruled term. If a new term gets settled while you work, add it to the rulings (see `/title-decider`, Downstream contract) instead of only using it locally.
 
 If no PAPER_PLAN.md exists, ask the user to run `/paper-plan` first or provide a brief outline.
 
@@ -310,7 +311,7 @@ After drafting all sections, run five sequential audit passes. De-AI polish is i
 
 **Pass 3: Sentence Architecture** — flag sentences over 40 words, keep subject and verb close, put familiar context first and new information later, and ensure each paragraph does one job.
 
-**Pass 4: Keyword Consistency** — apply the Banana Rule: do not rename defined technical terms just to avoid repetition. If Methods defines a group, variable, or technique name, Results, Discussion, tables, and captions must use the same term.
+**Pass 4: Keyword Consistency** — apply the Banana Rule: do not rename defined technical terms just to avoid repetition. If Methods defines a group, variable, or technique name, Results, Discussion, tables, and captions must use the same term. Start from `idea-stage/TITLE.md` **Terminology rulings** (if present): search the draft, captions and table titles for the synonyms of each ruled term and for every word on its Avoid list.
 
 **Pass 5: Numerical and Citation Integrity** — check sample sizes, percentages, significant figures, figure/table values, and whether citations support the claims they are attached to.
 

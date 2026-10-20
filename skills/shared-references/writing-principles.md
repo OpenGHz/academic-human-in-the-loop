@@ -396,7 +396,14 @@ For example, avoid mixing:
 - training / learning / optimization
 - sample / instance / example
 
-Choose the best term and keep it stable.
+Choose the best term and keep it stable. This binds every place a reader meets the concept: title, abstract, text, figure captions, table titles, legends and axis labels. If `idea-stage/TITLE.md` exists, its Terminology rulings fix the terms.
+
+Choosing the term:
+
+- **Name the compared options with a noun that works in every slot.** Test it where the paper needs it: table titles ("seeds per X"), statistics ("interaction of X and perturbation level"), captions ("controls within each X, not comparisons between them"). Example: a comparison of keypose and dense actions called the options "action prediction" in the title, "modes" in the tables and "labels" in the method. "Seeds per prediction" does not parse, and both sides predict the same way (what differs is what each chunk slot holds), so the paper now says "action representation" everywhere.
+- **Name what is held fixed so it cannot be misread.** When each arm is trained separately, "the same model" or "the same network" reads as shared weights; say "the same policy architecture". "Backbone" names only the feature extractor (ResNet-18 in ACT, the vision-language model in pi0.5), so do not use it for the whole policy or for variants that differ only in the head.
+- **In a figure caption, "labels" reads as the text labels in the plot.** Say what is plotted ("the dense and keypose representations of a demonstration").
+- **Keep one meaning per word.** If "target" means the controller's per-step setpoint, do not also call the predicted values "targets".
 
 ### Vocabulary Signaling
 
