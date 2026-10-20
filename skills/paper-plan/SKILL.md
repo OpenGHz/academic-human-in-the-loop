@@ -171,6 +171,8 @@ Build a **Claims-Evidence Matrix**:
 | [claim 2] | [exp C] | Partially supported | §4.1 |
 ```
 
+The matrix may tag evidence for the authors (e.g. registered / follow-up, post hoc). The abstract draft, contribution sentence, section plans and caption drafts must not carry such protocol-history labels; organize them by what is compared and write the facts behind the labels as method. See `../shared-references/writing-principles.md`, "The Paper Is Not a Tech Report".
+
 ### Step 2: Determine Paper Type and Structure
 
 Based on TARGET_VENUE and paper content, classify and select structure.

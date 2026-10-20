@@ -628,6 +628,7 @@ Move the following out of the main body — to the appendix only when the reprod
 - **Intermediate-attempt narrative.** "We first tried approach P, found it failed because of R, then moved to S which also failed, finally arrived at T." The dropped attempts are not part of the contribution; presenting them invites the reviewer to grade the dropped attempts. Lead with T; let the discarded P / S live in an internal log, not in §Method.
 - **Deprecated experimental rows / superseded results.** Once an experimental row is dropped from the contribution (whether because the protocol changed, the row was flawed, or it was superseded by a stronger version), it stays dropped. The paper does not present the dropped row "for completeness" and does not footnote it as deprecated. A footnote that says "deprecated row $K$ shows $X$" tells the reviewer there *was* a row $K$ that someone (you) judged unfit to present, and now invites them to ask why.
 - **Internal milestone language.** "Round-2 prompt template", "v3 of the protocol", "the post-Q4 evaluation cap." Version stamps make sense in a changelog, not in a method section. Pick the version that is in the contribution and present it as *the* method.
+- **Protocol-history labels.** "Registered" or "pre-registered" (unless the paper cites a public registry entry), "planned", "follow-up", "original protocol", "post hoc", "exploratory", "added later", internal stage names (stage A/B, P1–P4) and run codenames. They tell the reviewer the order in which the team ran things, not what was compared. Organize results by what is compared and name each condition by what it is (e.g. "default execution" for the fixed rules; "selected execution: chosen on tuning scenes, evaluated on fresh scenes"). Evidence labels for the authors (registered / follow-up in `PAPER_PLAN.md`'s Claims-Evidence Matrix) stay in the plan.
 - **Pipeline status flags.** "This experiment is in progress" / "raw data archives are not yet local for $TASK$" / "the cluster scheduler is being migrated." Operational state is invisible to the reviewer and should stay that way.
 - **"Saturated reference" or "excluded from headline" callouts.** If a task or row is excluded from the headline, it is not in the headline; it should not be footnoted into the headline by another route. Including a row only to footnote it as "saturated" or "excluded" reintroduces the dropped content in a way the reviewer has to parse.
 
@@ -642,6 +643,8 @@ This rule does not forbid honest scope statements, and it does not forbid an app
 - **Scope declarations in framing.** "This paper targets $X$; head-to-head numbers against the $Y$ family are out of scope." That is a framing statement about what the contribution is *about*, not an admission that the comparison was queued and dropped.
 - **Reproducibility appendices.** Exact invocations, dataset slugs, split definitions, evaluation caps, model identifiers — these live in an appendix that the reproducibility audience opens. The main body should not duplicate them.
 - **A single Limitations section.** See the next principle for what belongs in Limitations and what does not.
+- **Facts that change how a number reads.** Removing history words must not remove these; write each one as part of the method. Examples: a sequential seed design ("6 seeds per side, extended once to 12 if the interval includes 0"); checkpoints reused across comparisons ("fresh scenes, not fresh training seeds"); an option picked on the test data (say how it was picked and which side that favours); nominal per-comparison intervals without multiplicity correction. Never state or imply that everything was fixed in advance. The paper just does not recount the sequence.
+- **A metric or limit chosen after some data were seen.** Give its reason in one clause where the metric is defined and where the affected result first appears, and report the alternative right next to it, e.g. "we count success within 200 steps because keypose finishes sooner already without perturbation, which a 400-step limit does not credit; 400-step results are given alongside." A reviewer who sees two horizons asks why one is primary; the clause answers that without a timeline.
 
 ### The Substitution Pattern
 
@@ -654,6 +657,9 @@ This rule does not forbid honest scope statements, and it does not forbid an app
 | "Task $W$ saturates at $X$ and is excluded from the headline." | (Delete the row entirely. If it is excluded from the headline, it is not in the paper.) | Internal log; explicit scope statement in §Setup if the absence matters |
 | "Round-2 of the prompt template tightened the gate." | "The prompt template uses a held-out training-group gate at $T$." | (No relocation; pick the in-paper version and present it once) |
 | "Raw $DATASET$ archives are not yet local, so $BASELINE$ is deferred." | (Delete. Either run the baseline or scope it out explicitly.) | Status log |
+| "The first three groups are registered comparisons, the others follow-up comparisons." | "Selected execution: each representation's execution rule chosen on tuning scenes, evaluated on fresh scenes." | Evidence labels in `PAPER_PLAN.md` |
+| "Against dense with a post hoc faster execution." | "Against dense with the best of four faster executions, chosen on these test scenes." | (No relocation: how it was picked is the fact) |
+| "The main limit was changed from 400 to 200 steps after level 0 was read." | "We count success within 200 steps because …; 400-step results are given alongside." | (No relocation) |
 
 ### How to Audit a Draft
 
@@ -661,6 +667,7 @@ This rule does not forbid honest scope statements, and it does not forbid an app
 - Grep the body for deprecation markers: "deprecated", "superseded", "legacy", "row $K$" / "old setting", "earlier version". Each hit is a candidate.
 - Grep the body for selection narrative: "we first tried", "we initially", "we considered", "we narrowed". Each hit is a candidate.
 - Read every footnote in the main body. Footnotes that introduce a row only to flag it as excluded / saturated / deprecated should be deleted along with the row.
+- Grep the body, captions, table titles and footnotes for protocol-history labels: "registered", "pre-regist", "planned", "follow-up", "post hoc", "exploratory", "original protocol", "added later", stage names and run codenames. Rewrite each hit as what was compared, and keep, as method, any fact it carried that changes how a number reads.
 
 A paper presents the contribution that exists. The contribution that does not yet exist is not part of the paper.
 

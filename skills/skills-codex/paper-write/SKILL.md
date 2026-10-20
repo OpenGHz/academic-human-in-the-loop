@@ -313,7 +313,7 @@ After drafting all sections, run five sequential audit passes. De-AI polish is i
 
 **Pass 4: Keyword Consistency** — apply the Banana Rule: do not rename defined technical terms just to avoid repetition. If Methods defines a group, variable, or technique name, Results, Discussion, tables, and captions must use the same term. Start from `idea-stage/TITLE.md` **Terminology rulings** (if present): search the draft, captions and table titles for the synonyms of each ruled term and for every word on its Avoid list.
 
-**Pass 5: Numerical and Citation Integrity** — check sample sizes, percentages, significant figures, figure/table values, and whether citations support the claims they are attached to.
+**Pass 5: Numerical and Citation Integrity** — check sample sizes, percentages, significant figures, figure/table values, and whether citations support the claims they are attached to. No protocol-history labels (registered / pre-registered (unless a public registry entry is cited), planned, follow-up, original protocol, post hoc, exploratory, stage names, run codenames) in the body, captions, table titles or footnotes; organize results by what is compared. Write facts that change how a number reads as method: a sequential seed design, checkpoints reused across comparisons, an option picked on the test data (how, and which side it favours), nominal per-comparison intervals; a metric or limit chosen after some data were seen gets a one-clause reason where it is defined and where the affected result first appears, with the alternative reported alongside. Never state or imply that everything was fixed in advance.
 
 After drafting all sections, scan for common AI writing patterns and fix them:
 

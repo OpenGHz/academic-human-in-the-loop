@@ -309,6 +309,7 @@ those two as binding, not overridable):**
 - [ ] Colors distinguishable in grayscale (print-friendly)
 - [ ] **Tables have a short caption and no note paragraph below** — caveats are in the text plan (Key Rules)
 - [ ] **Grouped tables put the groups in a first column** — no spanning header rows, indented sub-rows or "same" rows between the data rows (Key Rules)
+- [ ] **No protocol-history labels in captions, table titles, footnotes or legends** — no registered / follow-up / post hoc / original protocol / stage names; name each condition by what it is (e.g. "selected execution: chosen on tuning scenes, evaluated on fresh scenes") and say how an option picked on the test data was picked
 - [ ] **No title inside figures** — titles go only in LaTeX `\caption{}` (from pedrohcgs)
 - [ ] Legend does not overlap data
 - [ ] Axis labels have units where applicable
