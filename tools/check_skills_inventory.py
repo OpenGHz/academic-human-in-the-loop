@@ -60,8 +60,21 @@ REQUIRED_README_ANCHORS = (
 )
 
 
+def submodule_dirs() -> set[Path]:
+    """Directories registered in `.gitmodules`. Their content is external and is only
+    present in recursive clones, so the inventory leaves them out: counting them would
+    make the result depend on how the repository was cloned."""
+    gitmodules = REPO_ROOT / ".gitmodules"
+    if not gitmodules.exists():
+        return set()
+    paths = re.findall(r"(?m)^\s*path\s*=\s*(\S+)\s*$", gitmodules.read_text(encoding="utf-8"))
+    return {(REPO_ROOT / path).resolve() for path in paths}
+
+
 def skill_names(root: Path) -> set[str]:
-    return {path.parent.name for path in root.glob("*/SKILL.md")}
+    """Skills directly under `root`, without git submodules (see `submodule_dirs`)."""
+    external = submodule_dirs()
+    return {path.parent.name for path in root.glob("*/SKILL.md") if path.parent.resolve() not in external}
 
 
 def allowed_tools(text: str) -> list[str]:
