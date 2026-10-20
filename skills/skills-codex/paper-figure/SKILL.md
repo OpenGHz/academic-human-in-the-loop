@@ -40,6 +40,7 @@ Generate all figures and tables for a paper based on: **$ARGUMENTS**
 - **FONT_SIZE = 10** — Base font size (matches typical conference body text)
 - **FIG_DIR = `figures/`** — Output directory for generated figures
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via a secondary Codex agent for figure quality review.
+- **PREVIEW = `true`** — After the snippets are written, build `figures/preview.pdf`: a figures-and-tables-only document in the venue's real page layout, so the user (and the reviewer in Step 7) sees every figure and table at printed size with its caption. Override with `— no-preview`.
 
 ## Inputs
 
@@ -210,9 +211,28 @@ For each figure, output the LaTeX code to include it:
 
 Save all snippets to `figures/latex_includes.tex` for easy copy-paste into the paper.
 
+### Step 6.5: Build the Figures-Only Preview PDF (default; skip with `— no-preview`)
+
+Render every figure and table, with its caption, in the venue's real page layout and nothing else. Printed size is where clipping, unreadable fonts, oversized tables and caption overflow actually show; a figure PDF viewed on its own hides them.
+
+1. **Write `figures/preview.tex`.** Take the preamble (everything before `\begin{document}`) of the venue template `/paper-write` will use, from `../paper-write/templates/` (`IEEE_CONF` and RA-L → `ieee_conference.tex`, which already carries the RAS margin overrides; `ICLR` → `iclr2026.tex`; and so on). Copy any style or class file it needs next to `preview.tex` only if LaTeX cannot find it otherwise. Add the packages and macro files the snippets need (e.g. `booktabs`, the `caption` setup, generated macro files). The body is a title (`<working title>: figures and tables (draft preview)`), one line saying what the document is, and `\input{figures/latex_includes.tex}`, so the preview always shows exactly the snippets the paper will use. Drop bibliography commands and author blocks; keep the venue's anonymity.
+2. **Build from the project root, auxiliary files outside the repository:**
+   ```bash
+   OUT=$(mktemp -d)
+   for pass in 1 2; do   # second pass resolves cross-references between captions
+     pdflatex -interaction=nonstopmode -halt-on-error -output-directory "$OUT" figures/preview.tex \
+       > "$OUT/build.txt" 2>&1 || { echo "preview build failed: see $OUT/preview.log"; break; }
+   done
+   [ -s "$OUT/preview.pdf" ] && cp "$OUT/preview.pdf" figures/preview.pdf
+   ```
+   Paths inside the snippets (`figures/...`) resolve because the build runs from the project root. If `pdflatex` is not installed, skip the preview with a warning; do not fail the skill.
+3. **Check the build.** No `Overfull \hbox` from a float; no undefined references (captions may cite each other); `pdffonts figures/preview.pdf` shows every font embedded and none of type Type 3; each `Requested size` line in the log matches the figure's natural size when the figure was made at its printed width (a large rescale changes the printed font size). Fix the cause and rebuild.
+4. **Look at the pages.** Rasterize them (`pdftoppm -r 110 -png figures/preview.pdf "$OUT/page"`) and do the render-then-verify check of Step 5 on these pages at printed size: clipped labels, overlaps, legend placement, font sizes, table width, caption length. In two-column layouts a full-width float cannot appear on the page where it is defined, so page 1 normally holds only the title; that is expected.
+5. **Report the path** (`figures/preview.pdf`) to the user at the end of the run, and rebuild the preview whenever a figure, table or caption changes in this skill. If the snippets contain placeholder or not-yet-measured data, the preview is a draft: keep the markers visible and say so.
+
 ### Step 7: Figure Quality Review with REVIEWER_MODEL
 
-Send figure descriptions and captions to GPT-6-Astra for review:
+Send figure descriptions and captions to GPT-6-Astra for review. When the preview exists, list the rendered preview pages (the PNG files from Step 6.5) in the reviewer's message as well, so it judges what will actually print:
 
 > Resolve this reviewer slot first; the following is the `backend=codex` example.
 
@@ -229,6 +249,8 @@ spawn_agent:
     3. Is the comparison fair and clear?
     4. Any missing baselines or ablations?
     5. Would a different visualization be more effective?
+
+    Rendered preview pages at printed size (open and inspect them): [PNG paths from Step 6.5]
 
     [list all figures with captions and descriptions]
 ```
@@ -267,6 +289,7 @@ those two as binding, not overridable):**
 
 - [ ] Font size readable at printed paper size (not too small)
 - [ ] Colors distinguishable in grayscale (print-friendly)
+- [ ] **Tables have a short caption and no note paragraph below** — caveats are in the text plan (Key Rules)
 - [ ] **No title inside figures** — titles go only in LaTeX `\caption{}` (from pedrohcgs)
 - [ ] Legend does not overlap data
 - [ ] Axis labels have units where applicable
@@ -289,7 +312,10 @@ figures/
 ├── fig2_training_curves.pdf
 ├── fig3_comparison.pdf
 ├── latex_includes.tex           # LaTeX snippets for all figures
-└── TABLE_*.tex                  # standalone table LaTeX files
+├── TABLE_*.tex                  # standalone table LaTeX files
+├── TABLE_*_facts.tex            # macros for numbers the text needs (no note paragraphs under tables)
+├── preview.tex                  # figures-and-tables-only document (Step 6.5)
+└── preview.pdf                  # rendered preview at printed size
 ```
 
 ## Key Rules
@@ -303,6 +329,8 @@ figures/
 - **One script per figure** — easy to re-run individual figures when data changes
 - **No titles inside figures** — captions are in LaTeX only
 - **Comparison tables count as figures** — generate them as standalone .tex files
+- **Always build the preview** — every run ends with an up-to-date `figures/preview.pdf` (Step 6.5) unless the user passed `— no-preview`
+- **Short table captions, no note paragraph below a table** — the caption (above the table in IEEE style) says only what a reader needs to read the table: metric and units, default conditions, what bold and symbols mean. At most one or two short lettered footnotes may mark a specific row. Protocol details, sample counts, caveats and definitions go into the paper text, not under the table: list each one with its target section in `PAPER_PLAN.md` for `/paper-write`, and write their numbers as macros (e.g. `figures/TABLE_<name>_facts.tex`) so the text never copies them by hand. This also applies when a reviewer asks for a caveat to "accompany" a table. Paragraph-length table notes are uncommon in robotics venues (RA-L, ICRA, IROS, CoRL) and cost space
 
 ## Figure Type Reference
 
