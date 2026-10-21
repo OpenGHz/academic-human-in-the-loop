@@ -295,7 +295,14 @@ a clean result, but a deliberate, stated alternative may override them.
 - [ ] **Captions, table titles and legends use the paper's terms** — the ones in
       `idea-stage/TITLE.md` Terminology rulings, one per concept; no synonym for the
       compared options or for what was held fixed ("the same network" reads as
-      shared weights; "labels" in a caption reads as the plot's text labels)
+      shared weights; "labels" in a caption reads as the plot's text labels);
+      ruled terms written in full ("action representation", not "representation");
+      "trained policies", not "checkpoints" or "model weights"
+- [ ] **A caption describes what is plotted, nothing else** — counts per cell, what
+      each mark is, how the compared arms differ; a clause that reconciles this figure
+      with another table ("four of the six models of Table I"), or a result from a
+      condition the figure does not show, goes in the text; when the caption says how
+      one arm runs, it says how the other runs, shared part first
 - [ ] **Render-then-verify** — the Step-5 self-check on the RENDERED PDF/PNG
       (not the script) actually happened: no clipped labels, no legend covering
       data, every number/label readable at final print size
