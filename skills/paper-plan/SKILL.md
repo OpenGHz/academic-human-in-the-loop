@@ -242,11 +242,12 @@ For each section, specify:
 - **Gap / challenge**: [what's missing in prior work, and why prior work is insufficient]
 - **One-sentence contribution**: [the main takeaway of the paper]
 - **Approach overview**: [what we do differently]
-- **Key questions**: [the research questions this paper answers]
+- **Introduction question**: [the paper's overall question at a macro level; retain field- or venue-expected RQs here]
 - **Contributions**: [2-4 numbered bullets, specific and falsifiable, matching Claims-Evidence Matrix]
 - **Results preview**: [the strongest result or comparison to surface early]
+- **Qualifier placement**: [keep the conditions needed to interpret the headline claim with it; put broader paper-level boundaries once in the venue-appropriate Limitations location, and keep result-specific conditions with the results they qualify. A request to keep qualifiers next to a claim does not mean repeating them in §1. The Abstract keeps what it needs to stand alone]
 - **Hero figure**: [describe what Figure 1 should show — MUST include clear comparison if applicable]
-- **Estimated length**: 1.5 pages
+- **Estimated length**: 1-1.5 pages
 - **Key citations**: [3-5 papers to cite here]
 - **Front-loading check**: [would a skim reader know the main claim before reaching the method?]
 
@@ -266,6 +267,7 @@ For each section, specify:
 - **Estimated length**: 1.5-2 pages
 
 ### §4 Experiments / Main Results
+- **Detailed research questions (if used)**: [for papers that organize results around them, map each question to its answering subsection]
 - **Figures planned**:
   - Fig 1: [description, type: bar/line/table/architecture, WHAT COMPARISON it shows]
   - Fig 2: [description]
@@ -274,7 +276,7 @@ For each section, specify:
 
 ### §5 Conclusion
 - **Restatement**: [contributions rephrased, not copy-pasted from intro]
-- **Limitations**: [honest assessment — reviewers value this]
+- **Limitations**: [honest assessment — reviewers value this; venue-appropriate home for broader scope boundaries; fold into Conclusion when required]
 - **Future work**: [1-2 concrete directions]
 - **Estimated length**: 0.5 pages
 ```
