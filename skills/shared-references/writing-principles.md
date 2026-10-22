@@ -355,7 +355,10 @@ After the substitution pass, count em-dashes in **two separate buckets**: (a) th
 
 ```bash
 # Extract abstract block and count em-dashes — must be 0.
-awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex \
+# When the abstract text has its own file that main.tex \input's inside \begin{abstract}
+# (paper-write's paper/sections/0_abstract.tex), awk does not follow \input; read the file too.
+{ cat paper/sections/0_abstract.tex 2>/dev/null
+  awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex; } \
   | grep -oE "—|---" | wc -l
 ```
 

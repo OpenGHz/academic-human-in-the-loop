@@ -613,10 +613,20 @@ Before declaring done:
 - [ ] Abstract is self-contained (understandable without reading the paper)
 - [ ] **Abstract contains ZERO em-dashes** (`—` / `---`) — hard gate, see [`../shared-references/writing-principles.md`](../shared-references/writing-principles.md) §Punctuation. Run:
   ```bash
-  awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex \
+  # paper/sections/0_abstract.tex holds the abstract text and main.tex \input's it inside
+  # \begin{abstract}; awk does not follow \input, so read the file too.
+  { cat paper/sections/0_abstract.tex 2>/dev/null
+    awk '/\\begin\{abstract\}/,/\\end\{abstract\}/' paper/sections/*.tex paper/main.tex; } \
     | grep -oE "—|---" | wc -l
   ```
   Non-zero count blocks completion; surface offending sentences and rewrite.
+- [ ] **Abstract within its length limit**: the venue's word limit if it sets one, otherwise §0's 250-word default. Check a character limit, if the venue sets one, separately on the text entered in the submission form.
+  A rough count for the standard layout, with comments stripped but escaped `\%` kept (stripping from every `%` cuts each line at its first percentage and undercounts):
+  ```bash
+  perl -pe 's/(?<!\\)%.*//' paper/sections/0_abstract.tex | wc -w
+  ```
+  This counts source tokens: a command that prints nothing, such as `\looseness=-1`, still counts, and a macro counts once whatever it prints. If the abstract is written inside `main.tex`, count that block instead, and near the limit recount on the rendered text.
+  If over, cut repeated detail and secondary numbers first, and keep the claim's scope and what the abstract needs to stand alone.
 - [ ] Main-body em-dash count ≤ 2 (same reference)
 - [ ] Title is specific and informative (not generic)
 - [ ] Related work is ≥1 full page
