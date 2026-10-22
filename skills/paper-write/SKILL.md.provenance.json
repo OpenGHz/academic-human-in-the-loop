@@ -6,7 +6,7 @@
   "reviewer_family": "openai",
   "review_independence": "cross-family",
   "acceptance_status": "accepted",
-  "verdict_id": "01a162d0-585f-7673-8a57-aae2ddbe2baf",
-  "content_hash": "f035f54ecbba33f0dd156e71688350d15903b5942048e000611be562248d2a66",
-  "stamped_at": "2026-10-22T08:56:17Z"
+  "verdict_id": "01a16384-5b35-7c52-92c6-36324e547b86",
+  "content_hash": "1b2544733a9075eaddb3ecc902b30422e1d60ac7c6c052e733baebc724f05d80",
+  "stamped_at": "2026-10-22T12:12:21Z"
 }
