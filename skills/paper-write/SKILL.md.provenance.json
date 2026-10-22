@@ -1,0 +1,12 @@
+{
+  "created_by": "aris-auto",
+  "author_model": "claude-opus-5-5",
+  "author_family": "anthropic",
+  "reviewer_model": "gpt-6.1-sol",
+  "reviewer_family": "openai",
+  "review_independence": "cross-family",
+  "acceptance_status": "accepted",
+  "verdict_id": "01a161d5-7c5a-7ea2-a87e-371d03ff2973",
+  "content_hash": "84df5d8552836675ad1da2a6e7a1a7b25a22dd99a440bb79d4e7ed961a8b2971",
+  "stamped_at": "2026-10-22T04:21:31Z"
+}

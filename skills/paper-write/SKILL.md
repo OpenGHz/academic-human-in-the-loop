@@ -256,6 +256,9 @@ Before drafting the front matter, re-read the one-sentence contribution from `PA
 - Give a brief approach overview before the reader gets lost in details
 - List 2-4 specific, falsifiable contributions as a numbered or bulleted list
 - Preview the strongest result early instead of saving it for the experiments section
+- Keep §1 at the level of the story: the overall question, the approach and its key insight, the headline result, and the contributions. Keep field- or venue-required research questions in §1; place detailed questions with the section or subsection that answers them
+- Keep contribution bullets concise, usually 1-2 lines, and qualitative by default, without numbers; the results carry the figures. When a contribution is a gain on a specific metric or benchmark, stating that number can make it sharper. Falsifiable means a reviewer can check the bullet against evidence the paper provides (a theorem, an experiment, a measured comparison), not that it contains a number
+- Each claim in §1 carries the conditions that make it true. When PAPER_PLAN.md or a claims ledger asks for further qualifiers next to a claim, place those that do not change what the claim says as Key Rule 3 does, rather than repeating them in §1; a qualifier that would change the claim narrows the claim itself. The Abstract keeps what it needs to stand alone
 - End with a brief roadmap ("The rest of this paper is organized as...")
 - Include the main result figure if space allows
 - Target: 1-1.5 pages
@@ -661,7 +664,12 @@ Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing
    section. Outside it, remove generic disclaimers such as "further research
    is needed", "may not generalize", and "should be interpreted with caution".
    Claim-defining scope, assumptions, and statistical qualifications stay
-   attached to the claims they make true.
+   attached to the claims they make true. Caveats that do not change what a
+   claim says (results outside its stated scope, untested settings, another
+   result's limits) are written once: broader boundaries in the
+   venue-appropriate Limitations location, result-specific ones with the
+   results they qualify, not beside every restatement of the claim. A
+   counterexample inside the claim's scope narrows the claim instead.
 4. Aim for 2-4 material, specific limitations (dataset scale, compute regime,
    assumption X). Real ones only — never invent one to meet a count, never
    apologize generically, never repeat the same limitation through the paper.
