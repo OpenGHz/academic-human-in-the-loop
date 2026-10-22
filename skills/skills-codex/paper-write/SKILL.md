@@ -190,7 +190,7 @@ Before drafting the front matter, re-read the one-sentence contribution from `PA
 
 **§2 Related Work:**
 - **MINIMUM 1 full page** (3-4 substantive paragraphs). Short related work sections are a common reviewer complaint.
-- Organize by category using `\paragraph{Category Name.}`
+- Organize by category. Under the one-paragraph-per-category default below, start each category's paragraph with a bold, unnumbered run-in heading (`\textbf{Category Name.}`) followed by the prose. When categories need several paragraphs, use `\subsection{Category Name}` headings instead (A., B., ... in IEEEtran). Do not use `\paragraph` for these headings: IEEEtran renders it as an italic a), b), c) heading
 - Each category: 1 paragraph summarizing the line of work + 1-2 sentences positioning this paper
 - Do NOT just list papers — synthesize and compare
 - End each paragraph with how this paper relates/differs
