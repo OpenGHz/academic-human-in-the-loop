@@ -549,7 +549,7 @@ the reader — break it.
 - Are significant figures consistent and appropriate?
 - Do Figure graphics match Table values?
 - Flag statistics cited only through secondary sources (reviews, textbooks) — recommend verifying primary source
-- No protocol-history labels (registered / pre-registered (unless a public registry entry is cited), planned, follow-up, original protocol, post hoc, exploratory, stage names, run codenames) in the body, captions, table titles or footnotes; every fact such a label carried that changes how a number reads is written as method (see `../shared-references/writing-principles.md`, "The Paper Is Not a Tech Report")
+- No protocol-history labels (registered / pre-registered (unless a public registry entry is cited), planned, follow-up, original protocol, post hoc, exploratory, stage names, run codenames, labels for data sets or experiments that are not defined where the set is introduced or that substitute collection history for what is compared) in the body, captions, table titles or footnotes; every fact such a label carried that changes how a number reads is written as method (see `../shared-references/writing-principles.md`, "The Paper Is Not a Tech Report")
 
 ### Step 6: Cross-Review with REVIEWER_MODEL
 
