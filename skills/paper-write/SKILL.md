@@ -275,6 +275,7 @@ Before drafting the front matter, re-read the one-sentence contribution from `PA
 
 **§3 Method / Preliminaries / Setup:**
 - Define notation early (reference math_commands.tex)
+- Put measured results, such as how accurate a labelling or extraction procedure is or how much two variants differ, in the experiments beside the claim they support, with a pointer from the method section if the reader needs one there. A brief empirical reason or sanity check that explains a design choice may stay in the method section, with its source stated (Key Rules, "Say where a finding comes from"). Drop training observations that no method choice or result depends on, such as a collapsed latent. When the method section is the experimental setup, its settings and values stay there
 - Use `\begin{definition}`, `\begin{theorem}` environments for formal statements
 - For theory papers: include proof sketches of key results in main body, full proofs in appendix
 - For theory papers: include a **comparison table** of prior bounds vs. this paper
@@ -541,6 +542,8 @@ the reader — break it.
 - Verify exact same terms appear in Results, Discussion, Tables, Figure captions
 - Flag every synonym substitution for a defined term
 - Acronym austerity: flag non-standard acronyms created only for convenience; verify every acronym is defined at first use
+- Do not treat a word the paper mentions only in passing (once, in an earlier parenthetical) as a defined term, and do not let "by construction" or "by design" stand in for a reason the reader has not been given; state the mechanism instead ("the perturbations change only how the robot moves to these targets", not "unchanged by the perturbations by construction")
+- Resolve ambiguous references such as "the rules below" by naming the target and citing its section. When reporting a selection among defined options, give each arm's chosen option by its defined name; an umbrella term that is none of them ("sequential execution") can hide that the arms chose differently
 
 **Pass 5: Numerical and Citation Integrity**
 
@@ -739,6 +742,7 @@ Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing
 - **Write complete sections, not outlines** — the output should be compilable LaTeX
 - **One file per section** — modular structure for easy editing
 - **Every claim must cite evidence** — cross-reference the Claims-Evidence Matrix
+- **Say where a finding comes from** — a finding that is neither common knowledge nor self-evident must not read as an established fact; make its source clear. Cite prior work where citations are allowed. For the paper's own result, a restatement outside the passage that presents its evidence points to the section, figure or table that shows it, or says "we found that ..." when the evidence is not shown elsewhere (e.g. a tuning run behind a design choice). In the Abstract, Introduction or Conclusion, a summary with the authors as subject ("we show that ...") is enough to identify the paper as the source; the Abstract still has no citations or body cross-references (§0 Abstract)
 - **Compile-ready** — the output should compile with `latexmk` without errors (modulo missing figures)
 - **Calibrate, don't hedge** — match each claim to its evidence's actual scope and modality, then state it directly; generic caveats live in Limitations only (the CONFIDENT PROSE, HONEST LIMITS block above is the contract)
 - **Launch, not progress report** — organize around the strongest genuine advantage, pick the contest the paper wins, give every experiment an argumentative duty; unfavorable numbers stay in the tables, explained as tradeoffs where the evidence supports that and stated neutrally where it does not — never narrated as defeats, never dressed as a tradeoff they are not (rules 9-12 above)
