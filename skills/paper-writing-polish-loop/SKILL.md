@@ -264,7 +264,9 @@ mcp__codex__codex:
     transitions, opener/closer patterns.
 
     Explicitly NOT in scope:
-    - content claims (do not suggest adding/removing experiments or numbers)
+    - content claims (do not suggest adding/removing experiments or numbers;
+      prose that recites values a cited table or figure already shows,
+      Universal Rules 37–38, is flagged for human attention only)
     - theory changes (do not suggest modifying theorems or proofs)
     - new citations (do not suggest \cite{...} additions)
     - section reordering as an auto-apply (flag for human attention only)

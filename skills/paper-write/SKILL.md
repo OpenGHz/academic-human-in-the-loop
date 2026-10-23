@@ -551,6 +551,7 @@ the reader — break it.
 - Do percentages in Results match raw numbers in Tables?
 - Are significant figures consistent and appropriate?
 - Do Figure graphics match Table values?
+- Does the results prose recite values that a cited table or figure already shows, or repeat a caveat that a caption states? Apply the Key Rule *Results prose interprets; tables and figures hold the numbers*
 - Flag statistics cited only through secondary sources (reviews, textbooks) — recommend verifying primary source
 - No protocol-history labels (registered / pre-registered (unless a public registry entry is cited), planned, follow-up, original protocol, post hoc, exploratory, stage names, run codenames, labels for data sets or experiments that are not defined where the set is introduced or that substitute collection history for what is compared) in the body, captions, table titles or footnotes; every fact such a label carried that changes how a number reads is written as method (see `../shared-references/writing-principles.md`, "The Paper Is Not a Tech Report")
 
@@ -754,6 +755,7 @@ Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing
 - **Front-load the contribution** — do not hide the payoff until the experiments or appendix
 - **Order results by argument, not by lab notebook** — present experiments in the sequence that best builds the case, never in the order they happened to run
 - **Controls and ablations sit next to the claim they test** — not pooled in a distant subsection where the reader has forgotten what was at stake
+- **Results prose interprets; tables and figures hold the numbers** — for empirical results, anchor the interpretation with a headline estimate or comparison and, where the paper judges results by intervals or tests, state the verdict in words (e.g., detectable, inconclusive, equivalent). Summarize other values already shown in a cited table or figure with ranges, factors or pointers, rather than reciting rows or plotted points (for robotics papers, apply the embodied-AI writer's rule *Report results statistically; don't recite the table row by row*). A short symmetric ± may stay with a number in the prose; a bracketed or asymmetric interval (e.g., a bootstrap confidence interval) that a cited table or figure already shows is left there, with the verdict it supports stated in words (embodied-AI experiments playbook Step 14). Keep values and intervals shown nowhere else, and any further numerical reporting required by the venue. Captions remain self-contained, including the comparison, takeaway, setting, sample sizes and uncertainty convention. Apply CONFIDENT PROSE, HONEST LIMITS rule 3 to redundant caveats across prose and captions; retain claim-defining scope, assumptions and statistical qualifications wherever needed. Run this check when writing the experiments/results section and after every later edit of results prose or captions, including review fixes
 
 ## Writing Quality Reference
 
