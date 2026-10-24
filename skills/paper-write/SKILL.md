@@ -508,6 +508,8 @@ After drafting all sections, run five sequential audit passes. Based on Sainani'
 
 Also remove redundancies: "completely eliminate" → "eliminate", "future plans" → "plans", "unexpected surprise" → "surprise".
 
+Also remove the negative clause of a contrast ("X rather than Y", "not Y but X", "X, not Y") when it adds no information beyond the positive clause, and state X alone: "…it mixes the effect of the perturbation with the change of execution rule, rather than measuring how much one fixed rule degrades" → end after "execution rule". Keep it when, without it, the scope, the interpretation of a measurement, the comparison, or a plausible alternative reading would be unclear ("a keypose slot is a stage endpoint, not the next step's target").
+
 Remove AI-isms: delve, pivotal, landscape, tapestry, underscore, noteworthy, intriguingly.
 
 **Pass 2: Active Voice and Verb Vitality** — Identify who did what.
@@ -698,6 +700,13 @@ Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing
    positive, evidence-matched statement of what the paper does establish. If
    the defensive sentence carries a real boundary, keep that boundary in the
    claim or Limitations; do not delete truth-conditional content.
+   Apply this to procedural reassurance as well: state the rule and its
+   reason, not a bare claim that it was fixed in advance or before results
+   were seen ("this was fixed before any results were read"). Keep timing or
+   provenance details when they are an externally verifiable commitment or
+   change how the evidence reads, such as a cited public preregistration, a
+   choice made after seeing test results, or reuse of data, models or test
+   cases that couples selection to confirmation; write the boundary as method.
 7. Tone-only edits never alter facts, negation, modality, scope, assumptions,
    comparison direction, aggregation, numbers, formulas, or citations. Genuine
    overclaims must still be narrowed; supported claims wrapped in redundant
