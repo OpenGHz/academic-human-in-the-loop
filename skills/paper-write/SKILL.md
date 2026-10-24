@@ -530,8 +530,10 @@ the reader — break it.
 - Flag sentences > 40 words for splitting
 - Ensure subject and verb are close together (no long parenthetical insertions between them)
 - Put familiar context first, new information later
+- Place procedural facts that affect a result's interpretation before or with the result, including what was selected and on which data. Keep a needed explanation beside the observation that raises the question, before changing topics; point to an earlier definition when sufficient
 - Place the most important point near the end of the sentence
 - Let each paragraph do one job
+- Omit section-opening inventories that merely list tables or figures. Cite each table or figure where its content is first needed, stating what it shows or measures; preserve any comparison boundary needed for interpretation
 - Don't start consecutive sentences with "This" or "We"
 - Check paragraph transitions — each paragraph's first sentence should connect to the previous
 
@@ -543,8 +545,10 @@ the reader — break it.
 - Extract all key terms from Method section (group names, variable names, technique names, abbreviations)
 - Verify exact same terms appear in Results, Discussion, Tables, Figure captions
 - Flag every synonym substitution for a defined term
+- Follow the specified venue or paper style for panel references; otherwise match the caption's notation ("Fig. 1(b)" for panel "(b)")
 - Acronym austerity: flag non-standard acronyms created only for convenience; verify every acronym is defined at first use
 - Do not treat a word the paper mentions only in passing (once, in an earlier parenthetical) as a defined term, and do not let "by construction" or "by design" stand in for a reason the reader has not been given; state the mechanism instead ("the perturbations change only how the robot moves to these targets", not "unchanged by the perturbations by construction")
+- After deleting or renaming a quantity or term, check later references to it; revise or remove any phrase whose antecedent is no longer clear
 - Resolve ambiguous references such as "the rules below" by naming the target and citing its section. When reporting a selection among defined options, give each arm's chosen option by its defined name; an umbrella term that is none of them ("sequential execution") can hide that the arms chose differently
 
 **Pass 5: Numerical and Citation Integrity**
