@@ -777,7 +777,9 @@ Project skill path: \`$SKILLS_REL/<skill-name>\`
 For ARIS Codex workflows, prefer the project-local skills under \`$SKILLS_REL/\`.
 When a skill needs ARIS helper scripts, resolve the repo root from the manifest or set it explicitly:
 \`$repo_lookup_cmd\`
-Do not edit or delete symlinked skills in place; update upstream or rerun:
+Symlinked skills point into \`$ARIS_REPO\`, so an edit changes them for every project; do not delete them in place.
+To fix a wrong or outdated statement in a skill (a sentence or two), edit the file under \`$ARIS_REPO\` directly, plus its counterpart in the other tree (\`skills/\` or \`skills/skills-codex/\`) if one exists, and show the diff. Use \`/meta-optimize\` then \`/meta-apply\` only for changes to how a skill works, such as a new rule, step or default.
+To pick up new or removed skills, rerun:
 \`bash $ARIS_REPO/tools/install_aris_codex.sh \"$PROJECT_PATH\" --reconcile\`
 For copied Codex installs, use:
 \`bash $ARIS_REPO/tools/smart_update_codex.sh --project \"$PROJECT_PATH\"\`

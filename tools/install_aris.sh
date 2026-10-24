@@ -1563,7 +1563,8 @@ update_claude_doc() {
 ARIS skills installed in this project: $count entries.
 Manifest: \`$ARIS_DIR_NAME/$MANIFEST_NAME\` (lists every skill ARIS installed and its upstream target).
 For ARIS workflows, prefer the project-local skills under \`$SKILLS_REL/\` over global skills.
-Do not modify or delete files inside any skill that is a symlink (symlinks point into \`$ARIS_REPO\`).
+Skills are symlinks into \`$ARIS_REPO\`, so an edit changes them for every project; do not delete skill files or symlinks (rerun the installer instead).
+To fix a wrong or outdated statement in a skill (a sentence or two), edit the file in \`$ARIS_REPO\` directly, plus its counterpart under \`skills/skills-codex/\` if one exists, and show the diff. Use \`/meta-optimize\` then \`/meta-apply\` only for changes to how a skill works, such as a new rule, step or default.
 Update with: \`bash $ARIS_REPO/tools/install_aris.sh\`  (re-runnable; reconciles new/removed skills).
 $BLOCK_END"
 
