@@ -20,9 +20,15 @@ allowed-tools: Bash(*), Read, Grep, Glob, mcp__codex__codex, mcp__codex__codex-r
 
 Analyze accumulated usage logs and propose optimizations for: **$ARGUMENTS**
 
+**Not for small factual fixes.** When a skill states something wrong or outdated and the fix is a
+sentence or two (not a new rule, step or default), skip this loop: edit the file directly in the
+ARIS repo, plus its counterpart under `skills/` or `skills/skills-codex/` if one exists, and show
+the diff. Leave any provenance stamp alone; its content-hash mismatch correctly records the later
+edit. Staging, the landing jury and `/meta-apply` are for changes to how a skill works.
+
 ## Privilege boundary — this skill is a READ-ONLY PRODUCER
 
-meta-optimize **proposes**; it does not **land**. The mutation of the skill corpus
+meta-optimize **proposes**; it does not **land**. Landing this loop's patches in the skill corpus
 is the exclusive job of a separate, human-invoked skill: [`/meta-apply`](../meta-apply/SKILL.md).
 This split is structural, not advisory — it is why a missed instruction cannot let
 this loop apply its own patch (the self-acquittal failure mode):
