@@ -292,8 +292,10 @@ Before drafting the front matter, re-read the one-sentence contribution from `PA
 
 **§5 Conclusion:**
 - Summarize contributions (NOT copy-paste from intro — rephrase)
+- State findings as takeaways or supported trends. Keep claim-defining conditions, written as the general condition they stand for ("when demonstrations are scarce", not "with 100 demonstrations"), and leave routine settings, counts and per-task estimates in the results; a headline gain already reported in the body or a quantity essential to the claim may stay. Calibrate any broader implication to the evidence (Key Rules 1-3)
+- Group results across settings or platforms (e.g., simulation and a real robot) when they support the same takeaway. Lead with what they establish rather than where they ran, and preserve differences in scope
 - Limitations (2-4 material, specific limits — dataset scale, compute regime, assumption X; real ones only, never invented to fill a count. This section is the ONLY home for generic caveats)
-- Future work (1-2 concrete directions)
+- Future work (1-2 concrete directions that extend the main findings, such as broader evaluation (more tasks, settings, models or data) or use at scale, or that address a material limitation. Each should go beyond what the paper already does and answer a substantive open question. Keep limitation–mitigation pairing where a venue playbook requires it)
 - Ethics statement and reproducibility statement (if venue requires)
 - Target: 0.5 pages
 

@@ -275,9 +275,9 @@ For each section, specify:
 - **Data source**: [which JSON files / experiment results]
 
 ### §5 Conclusion
-- **Restatement**: [contributions rephrased, not copy-pasted from intro]
+- **Restatement**: [contributions and main findings rephrased as takeaways, not copied from the intro; omit routine experimental detail, retain claim-defining conditions, and group results supporting the same takeaway across settings]
 - **Limitations**: [honest assessment — reviewers value this; venue-appropriate home for broader scope boundaries; fold into Conclusion when required]
-- **Future work**: [1-2 concrete directions]
+- **Future work**: [1-2 concrete directions that would most extend the main findings; none the paper already does]
 - **Estimated length**: 0.5 pages
 ```
 
