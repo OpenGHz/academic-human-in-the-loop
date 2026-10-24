@@ -20,6 +20,12 @@ allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__antigravity__antigra
 
 Analyze accumulated usage logs and propose optimizations for: **$ARGUMENTS**
 
+**Not for small factual fixes.** When a skill states something wrong or outdated and the fix is a
+sentence or two (not a new rule, step or default), skip this loop: edit the file directly in the
+ARIS repo, plus its counterpart under `skills/` or `skills/skills-codex/` if one exists, and show
+the diff. Leave any provenance stamp alone; its content-hash mismatch correctly records the later
+edit. Staging, the landing jury and `/meta-apply` are for changes to how a skill works.
+
 ## Context
 
 ARIS is a **research harness** — a system of skills, bridges, workflows, and artifact contracts that wraps around LLMs to orchestrate research. This skill implements a prototype **outer loop** that observes how the harness is used and proposes improvements to the harness itself (not to the research artifacts it produces).
