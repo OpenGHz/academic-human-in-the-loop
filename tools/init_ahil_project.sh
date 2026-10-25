@@ -14,14 +14,12 @@ third_party/
 .vscode/
 paper/raw_data/
 /papers/
-# LaTeX build intermediates (latexmk / pdflatex / bibtex)
+# LaTeX build intermediates (latexmk / pdflatex / bibtex); these extensions are LaTeX-only
 *.aux
 *.bbl
 *.blg
 *.fdb_latexmk
 *.fls
-*.log
-*.out
 *.synctex.gz
 *.toc
 *.lof
@@ -36,16 +34,20 @@ paper/raw_data/
 *.ilg
 *.xdv
 *.dvi
-compile.log
-# Middleman intermediates
-*.json
-*.txt
-*.png
-*.svg
 *.bkp
+# .log, .out, .json, .txt, .png and .svg are also experiment evidence (train.log, eval.log,
+# readout JSON, text logs), so they are ignored only inside the paper directory.
+/paper/**/*.log
+/paper/**/*.out
+/paper/**/*.json
+/paper/**/*.txt
+/paper/**/*.png
+/paper/**/*.svg
 
-# arxiv.org submission files
-*.zip
+# arxiv.org submission packages
+/*.zip
+/paper/**/*.zip
+
 EOF
 
 python3 .aris/tools/research_wiki.py init research-wiki/
