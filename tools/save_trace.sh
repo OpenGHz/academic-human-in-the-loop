@@ -34,6 +34,13 @@
 
 set -euo pipefail
 
+# Codex MCP reviews: add --codex-rollout (with --thread-id) instead of --prompt /
+# --response to copy the prompt and the reviewer's reply straight from Codex's own
+# session file (tools/codex_rollout.py), so the trace never holds an executor's
+# retyped copy. The model and effort the turn was configured with are recorded as
+# the requested pair; the rollout is not a backend report of the model that ran.
+# Uses the thread's latest turn, which must have completed; --codex-turn-index N
+# picks another (0-based, negative from the end).
 # Reviewer assurance flags: --review-completed --review-scope-complete
 # --review-positive (only when the skill's own gate is positive). --verdict keeps
 # the raw assessment; this helper does not infer positivity from text or scores.
@@ -48,6 +55,7 @@ EXECUTOR_MODEL_SOURCE="unavailable" REVIEWER_MODEL_SOURCE="unavailable" FAMILY_R
 NATIVE_EVIDENCE="" NATIVE_EVIDENCE_ID="" NATIVE_EVIDENCE_PATH=""
 REVIEW_COMPLETED=false REVIEW_SCOPE_COMPLETE=false REVIEW_POSITIVE=false VERDICT=""
 REVIEW_INDEPENDENCE="unknown" ACCEPTANCE_STATUS="provisional"
+CODEX_ROLLOUT=false CODEX_TURN_INDEX="-1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,6 +87,8 @@ while [[ $# -gt 0 ]]; do
     --review-scope-complete) REVIEW_SCOPE_COMPLETE=true; shift ;;
     --review-positive)    REVIEW_POSITIVE=true; shift ;;
     --verdict)            VERDICT="$2"; shift 2 ;;
+    --codex-rollout)      CODEX_ROLLOUT=true; shift ;;
+    --codex-turn-index)   CODEX_TURN_INDEX="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -91,6 +101,36 @@ fi
 
 if [[ "$TRACE_MODE" == "off" ]]; then
   exit 0
+fi
+
+# --- Codex rollout: the reviewer's own record of the turn ---
+if $CODEX_ROLLOUT; then
+  if [[ -z "$THREAD_ID" ]]; then
+    echo "Error: --codex-rollout needs --thread-id" >&2
+    exit 1
+  fi
+  if [[ -n "$PROMPT" || -n "$PROMPT_FILE" || -n "$RESPONSE" || -n "$RESPONSE_FILE" ]]; then
+    echo "Error: --codex-rollout replaces --prompt/--prompt-file/--response/--response-file; pass one or the other" >&2
+    exit 1
+  fi
+  ROLLOUT_JSON=$(python3 "$(dirname "$0")/codex_rollout.py" turn \
+    --thread-id "$THREAD_ID" --turn-index "$CODEX_TURN_INDEX") || exit 1
+  ROLLOUT_FIELD() { ST_ROLLOUT_JSON="$ROLLOUT_JSON" python3 -c 'import json, os, sys; v = json.loads(os.environ["ST_ROLLOUT_JSON"]).get(sys.argv[1]); print("" if v is None else v, end="")' "$1"; }
+  PROMPT=$(ROLLOUT_FIELD prompt)
+  RESPONSE=$(ROLLOUT_FIELD response)
+  ROLLOUT_MODEL=$(ROLLOUT_FIELD model)
+  ROLLOUT_EFFORT=$(ROLLOUT_FIELD effort)
+  # turn_context holds the model and effort the Codex client configured for the
+  # turn. That is the requested pair (a relay may still route elsewhere), so it
+  # never becomes --reported-reviewer-model.
+  if [[ -n "$MODEL" && -n "$ROLLOUT_MODEL" && "$MODEL" != "$ROLLOUT_MODEL" ]]; then
+    echo "warning: --model '$MODEL' differs from the rollout's configured '$ROLLOUT_MODEL'; recording the rollout's" >&2
+  fi
+  [[ -n "$ROLLOUT_MODEL" ]] && MODEL="$ROLLOUT_MODEL"
+  if [[ -n "$EFFORT" && -n "$ROLLOUT_EFFORT" && "$EFFORT" != "$ROLLOUT_EFFORT" ]]; then
+    echo "warning: --effort '$EFFORT' differs from the rollout's configured '$ROLLOUT_EFFORT'; recording the rollout's" >&2
+  fi
+  [[ -n "$ROLLOUT_EFFORT" ]] && EFFORT="$ROLLOUT_EFFORT"
 fi
 
 # Derive provenance from model identities, never from caller-supplied family or
