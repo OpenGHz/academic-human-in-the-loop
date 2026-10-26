@@ -178,3 +178,111 @@ def test_cached_pending_is_asked_again(monkeypatch):
     assert calls["n"] == 1
     assert result.status == "verified"
     assert cache["arxiv:1706.03762"]["status"] == "verified"
+
+
+# ── a real arXiv id attached to the wrong paper ─────────────────────────────
+# A web-search answer once gave 2403.10545 (a biofilm paper) for "Course
+# Correcting Koopman Representations" (really 2310.15386). The id exists, so
+# checking existence alone passed it.
+
+WRONG_PAPER_FEED = (
+    "<feed><title>arXiv Query</title><entry>"
+    "<id>http://arxiv.org/abs/2403.10545v1</id>"
+    "<title>The role of fluid friction in streamer formation and\n  biofilm growth</title>"
+    "</entry></feed>"
+)
+LATEX_TITLE_FEED = (
+    "<feed><entry><id>http://arxiv.org/abs/2403.14860v1</id>"
+    "<title>Robust Model Based Reinforcement Learning Using $\\mathcal{L}_1$\n"
+    "  Adaptive Control</title></entry></feed>"
+)
+
+
+def _run(mod, papers, cache=None):
+    return mod.verify_papers(
+        [mod.PaperInput(**p) for p in papers],
+        arxiv_batch_size=40,
+        fuzzy_threshold=mod.DEFAULT_FUZZY_THRESHOLD,
+        user_email="",
+        cache=cache,
+    )
+
+
+def test_existing_id_with_another_papers_title_is_unverified(monkeypatch):
+    mod = load_module()
+    _patch_http_get(monkeypatch, mod, [(200, WRONG_PAPER_FEED)])
+
+    (result,) = _run(mod, [{
+        "id": "p", "arxiv_id": "2403.10545",
+        "title": "Course Correcting Koopman Representations",
+    }])
+
+    assert result.status == "unverified"
+    assert result.reason == "arxiv_title_mismatch"
+    assert result.identifiers["arxiv_title"].startswith("The role of fluid friction")
+
+
+def test_matching_title_survives_latex_markup(monkeypatch):
+    mod = load_module()
+    _patch_http_get(monkeypatch, mod, [(200, LATEX_TITLE_FEED)])
+
+    (result,) = _run(mod, [{
+        "id": "p", "arxiv_id": "2403.14860",
+        "title": "Robust Model Based Reinforcement Learning Using L1 Adaptive Control",
+    }])
+
+    assert result.status == "verified"
+
+
+SHORT_FORM_FEED = (
+    "<feed><entry><id>http://arxiv.org/abs/2307.03172v3</id>"
+    "<title>Lost in the Middle: How Language Models Use Long Contexts</title>"
+    "</entry></feed>"
+)
+
+
+def test_short_form_of_the_title_matches(monkeypatch):
+    """The candidate_papers.json example in citation-discipline.md uses a short form."""
+    mod = load_module()
+    _patch_http_get(monkeypatch, mod, [(200, SHORT_FORM_FEED)])
+
+    (result,) = _run(mod, [{"id": "p1", "arxiv_id": "2307.03172", "title": "Lost in the Middle"}])
+
+    assert result.status == "verified"
+
+
+def test_id_without_claimed_title_still_checks_existence_only(monkeypatch):
+    mod = load_module()
+    _patch_http_get(monkeypatch, mod, [(200, WRONG_PAPER_FEED)])
+
+    (result,) = _run(mod, [{"id": "p", "arxiv_id": "2403.10545"}])
+
+    assert result.status == "verified"
+
+
+def test_cache_keeps_the_title_check(monkeypatch):
+    mod = load_module()
+    calls = _patch_http_get(monkeypatch, mod, [(200, WRONG_PAPER_FEED)])
+    cache: dict = {}
+    paper = {"id": "p", "arxiv_id": "2403.10545",
+             "title": "Course Correcting Koopman Representations"}
+
+    _run(mod, [paper], cache)
+    (again,) = _run(mod, [paper], cache)
+
+    assert calls["n"] == 1  # second run answered from the cache
+    assert again.reason == "arxiv_title_mismatch"
+
+
+def test_cache_entry_without_a_title_is_verified_again(monkeypatch):
+    """Entries cached before titles were recorded cannot be title-checked."""
+    mod = load_module()
+    calls = _patch_http_get(monkeypatch, mod, [(200, WRONG_PAPER_FEED)])
+    cache = {"arxiv:2403.10545": {"status": "verified", "method": "arxiv",
+                                  "identifiers": {"arxiv_id": "2403.10545"}, "ts": 0}}
+
+    (result,) = _run(mod, [{"id": "p", "arxiv_id": "2403.10545",
+                            "title": "Course Correcting Koopman Representations"}], cache)
+
+    assert calls["n"] == 1
+    assert result.reason == "arxiv_title_mismatch"
