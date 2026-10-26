@@ -4,7 +4,9 @@ verify_papers.py — Pre-search paper-existence verification helper.
 
 Verifies that candidate papers found by literature-search skills actually exist
 via 3-layer fallback (arXiv API → CrossRef DOI lookup → Semantic Scholar fuzzy
-title match). Designed to catch LLM hallucination at search time, before
+title match). When a candidate gives both an arXiv ID and a title, the ID must
+also belong to that title: a real ID attached to another paper is `unverified`
+with reason `arxiv_title_mismatch`. Designed to catch LLM hallucination at search time, before
 fabricated references propagate through downstream skills.
 
 Used by `/research-lit` (Step 1.5, mandatory), `/idea-creator`, `/novelty-check`.
@@ -85,6 +87,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import os
 import random
@@ -130,6 +133,9 @@ def _arxiv_user_agent() -> str:
 ARXIV_VERSION_RE = re.compile(r"v\d+$")
 TITLE_NORMALIZE_RE = re.compile(r"[^\w\s]", re.UNICODE)
 WHITESPACE_RE = re.compile(r"\s+")
+ARXIV_ENTRY_RE = re.compile(r"<entry>(.*?)</entry>", re.DOTALL)
+ARXIV_ENTRY_ID_RE = re.compile(r"<id>https?://arxiv\.org/abs/([^<\s]+)</id>")
+ARXIV_ENTRY_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.DOTALL)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -177,6 +183,19 @@ def normalize_title(raw: str) -> str:
     t = TITLE_NORMALIZE_RE.sub(" ", t)
     t = WHITESPACE_RE.sub(" ", t).strip()
     return t
+
+
+def title_containment(a: str, b: str) -> float:
+    """Share of the shorter title's words found in the other, after normalization.
+
+    Measured against the shorter title so a claimed short form ("Lost in the
+    Middle" for "Lost in the Middle: How Language Models Use Long Contexts")
+    still matches; a different paper shares few or none of its words.
+    """
+    wa, wb = set(normalize_title(a).split()), set(normalize_title(b).split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / min(len(wa), len(wb))
 
 
 def title_hash(normalized: str) -> str:
@@ -295,18 +314,40 @@ def backoff(attempt: int) -> float:
 # Layer 1: arXiv batch verification
 # ──────────────────────────────────────────────────────────────────────────
 
-def verify_arxiv_batch(ids: list[str], batch_size: int = DEFAULT_BATCH_SIZE) -> dict[str, str]:
-    """Return {arxiv_id: status} where status in {verified, unverified, verify_pending}."""
+def _arxiv_titles(body: str) -> dict[str, str]:
+    """{base arXiv id: title} for each <entry> of an arXiv Atom response."""
+    titles: dict[str, str] = {}
+    for entry in ARXIV_ENTRY_RE.findall(body):
+        id_match = ARXIV_ENTRY_ID_RE.search(entry)
+        title_match = ARXIV_ENTRY_TITLE_RE.search(entry)
+        if id_match and title_match:
+            base, _ = normalize_arxiv_id(id_match.group(1))
+            titles[base] = WHITESPACE_RE.sub(" ", html.unescape(title_match.group(1))).strip()
+    return titles
+
+
+def verify_arxiv_batch(
+    ids: list[str],
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    titles_out: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Return {arxiv_id: status} where status in {verified, unverified, verify_pending}.
+
+    With ``titles_out``, also record the arXiv title of each id found, so the
+    caller can check it against the title it was given.
+    """
     if not ids:
         return {}
     result: dict[str, str] = {}
     for i in range(0, len(ids), batch_size):
         batch = ids[i : i + batch_size]
-        result.update(_verify_arxiv_batch_with_retry(batch))
+        result.update(_verify_arxiv_batch_with_retry(batch, titles_out))
     return result
 
 
-def _verify_arxiv_batch_with_retry(batch: list[str]) -> dict[str, str]:
+def _verify_arxiv_batch_with_retry(
+    batch: list[str], titles_out: dict[str, str] | None = None
+) -> dict[str, str]:
     """3 retries with exponential backoff. On persistent failure split batch in half."""
     base_ids = [normalize_arxiv_id(x)[0] for x in batch]
     url = f"{ARXIV_API}?id_list={','.join(base_ids)}&max_results={len(base_ids)}"
@@ -317,6 +358,8 @@ def _verify_arxiv_batch_with_retry(batch: list[str]) -> dict[str, str]:
             for bid in base_ids:
                 if f"<id>http://arxiv.org/abs/{bid}" in body:
                     found.add(bid)
+            if titles_out is not None:
+                titles_out.update(_arxiv_titles(body))
             return {
                 orig: "verified" if normalize_arxiv_id(orig)[0] in found else "unverified"
                 for orig in batch
@@ -334,8 +377,8 @@ def _verify_arxiv_batch_with_retry(batch: list[str]) -> dict[str, str]:
     # Persistent failure — split & retry
     if len(batch) > 1:
         mid = len(batch) // 2
-        left = _verify_arxiv_batch_with_retry(batch[:mid])
-        right = _verify_arxiv_batch_with_retry(batch[mid:])
+        left = _verify_arxiv_batch_with_retry(batch[:mid], titles_out)
+        right = _verify_arxiv_batch_with_retry(batch[mid:], titles_out)
         return {**left, **right}
     return {batch[0]: "verify_pending"}
 
@@ -431,6 +474,36 @@ def verify_title_s2(title: str, fuzzy_threshold: float) -> tuple[str, dict[str, 
 # Orchestration
 # ──────────────────────────────────────────────────────────────────────────
 
+def _arxiv_paper_result(
+    pid: str,
+    base_id: str,
+    id_status: str,
+    claimed_title: str | None,
+    arxiv_title: str | None,
+    fuzzy_threshold: float,
+) -> PaperResult:
+    """Result for one paper whose arXiv id came back with ``id_status``.
+
+    An id that exists but belongs to a different paper is a fabricated
+    identifier, so a claimed title that does not match the arXiv title makes
+    the paper ``unverified`` (reason ``arxiv_title_mismatch``).
+    """
+    identifiers = {"arxiv_id": base_id}
+    if arxiv_title:
+        identifiers["arxiv_title"] = arxiv_title
+    if id_status != "verified":
+        return PaperResult(
+            id=pid, status=id_status, reason=f"arxiv_{id_status}", identifiers=identifiers
+        )
+    if claimed_title and arxiv_title and title_containment(claimed_title, arxiv_title) < fuzzy_threshold:
+        return PaperResult(
+            id=pid, status="unverified", reason="arxiv_title_mismatch", identifiers=identifiers
+        )
+    return PaperResult(
+        id=pid, status="verified", method="arxiv", confidence="high", identifiers=identifiers
+    )
+
+
 def verify_papers(
     papers: list[PaperInput],
     *,
@@ -444,6 +517,7 @@ def verify_papers(
 
     # Cache lookup — short-circuit
     results: dict[str, PaperResult] = {}
+    inputs = {p.id: p for p in papers}
     to_verify_arxiv: dict[str, list[str]] = {}  # arxiv_id -> [paper_ids]
     to_verify_doi: list[PaperInput] = []
     to_verify_title: list[PaperInput] = []
@@ -453,15 +527,26 @@ def verify_papers(
         # a cached verify_pending is a past outage, not an answer — ask again
         if cache is not None and key and key in cache and cache[key].get("status") != "verify_pending":
             cached = cache[key]
-            results[p.id] = PaperResult(
-                id=p.id,
-                status=cached["status"],
-                method=cached.get("method"),
-                confidence=cached.get("confidence"),
-                reason=cached.get("reason"),
-                identifiers=cached.get("identifiers", {}),
-            )
-            continue
+            if key.startswith("arxiv:") and p.title:
+                arxiv_title = (cached.get("identifiers") or {}).get("arxiv_title")
+                # An entry cached before titles were recorded cannot be checked
+                # against the claimed title: verify it again.
+                if arxiv_title or cached["status"] != "verified":
+                    results[p.id] = _arxiv_paper_result(
+                        p.id, key[len("arxiv:"):], cached["status"], p.title,
+                        arxiv_title, fuzzy_threshold,
+                    )
+                    continue
+            else:
+                results[p.id] = PaperResult(
+                    id=p.id,
+                    status=cached["status"],
+                    method=cached.get("method"),
+                    confidence=cached.get("confidence"),
+                    reason=cached.get("reason"),
+                    identifiers=cached.get("identifiers", {}),
+                )
+                continue
         if p.arxiv_id:
             base, _ = normalize_arxiv_id(p.arxiv_id)
             to_verify_arxiv.setdefault(base, []).append(p.id)
@@ -476,27 +561,31 @@ def verify_papers(
 
     # Layer 1: arXiv batch
     if to_verify_arxiv:
-        arxiv_results = verify_arxiv_batch(list(to_verify_arxiv.keys()), arxiv_batch_size)
+        arxiv_titles: dict[str, str] = {}
+        arxiv_results = verify_arxiv_batch(
+            list(to_verify_arxiv.keys()), arxiv_batch_size, titles_out=arxiv_titles
+        )
         for base_id, paper_ids in to_verify_arxiv.items():
             status = arxiv_results.get(base_id, "verify_pending")
+            arxiv_title = arxiv_titles.get(base_id)
             for pid in paper_ids:
-                results[pid] = PaperResult(
-                    id=pid,
-                    status=status,
-                    method="arxiv" if status == "verified" else None,
-                    confidence="high" if status == "verified" else None,
-                    reason=None if status == "verified" else f"arxiv_{status}",
-                    identifiers={"arxiv_id": base_id},
+                results[pid] = _arxiv_paper_result(
+                    pid, base_id, status, inputs[pid].title, arxiv_title, fuzzy_threshold
                 )
-                if cache is not None:
-                    cache[f"arxiv:{base_id}"] = {
-                        "status": status,
-                        "method": "arxiv" if status == "verified" else None,
-                        "confidence": "high" if status == "verified" else None,
-                        "reason": None if status == "verified" else f"arxiv_{status}",
-                        "identifiers": {"arxiv_id": base_id},
-                        "ts": now,
-                    }
+            if cache is not None:
+                # The cache records whether the id exists (and its title), not
+                # the per-paper title check, which depends on the claimed title.
+                identifiers = {"arxiv_id": base_id}
+                if arxiv_title:
+                    identifiers["arxiv_title"] = arxiv_title
+                cache[f"arxiv:{base_id}"] = {
+                    "status": status,
+                    "method": "arxiv" if status == "verified" else None,
+                    "confidence": "high" if status == "verified" else None,
+                    "reason": None if status == "verified" else f"arxiv_{status}",
+                    "identifiers": identifiers,
+                    "ts": now,
+                }
 
     # Layer 2: CrossRef
     for p in to_verify_doi:

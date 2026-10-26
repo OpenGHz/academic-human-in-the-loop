@@ -118,7 +118,14 @@ called by `/research-lit` (Step 1.5, mandatory), and is referenced by
 
 1. **arXiv API batch verify** — `arxiv.org/api/query?id_list=...` confirms up
    to 40 arXiv IDs per request. Cheapest, most authoritative; always run first
-   when arXiv IDs are present.
+   when arXiv IDs are present. When the candidate also has a title, the title
+   arXiv returns must contain it (at least the fuzzy threshold of the shorter
+   title's words), else the paper is `unverified` with reason
+   `arxiv_title_mismatch`: usually a real ID attached to the wrong paper, but a
+   title that changed between arXiv versions can also trigger it, so check
+   which of the two is wrong before dropping the paper. Pass the title with the
+   ID, as in the `candidate_papers.json` schema below; `--arxiv-ids` alone
+   checks existence only.
 2. **CrossRef DOI lookup** — `api.crossref.org/works/{doi}` confirms the DOI
    resolves. Run when arXiv ID is absent or arXiv check returned `unverified`.
 3. **Semantic Scholar fuzzy title search** — `api.semanticscholar.org/graph/v1/paper/search`
