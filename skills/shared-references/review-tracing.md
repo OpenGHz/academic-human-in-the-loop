@@ -100,14 +100,16 @@ else
 fi
 ```
 
-For a Codex MCP reviewer (`mcp__codex__codex` / `codex-reply`), pass
+For a completed Codex MCP review (`mcp__codex__codex` / `codex-reply`), pass
 `--codex-rollout` with `--thread-id` instead of `--prompt` / `--response`. The
 helper then copies the prompt and the reviewer's final reply from Codex's own
 session file (`$CODEX_HOME/sessions/**/rollout-*-<threadId>.jsonl`), so the
 trace holds the reviewer's text, not a copy the executor wrote. The model and
 effort the turn was configured with are recorded as the requested pair, not as a
 backend-reported model. It uses the thread's latest turn, which must have
-completed; `--codex-turn-index N` picks another.
+completed; `--codex-turn-index N` picks another. A failed call has no completed
+turn to copy: trace it as above, with `--prompt`, `--response` holding the error,
+and `--status error`.
 
 The helper, when present, handles directory creation, run numbering, file
 writing, and provenance classification. For a successful `copilot-native`
