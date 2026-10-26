@@ -79,7 +79,7 @@ For EACH core claim, search using ALL available sources:
 
 3. **Read abstracts**: For each potentially overlapping paper, WebFetch its abstract and related work section
 
-4. **Capture FULL metadata at first contact — do not defer.** The moment a paper looks like it will enter the Closest Prior Work table or the bibtex, `WebFetch` its **arXiv abstract page** (`https://arxiv.org/abs/<id>`) and record the **exact title** and the **complete author list, all authors in order** — not "first author + others", not the ID alone. WebSearch result snippets routinely omit authors; that is a retrieval gap, not a reason to leave the field blank. **It is laziness, not discipline, to write a paper into the report with an ID but no authors and plan to "backfill later".** If a `WebFetch` fails (socket/timeout), retry once (and try the local proxy per global prefs for `Bash`-based fetches); only if it still fails may you mark the author field `[authors-unverified: fetch failed]` and say so explicitly in the report.
+4. **Capture FULL metadata at first contact — do not defer.** The moment a paper looks like it will enter the Closest Prior Work table or the bibtex, `WebFetch` its **arXiv abstract page** (`https://arxiv.org/abs/<id>`) and record the **exact title** and the **complete author list, all authors in order** — not "first author + others", not the ID alone. WebSearch result snippets routinely omit authors; that is a retrieval gap, not a reason to leave the field blank. **It is laziness, not discipline, to write a paper into the report with an ID but no authors and plan to "backfill later".** If a `WebFetch` fails (socket/timeout), retry once (and try the local proxy per global prefs for `Bash`-based fetches); only if it still fails may you mark the author field `[authors-unverified: fetch failed]` and say so explicitly in the report. The arXiv page usually does not show where a paper was published: before the Venue column or a BibTeX entry says `arXiv`, look the title up in DBLP or the conference proceedings, and give the published venue and year when there is one.
 
 ### Phase C: Cross-Model Verification
 Call REVIEWER_MODEL via Codex MCP (`mcp__codex__codex`) with xhigh reasoning.
@@ -189,6 +189,8 @@ Resolve the mode:
   2. **Target present →** **upsert, never clobber:** if this idea already has an entry, refresh its novelty section in place (versioned); otherwise **append it as another ranked entry**, growing the report toward the `N`-idea schema `/idea-creator` uses. Entries for other ideas are preserved — append adds, it does not overwrite.
 
 Phase E (wiki ingest) and Review Tracing run in **both** modes — they are persistence/audit, not the human-facing report.
+
+In either mode, a `.aris/traces/…` path exists only on this machine: `.aris/` is git-ignored and traces are never committed ([`review-tracing.md`](../shared-references/review-tracing.md) § Privacy). If the report goes into git, quote the reviewer's verdict and the reasoning the report relies on in the report (or a tracked file next to it), and label the trace path as local.
 
 ### Phase E: Persist Closest Prior Work to Research Wiki (only when `research-wiki/` exists)
 
