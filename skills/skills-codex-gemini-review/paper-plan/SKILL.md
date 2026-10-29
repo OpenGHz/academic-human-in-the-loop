@@ -14,7 +14,7 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gemini-review`** — Gemini reviewer invoked through the local `gemini-review` MCP bridge. Set `GEMINI_REVIEW_MODEL` if you need a specific Gemini model override.
-- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`.
+- **TARGET_VENUE = (unset)** — No default; resolved in Step 0. Priority: **`— venue:` argument (e.g., `/paper-plan "topic" — venue: NeurIPS`) > NARRATIVE/topic doc > ask the user**. A venue from the argument or the narrative is used without prompting for confirmation. **When neither names a venue, ask; never pick one silently.** Supported: `ICLR`, `NeurIPS`, `ICML`.
 - **MAX_PAGES** — Main body page limit, measured from first page to end of Conclusion section (excluding references, appendix, and acknowledgements). ICLR=9, NeurIPS=9, ICML=8.
 
 ## Inputs
@@ -29,6 +29,21 @@ The skill expects one or more of these in the project directory:
 If none exist, ask the user to describe the paper's contribution in 3-5 sentences.
 
 ## Workflow
+
+### Step 0: Resolve Target Venue
+
+The venue sets MAX_PAGES, the section template, and the citation style, so resolve it before any planning:
+
+1. `— venue: <X>` in `$ARGUMENTS` → use it.
+2. Else a venue named in the topic text, or in the `## Target Venue` section of `NARRATIVE_REPORT.md` / `STORY.md` / the input doc → use it. A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue.
+3. Else **ask the user** which venue they are targeting (offer the venues that fit the topic), and wait for the answer. Do not start Step 1 on a guessed venue.
+4. If no one can answer (`/paper-plan` is a phase of an unattended run and no venue was handed down), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper plan deferred` and stop before Step 1, without writing `PAPER_PLAN.md`. This matches `/research-pipeline`.
+
+Print one line with the result:
+
+```
+🎯 Venue resolved: NeurIPS (source: NARRATIVE_REPORT.md § Target Venue)
+```
 
 ### Step 1: Extract Claims and Evidence
 

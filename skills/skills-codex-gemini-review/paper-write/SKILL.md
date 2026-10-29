@@ -14,9 +14,9 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gemini-review`** — Gemini reviewer invoked through the local `gemini-review` MCP bridge. Set `GEMINI_REVIEW_MODEL` if you need a specific Gemini model override.
-- **TARGET_VENUE = `ICLR`** — Default venue. Supported: `ICLR`, `NeurIPS`, `ICML`. Determines style file and formatting.
+- **TARGET_VENUE = (unset)** — No default. Resolve before Step 0, in this order: a venue in `$ARGUMENTS` (`— venue: <X>`, or a venue name as the first argument) > the `**Venue**` line of `PAPER_PLAN.md` > `## Target Venue` in `NARRATIVE_REPORT.md` > ask the user. A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue. Do not prompt to confirm a venue these sources supply; never pick one silently. If no one can answer (an unattended phase with no venue handed down), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper writing deferred` and stop before Step 0. Supported: `ICLR`, `NeurIPS`, `ICML`. Determines style file and formatting.
 - **ANONYMOUS = true** — If true, use anonymous author block. Set `false` for camera-ready.
-- **MAX_PAGES = 9** — Main body page limit. Counts from first page to end of Conclusion section. References and appendix are NOT counted.
+- **MAX_PAGES = (from venue)** — Main body page limit; no fixed default. Take it from the `**Page budget**` line of `PAPER_PLAN.md` when present, otherwise from the resolved `TARGET_VENUE`: ICLR=9, NeurIPS=9, ICML=8. Counts from first page to end of Conclusion section. References and appendix are NOT counted.
 - **DBLP_BIBTEX = true** — Fetch real BibTeX from DBLP/CrossRef instead of LLM-generated entries. Eliminates hallucinated citations. Zero install required. Set `false` to use legacy behavior (LLM search + `[VERIFY]` markers).
 
 ## Inputs
@@ -79,6 +79,8 @@ paper/
 **Section files are FLEXIBLE**: If the paper plan has 6-8 sections, create corresponding files (e.g., `4_theory.tex`, `5_experiments.tex`, `6_analysis.tex`, `7_conclusion.tex`).
 
 ## Workflow
+
+Resolve `TARGET_VENUE` (see Constants) before Step 0, so a missing venue is asked for before anything in `paper/` is touched.
 
 ### Step 0: Backup and Clean
 

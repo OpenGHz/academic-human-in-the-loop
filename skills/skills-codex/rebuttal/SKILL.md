@@ -49,7 +49,7 @@ Workflow 4:   rebuttal (post-submission external reviews)
 
 ## Constants
 
-- **VENUE = `ICML`** — Default venue. Override if needed.
+- **VENUE = (unset)** — No default. Take it from `— venue:` or the user's inputs (paper source, review bundle); if it is missing, **stop and ask** (see Required Inputs). Never assume one: the venue sets the character limit and the rendering mode.
 - **RESPONSE_MODE = `TEXT_ONLY`** — v1 default.
 - **REVIEWER_MODEL = `gpt-6-astra`** — Used via Codex MCP for internal stress-testing.
 - **REVIEWER_BACKEND = `codex`** — Default: Codex xhigh stress tester. Use `--reviewer: oracle-pro` only when explicitly requested; if Oracle is unavailable, warn and fall back to Codex xhigh. See `../shared-references/reviewer-routing.md`.

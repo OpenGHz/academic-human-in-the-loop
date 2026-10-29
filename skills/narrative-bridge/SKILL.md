@@ -34,7 +34,7 @@ figures/*.json (if any)                                                         
 
 - **REVIEWER_MODEL = `gpt-5.5`** — Model used via Codex MCP for narrative quality review. Must be an OpenAI model.
 - **REVIEWER_BACKEND = `codex`** — Default: Codex MCP (xhigh). Override with `— reviewer: oracle-pro` per `shared-references/reviewer-routing.md`.
-- **TARGET_VENUE = `ICLR`** — Default venue (informs Title / Target Venue sections). Override per `/paper-plan` venue list.
+- **TARGET_VENUE = (unset)** — Fills the `## Target Venue` section and informs the title. Taken from `— venue:`; if absent, ask the user (supported list per `/paper-plan`). No default: `/paper-plan` and `/paper-writing` treat `## Target Venue` as the user's choice, so never write a guessed venue there.
 - **REVIEW = true** — Run a single Codex MCP review pass over the synthesized narrative for fabrication / overclaim / unsourced numbers. Set `false` to skip.
 - **TEMPLATE_PATH = `templates/NARRATIVE_REPORT_TEMPLATE.md`** — Canonical schema. Fall back chain: `.aris/templates/NARRATIVE_REPORT_TEMPLATE.md` → `$ARIS_REPO/templates/NARRATIVE_REPORT_TEMPLATE.md`.
 - **OUTPUT_PATH = `NARRATIVE_REPORT.md`** — Project root (where `/paper-plan` looks). Timestamped copy lives alongside it.
@@ -171,7 +171,7 @@ Walk the template's section list and fill each from inputs. **Never invent conte
 
 #### `## Proposed Title` and `## Target Venue`
 - Title: synthesize from method name + main claim + setting (avoid generic "X for Y").
-- Venue: use `TARGET_VENUE` constant unless argument overrides.
+- Venue: use the resolved `TARGET_VENUE`. If no venue was given and no one can answer (unattended run), write `<!-- DATA_NEEDED: target venue — not specified -->` instead, so downstream skills ask rather than inherit a guess.
 
 ### Phase 3: Numeric Audit (before review)
 
@@ -296,6 +296,8 @@ Next:
 ✅ NARRATIVE_REPORT.md and figures/ ready.
 Next: /paper-writing "NARRATIVE_REPORT.md" — venue: {TARGET_VENUE}
 ```
+
+If no venue was specified, drop `— venue: {TARGET_VENUE}` from the suggested command.
 
 Do not invoke `/paper-writing` automatically — the user should confirm the narrative reads correctly first.
 
