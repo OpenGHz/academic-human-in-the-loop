@@ -108,8 +108,9 @@ trace holds the reviewer's text, not a copy the executor wrote. The model and
 effort the turn was configured with are recorded as the requested pair, not as a
 backend-reported model. It uses the thread's latest turn, which must have
 completed; `--codex-turn-index N` picks another. A failed call has no completed
-turn to copy: trace it as above, with `--prompt`, `--response` holding the error,
-and `--status error`.
+turn to copy: use the full invocation above without `--codex-rollout`, passing
+the original prompt via `--prompt`, the raw error via `--response`, and
+`--status error`.
 
 The helper, when present, handles directory creation, run numbering, file
 writing, and provenance classification. For a successful `copilot-native`
