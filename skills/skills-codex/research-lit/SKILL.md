@@ -166,6 +166,33 @@ Before searching online, check if the user already has relevant papers locally:
 >
 > Then continue to Step 1.
 
+### Step 0d: Organize a raw idea draft (if the user pointed to one)
+
+When the request references an idea doc that is a raw draft (the user calls it a draft /
+草稿 / notes, it sits outside tracked project files such as a git-ignored or `third_party/`
+path, or it is unstructured notes), organize it into a **brief** and take search terms from
+the brief:
+
+1. Write the brief to `idea-stage/IDEA_BRIEF.md` as a new file; the raw draft stays as the
+   user wrote it. Regroup the draft's content under headings (problem, method components,
+   data / setting, design rationale, open questions) in the draft's language. The brief is a
+   faithful restructuring, done when every claim, number, design choice, and open question in
+   the draft has a home in it. Claims the literature later contradicts stay as written in the
+   brief and get flagged in the synthesis (Step 3), so the evaluation lives in one place.
+2. Header: a one-line idea statement plus "Organized from the user's draft by `/research-lit`
+   on <YYYY-MM-DD>". The brief is the citable source: cite the brief's path wherever a source
+   idea is named, and keep the raw draft's path out of every generated file, since the draft
+   may be private or untracked.
+3. If `idea-stage/IDEA_BRIEF.md` already exists, first save it as
+   `idea-stage/IDEA_BRIEF_<YYYYMMDD_HHmmss>.md`, since the user may have edited it
+   ([`output-versioning.md`](../shared-references/output-versioning.md)).
+4. In composed mode (`— composed:`), hand the brief to the orchestrator as a section of its
+   canonical report instead of writing the file
+   ([`output-composition.md`](../shared-references/output-composition.md)).
+5. At the end of the run, point the user at the brief's path.
+
+An idea doc that is already structured and tracked in the project is cited as is, with no brief.
+
 ### Step 1: Search (external)
 - Use WebSearch to find recent papers on the topic
 - Check arXiv, Semantic Scholar, Google Scholar
