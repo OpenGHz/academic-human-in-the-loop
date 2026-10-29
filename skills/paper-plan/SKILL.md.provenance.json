@@ -2,11 +2,11 @@
   "created_by": "aris-auto",
   "author_model": "claude-opus-5-5",
   "author_family": "anthropic",
-  "reviewer_model": "gpt-6.1-sol",
+  "reviewer_model": "gpt-6-astra",
   "reviewer_family": "openai",
   "review_independence": "cross-family",
   "acceptance_status": "accepted",
-  "verdict_id": "01a16cec-3c33-70c3-8941-9a3af57f08f3",
-  "content_hash": "605fe1cedad02587140ffe7a2dc968fdacb8d92dd46c9216e919771caeac15b3",
-  "stamped_at": "2026-10-24T08:03:23Z"
+  "verdict_id": "01a186a1-901a-7fa3-9293-660ea58ce588",
+  "content_hash": "5649a829dc77db5295eb5ec1429e4111004948a86d6a0943a805226cd812d5b4",
+  "stamped_at": "2026-10-29T07:57:42Z"
 }
