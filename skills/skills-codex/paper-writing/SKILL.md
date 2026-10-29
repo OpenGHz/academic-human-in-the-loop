@@ -41,7 +41,7 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 ## Constants
 
-- **VENUE = `ICLR`** — Target venue. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
+- **VENUE = (unset)** — Target venue. No default. Resolve before Phase 1: **`— venue:` argument > a venue the inputs already name > ask the user**. Inputs, in order: the `## Target Venue` section of `NARRATIVE_REPORT.md` or of the narrative document passed in `$ARGUMENTS` (e.g. `STORY.md`); the `**Venue**` line of an existing `PAPER_PLAN.md` when resuming from it; a venue named in the topic text (a `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue). Do not prompt to confirm a venue the argument or inputs supply. When none does, ask once at launch, even with `AUTO_PROCEED=true` — a missing venue is missing input, not a phase approval. If no one can answer, do not guess and do not wait: report `VENUE NOT SPECIFIED — paper writing deferred` and stop before Phase 1, as `/research-pipeline` does. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
 - **MAX_IMPROVEMENT_ROUNDS = 2** — Number of review→fix→recompile rounds in the improvement loop.
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via Codex MCP for plan review, figure review, writing review, and improvement loop.
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
@@ -114,6 +114,8 @@ Invoke `/paper-plan` to create the structural outline:
 ```
 /paper-plan "$ARGUMENTS"
 ```
+
+If `$ARGUMENTS` has no `— venue:`, append `— venue: <VENUE>` with the resolved venue, so `/paper-plan` does not ask again.
 
 **What this does:**
 - Parse NARRATIVE_REPORT.md for claims, evidence, and figure descriptions

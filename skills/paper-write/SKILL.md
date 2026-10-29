@@ -2,7 +2,7 @@
 name: paper-write
 description: "Draft LaTeX paper section by section from an outline. Use when user says \"写论文\", \"write paper\", \"draft LaTeX\", \"开始写\", or wants to generate LaTeX content from a paper plan."
 argument-hint: "[venue-or-section] [— style-ref: <source>]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, mcp__codex__codex, mcp__codex__codex-reply, mcp__antigravity__antigravity, mcp__antigravity__antigravity-reply, mcp__grok__grok, mcp__grok__grok-reply, mcp__claude-review__review, mcp__claude-review__review_reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, AskUserQuestion, mcp__codex__codex, mcp__codex__codex-reply, mcp__antigravity__antigravity, mcp__antigravity__antigravity-reply, mcp__grok__grok, mcp__grok__grok-reply, mcp__claude-review__review, mcp__claude-review__review_reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
 ---
 
 # Paper Write: Section-by-Section LaTeX Generation
@@ -23,9 +23,9 @@ Draft a LaTeX paper based on: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via Codex MCP for section review. For `backend=codex`, use an OpenAI model.
-- **TARGET_VENUE = `ICLR`** — Default venue. Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR` (also ICCV/ECCV), `ACL` (also EMNLP/NAACL), `AAAI`, `ACM` (ACM MM, SIGIR, KDD, CHI, etc.), `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters, e.g., T-PAMI, JSAC, TWC, TCOM, TSP, TIP), `IEEE_CONF` (IEEE conferences, e.g., ICC, GLOBECOM, INFOCOM, ICASSP). Determines style file and formatting. **RA-L** (IEEE Robotics and Automation Letters) is a journal, but its review submission uses the RAS conference format. Resolve `RA-L` / `RAL` to `IEEE_CONF` for the submission draft, and switch to the journal format only for the accepted version. See the RA-L section of `../shared-references/venue-checklists.md`.
+- **TARGET_VENUE = (unset)** — No default. Resolve before Step 0, in this order: a venue in `$ARGUMENTS` (`— venue: <X>`, or a venue name as the first argument) > the `**Venue**` line of `PAPER_PLAN.md` > `## Target Venue` in `NARRATIVE_REPORT.md` > ask the user (`AskUserQuestion`). A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue. Do not prompt to confirm a venue these sources supply; never pick one silently. If no one can answer (an unattended phase with no venue handed down), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper writing deferred` and stop before Step 0. Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR` (also ICCV/ECCV), `ACL` (also EMNLP/NAACL), `AAAI`, `ACM` (ACM MM, SIGIR, KDD, CHI, etc.), `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters, e.g., T-PAMI, JSAC, TWC, TCOM, TSP, TIP), `IEEE_CONF` (IEEE conferences, e.g., ICC, GLOBECOM, INFOCOM, ICASSP). Determines style file and formatting. **RA-L** (IEEE Robotics and Automation Letters) is a journal, but its review submission uses the RAS conference format. Resolve `RA-L` / `RAL` to `IEEE_CONF` for the submission draft, and switch to the journal format only for the accepted version. See the RA-L section of `../shared-references/venue-checklists.md`.
 - **ANONYMOUS = true** — If true, use anonymous author block. Set `false` for camera-ready. Note: most IEEE venues do NOT use anonymous submission — set `false` for IEEE. **Exception: IEEE RAS venues are double-anonymous.** This covers RAS's fully sponsored journals, such as RA-L and T-RO (since 2025-01-01), as well as ICRA (per the 2027 CFP) and IROS. Keep `true` until acceptance for these, and check the current CFP for CASE.
-- **MAX_PAGES = 9** — Main body page limit. For ML conferences: counts from first page to end of Conclusion section, references and appendix NOT counted. **For IEEE venues: references ARE counted toward the page limit.** Typical limits: IEEE journal = no strict limit (but 12-14 pages typical for Transactions, 4-5 for Letters; RA-L = 8 pages including references by default (pages 7–8 cost $175 each); use 6 or 7 only if the user explicitly asks, never shrink to 6 on your own), IEEE conference = 5-8 pages including references.
+- **MAX_PAGES = (from venue)** — Page limit; no fixed default. Take it from the `**Page budget**` line of `PAPER_PLAN.md` when present (it already reflects the venue and any explicit user request). Otherwise derive it from the resolved `TARGET_VENUE`: ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready), RA-L = 8 pages including references by default (pages 7–8 cost $175 each; use 6 or 7 only if the user explicitly asks, never shrink to 6 on your own), ICRA / IROS / Humanoids = 8 pages including references. Where the limit varies by event or track — other IEEE conferences (typically 5-8 pages including references), IEEE journals (no strict limit, but 12-14 pages typical for Transactions, 4-5 for Letters), CVPR, ACL, ACM — use the limit in the current CFP or the user's inputs; if neither gives one, ask. If no one can answer, do not guess a number: draft to the plan's section lengths and report `PAGE LIMIT NOT SPECIFIED` in Final Checks instead of passing the page-count check. Counting rule: for ML conferences, from the first page to the end of the Conclusion section, references and appendix NOT counted (**CoRL: the mandatory `\section{Limitations}` counts**). **For IEEE venues: references ARE counted toward the page limit.**
 - **DBLP_BIBTEX = true** — Fetch real BibTeX from DBLP/CrossRef instead of LLM-generated entries. Eliminates hallucinated citations. Zero install required. Set `false` to use legacy behavior (LLM search + `[VERIFY]` markers).
 - **MIN_REFERENCES = `30`** — Hard floor inherited from `/paper-writing`. Counted as unique `\cite{}` / `\citep{}` / `\citet{}` keys across all `*.tex` files in `paper/`. Enforced in Step 8: Final Checks — write completion is blocked when below the floor.
 
@@ -192,6 +192,8 @@ paper/
 **Section files are FLEXIBLE**: If the paper plan has 6-8 sections, create corresponding files (e.g., `4_theory.tex`, `5_experiments.tex`, `6_analysis.tex`, `7_conclusion.tex`).
 
 ## Workflow
+
+Resolve `TARGET_VENUE` (see Constants) before Step 0, so a missing venue is asked for before anything in `paper/` is touched.
 
 ### Step 0: Backup and Clean
 
@@ -588,7 +590,7 @@ mcp__codex__codex:
     1. Does each claim from the intro have supporting evidence?
     2. Is the writing clear, concise, and free of AI-isms?
     3. Any logical gaps or unclear explanations?
-    4. Does it fit within [MAX_PAGES] pages (to end of Conclusion)?
+    4. Does it fit within [MAX_PAGES] pages, counted the [VENUE] way (ML conferences: to end of Conclusion; CoRL: to end of Conclusion or Limitations, whichever is last; IEEE venues: including references)? If no page limit was resolved, report `PAGE LIMIT NOT SPECIFIED` and skip this check.
     5. Is related work sufficiently comprehensive (≥1 page)?
     6. For theory papers: are proof sketches adequate?
     7. Are figures/tables clearly described and properly referenced?
@@ -621,7 +623,7 @@ Before declaring done:
 - [ ] No author information in anonymous mode
 - [ ] Figure/table numbering is correct
 - [ ] No float-generated `Overfull \hbox`, and no table protruding beyond its target column or text width or appearing cramped; a table may intentionally use the full available width. Check the rendered page after edits that add rows or columns, using `../paper-figure/SKILL.md` (Key Rules, table width)
-- [ ] Page count within MAX_PAGES (main body to Conclusion end) — if over, apply [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) in order; never delete experiments, theorems, or citations to fit
+- [ ] Page count within MAX_PAGES (ML conferences: main body to Conclusion end; CoRL: to Conclusion or Limitations end, whichever is last; IEEE venues: including references), or `PAGE LIMIT NOT SPECIFIED` reported when no limit resolved — if over, apply [`../shared-references/page-shrink-heuristic.md`](../shared-references/page-shrink-heuristic.md) in order; never delete experiments, theorems, or citations to fit
 - [ ] No TODO/FIXME/XXX markers left in the text
 - [ ] No `[VERIFY]` markers left unchecked
 - [ ] Abstract is self-contained (understandable without reading the paper)
@@ -765,7 +767,7 @@ Do not lower `MIN_REFERENCES` to pass the gate; it is set at the `/paper-writing
 - **Calibrate, don't hedge** — match each claim to its evidence's actual scope and modality, then state it directly; generic caveats live in Limitations only (the CONFIDENT PROSE, HONEST LIMITS block above is the contract)
 - **Launch, not progress report** — organize around the strongest genuine advantage, pick the contest the paper wins, give every experiment an argumentative duty; unfavorable numbers stay in the tables, explained as tradeoffs where the evidence supports that and stated neutrally where it does not — never narrated as defeats, never dressed as a tradeoff they are not (rules 9-12 above)
 - **Venue style matters** — ML conferences (ICLR/NeurIPS/ICML) use `natbib` (`\citep`/`\citet`); **IEEE venues use `cite` package (`\cite{}`, numeric)**. Never mix.
-- **Page limit rules differ by venue** — ML conferences: main body to Conclusion, references/appendix NOT counted. **IEEE: references ARE counted toward the page limit.**
+- **Page limit rules differ by venue** — ML conferences: main body to Conclusion, references/appendix NOT counted (**CoRL: through the mandatory Limitations section when it comes after Conclusion**). **IEEE: references ARE counted toward the page limit.**
 - **Clean bib** — references.bib must only contain entries that are actually `\cite`d
 - **Section count is flexible** — match PAPER_PLAN structure, don't force into 5 sections
 - **Backup before overwrite** — never destroy existing `paper/` directory without backing up

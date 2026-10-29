@@ -35,7 +35,7 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 ## Constants
 
-- **VENUE = `ICLR`** — Fallback venue used only when neither (a) the `— venue:` CLI argument nor (b) the NARRATIVE_REPORT.md `## Target Venue` section specifies one. Resolution priority is **CLI arg > NARRATIVE > this default**, applied silently — do **not** prompt the user to confirm when NARRATIVE supplies a venue, even if it differs from this default. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
+- **VENUE = (unset)** — No default; resolved before Phase 1 (see Venue Resolution). Priority: **CLI arg > a venue the inputs already name (narrative `## Target Venue`, resumed `PAPER_PLAN.md`, topic text) > ask the user**. Do **not** prompt the user to confirm when the inputs supply a venue; never pick one silently when none does. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
 - **MAX_IMPROVEMENT_ROUNDS = 2** — Number of review→fix→recompile rounds in the improvement loop.
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via Codex MCP for plan review, figure review, writing review, and improvement loop.
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
@@ -49,19 +49,19 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 ### Venue Resolution (no redundant prompts)
 
-Before Phase 1, resolve the effective venue **silently** using this priority:
+Before Phase 1, resolve the effective venue using this priority:
 
 1. **CLI argument** `— venue: <X>` if present → use `<X>`
-2. Else **NARRATIVE_REPORT.md `## Target Venue`** section if present → parse the venue name (case-insensitive; strip year, e.g. "CoRL 2026" → `CORL`) and use it
-3. Else **VENUE constant default** (`ICLR`)
+2. Else a venue the inputs already name → parse it (case-insensitive; strip year, e.g. "CoRL 2026" → `CORL`) and use it. Check, in order: the `## Target Venue` section of `NARRATIVE_REPORT.md` or of the narrative document passed in `$ARGUMENTS` (e.g. `STORY.md`); the `**Venue**` line of an existing `PAPER_PLAN.md` when resuming from it; a venue named in the topic text. A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue.
+3. Else **ask the user** once, at launch, before any phase runs. This holds even with `AUTO_PROCEED=true`: a missing venue is missing input, not a phase approval. If no one can answer (an unattended caller started this run without a venue), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper writing deferred` and stop before Phase 1, as `/research-pipeline` does.
 
-**Do not** ask the user to confirm when NARRATIVE specifies a venue, even if it differs from the constant default — the narrative is the spec, the constant is just the fallback. Print a one-line resolution log instead:
+**Do not** ask the user to confirm when NARRATIVE specifies a venue — the narrative is the spec. Print a one-line resolution log instead:
 
 ```
 🎯 Venue resolved: CORL (source: NARRATIVE_REPORT.md § Target Venue; CLI arg not provided)
 ```
 
-The only situation that warrants a confirmation prompt is an **explicit conflict** between the CLI arg and the NARRATIVE (e.g., user passes `— venue: NeurIPS` but NARRATIVE says CoRL 2026). In that case, ask once which to honor, then proceed.
+The only situation that warrants a confirmation prompt is an **explicit conflict** between the CLI arg and the NARRATIVE (e.g., user passes `— venue: NeurIPS` but NARRATIVE says CoRL 2026). In that case, ask once which to honor, then proceed. If no one can answer, honor the CLI arg (priority 1) instead of waiting.
 
 ### Robotics / Embodied-AI routing
 
@@ -218,6 +218,8 @@ Invoke `/paper-plan` to create the structural outline:
 ```
 /paper-plan "$ARGUMENTS"
 ```
+
+Pass the venue resolved above as `— venue: <VENUE>`, replacing any `— venue:` already in `$ARGUMENTS`, so `/paper-plan` neither asks again nor sees a venue the user overruled.
 
 If `— style-ref: <source>` was passed in `$ARGUMENTS` and the helper succeeded above, append `— style-ref: <source>` to the invocation: `/paper-plan "<topic> — style-ref: <source>"`. (Writer-side phase — forwarding is allowed; reviewer/auditor phases below must not see the style ref.)
 

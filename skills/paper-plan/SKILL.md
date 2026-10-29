@@ -1,8 +1,8 @@
 ---
 name: paper-plan
 description: "Generate a structured paper outline from review conclusions and experiment results. Use when user says \"写大纲\", \"paper outline\", \"plan the paper\", \"论文规划\", or wants to create a paper plan before writing."
-argument-hint: "[topic-or-narrative-doc] [— style-ref: <source>]"
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, Skill, mcp__codex__codex, mcp__codex__codex-reply, mcp__antigravity__antigravity, mcp__antigravity__antigravity-reply, mcp__grok__grok, mcp__grok__grok-reply, mcp__claude-review__review, mcp__claude-review__review_reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
+argument-hint: "[topic-or-narrative-doc] [— venue: <venue>] [— style-ref: <source>]"
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, Skill, AskUserQuestion, mcp__codex__codex, mcp__codex__codex-reply, mcp__antigravity__antigravity, mcp__antigravity__antigravity-reply, mcp__grok__grok, mcp__grok__grok-reply, mcp__claude-review__review, mcp__claude-review__review_reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
 ---
 
 # Paper Plan: From Review Conclusions to Paper Outline
@@ -23,7 +23,7 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via Codex MCP for outline review. For `backend=codex`, use an OpenAI model.
-- **TARGET_VENUE = `ICLR`** — Fallback venue used only when neither (a) the `— venue:` CLI argument nor (b) the input narrative document's `## Target Venue` section specifies one. Resolution priority is **CLI arg > NARRATIVE/topic doc > this default**, applied silently — do not prompt for confirmation when the narrative supplies a venue, even if it differs from this default. Parse common variants case-insensitively and strip year suffix (e.g. "CoRL 2026" → `CORL`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (`MAX_PAGES = 8` including references by default, tightened to 6 or 7 only on explicit user request; double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
+- **TARGET_VENUE = (unset)** — No default; resolved in [Step 0](#step-0-resolve-target-venue). Priority: **`— venue:` CLI arg > NARRATIVE/topic doc > ask the user**. A venue from the CLI or the narrative is used without prompting for confirmation. **When neither names a venue, ask; never pick one silently.** Parse common variants case-insensitively and strip year suffix (e.g. "CoRL 2026" → `CORL`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (`MAX_PAGES = 8` including references by default, tightened to 6 or 7 only on explicit user request; double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
 - **MIN_REFERENCES = `30`** — Hard floor on bibliographic entries for the final paper, inherited from `/paper-writing` (override via `— min-references: <N>`). At plan time, the Citation Scaffolding step (Step 5) must inventory the seed `references.bib`, **any literature-review output (`literature/related_work.md` etc.)**, plus all `\cite`-able papers mentioned in the input narrative; if the union has fewer entries than this floor, the plan emits a `GAP_REFERENCES` block. **If a literature landscape already exists, the gap is an import gap — close it by importing entries into `references.bib` during `/paper-write`, NOT by re-running `/research-lit`** (that pass is done). Only recommend a fresh literature pass when no such output exists. The plan is allowed to proceed — the hard block lives in `/paper-write` and `/citation-audit` — but proceeding without closing the gap will burn writing-phase cost and then fail downstream.
 - **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total (**RA-L: 8 pages including references by default; 6 or 7 only if the user explicitly asks**); **IEEE conference (ICRA, IROS, Humanoids) = 8 pages including references** (hard limit; the bibliography counts toward it, so budget the full main body *plus* references to fit in 8 pages).
 
@@ -147,6 +147,21 @@ Slot ID format: `GAP_<SECTION>_<FEATURE>`, all-caps, stable across regenerations
 Original idea: @zhangpelf in [#217](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/issues/217).
 
 ## Workflow
+
+### Step 0: Resolve Target Venue
+
+The venue sets MAX_PAGES, the section template, the citation style, and whether the robotics references apply, so resolve it before any planning:
+
+1. `— venue: <X>` in `$ARGUMENTS` → use it.
+2. Else a venue named in the topic text, or in the `## Target Venue` section of `NARRATIVE_REPORT.md` / `STORY.md` / the input doc → use it. A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue.
+3. Else **ask the user** which venue they are targeting (`AskUserQuestion`; offer the venues that fit the topic, and accept any supported one), and wait for the answer. Do not start Step 1 on a guessed venue.
+4. If no one can answer (`/paper-plan` is a phase of an unattended run and no venue was handed down), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper plan deferred` and stop before Step 1, without writing `PAPER_PLAN.md`. This matches `/research-pipeline`.
+
+Print one line with the result:
+
+```
+🎯 Venue resolved: CORL (source: NARRATIVE_REPORT.md § Target Venue)
+```
 
 ### Step 1: Extract Claims and Evidence
 
@@ -363,7 +378,7 @@ mcp__codex__codex:
     2. Claim-evidence alignment — every claim backed?
     3. Missing experiments or analysis
     4. Positioning relative to prior work
-    5. Page budget feasibility (MAX_PAGES = main body to Conclusion end, excluding refs/appendix)
+    5. Page budget feasibility (MAX_PAGES for [VENUE]: ML conferences count main body to Conclusion end, excluding refs/appendix; IEEE venues count references too)
     6. Front-matter strength — are the abstract, introduction, and hero figure plan strong enough for skim-reading reviewers?
 
     For each weakness, suggest the MINIMUM fix.
@@ -384,7 +399,7 @@ Save the final outline to `PAPER_PLAN.md` in the project root:
 **Venue**: [target venue]
 **Type**: [empirical/theory/method]
 **Date**: [today]
-**Page budget**: [MAX_PAGES] pages (main body to Conclusion end, excluding references & appendix)
+**Page budget**: [MAX_PAGES] pages ([counting rule for this venue — ML conferences: main body to Conclusion end, excluding references & appendix; IEEE venues: including references])
 **Section count**: [N] (must match the number of section files that will be created)
 
 ## Claims-Evidence Matrix

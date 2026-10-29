@@ -21,7 +21,7 @@ Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
 ## Constants
 
 - **REVIEWER_MODEL = `gpt-6-astra`** — Model used via a secondary Codex agent for outline review. For `backend=codex`, use an OpenAI model.
-- **TARGET_VENUE = `ICLR`** — Default venue. User can override (e.g., `/paper-plan "topic" — venue: NeurIPS`). Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (`MAX_PAGES = 8` including references by default, tightened to 6 or 7 only on explicit user request; double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
+- **TARGET_VENUE = (unset)** — No default; resolved in Step 0. Priority: **`— venue:` argument (e.g., `/paper-plan "topic" — venue: NeurIPS`) > NARRATIVE/topic doc > ask the user**. A venue from the argument or the narrative is used without prompting for confirmation. **When neither names a venue, ask; never pick one silently.** Supported: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `CORL` (Conference on Robot Learning, PMLR), `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). `RA-L` / `RAL` resolves to `IEEE_CONF`, because the RA-L review submission uses the RAS conference format (`MAX_PAGES = 8` including references by default, tightened to 6 or 7 only on explicit user request; double-anonymous). Also apply the RA-L section of `../shared-references/venue-checklists.md`.
 - **MAX_PAGES** — Page limit. For ML conferences: main body to Conclusion end (excluding references, appendix). ICLR=9, NeurIPS=9, ICML=8, AAAI=7 technical-content pages plus references unless the current AAAI CFP says otherwise, CORL=8 (initial) / 9 (camera-ready; CoRL gives +1 page for review feedback). **CoRL: mandatory `\section{Limitations}` is counted toward the page budget.** **For IEEE venues: references ARE included in page count.** IEEE journal Transactions ≈ 12-14 pages total, Letters ≈ 4-5 pages total (**RA-L: 8 pages including references by default; 6 or 7 only if the user explicitly asks**); IEEE conference ≈ 5-8 pages total (including references).
 
 ## Inputs
@@ -46,6 +46,21 @@ Keep the existing workflow and outputs, but use the shared references below to i
 - Load these references only when they help; they are support material, not a new workflow phase
 
 ## Workflow
+
+### Step 0: Resolve Target Venue
+
+The venue sets MAX_PAGES, the section template, and the citation style, so resolve it before any planning:
+
+1. `— venue: <X>` in `$ARGUMENTS` → use it.
+2. Else a venue named in the topic text, or in the `## Target Venue` section of `NARRATIVE_REPORT.md` / `STORY.md` / the input doc → use it. A `DATA_NEEDED` marker or the template placeholder `[Venue] [Year]` is not a venue.
+3. Else **ask the user** which venue they are targeting (offer the venues that fit the topic), and wait for the answer. Do not start Step 1 on a guessed venue.
+4. If no one can answer (`/paper-plan` is a phase of an unattended run and no venue was handed down), do not guess and do not wait: report `VENUE NOT SPECIFIED — paper plan deferred` and stop before Step 1, without writing `PAPER_PLAN.md`. This matches `/research-pipeline`.
+
+Print one line with the result:
+
+```
+🎯 Venue resolved: NeurIPS (source: NARRATIVE_REPORT.md § Target Venue)
+```
 
 ### Step 1: Extract Claims and Evidence
 
@@ -226,7 +241,7 @@ spawn_agent:
     2. Claim-evidence alignment — every claim backed?
     3. Missing experiments or analysis
     4. Positioning relative to prior work
-    5. Page budget feasibility (MAX_PAGES = main body to Conclusion end, excluding refs/appendix)
+    5. Page budget feasibility (MAX_PAGES for [VENUE]: ML conferences count main body to Conclusion end, excluding refs/appendix; IEEE venues count references too)
 
     For each weakness, suggest the MINIMUM fix.
     Be specific and actionable — "add X" not "consider more experiments".
@@ -245,7 +260,7 @@ Save the final outline to `PAPER_PLAN.md` in the project root:
 **Venue**: [target venue]
 **Type**: [empirical/theory/method]
 **Date**: [today]
-**Page budget**: [MAX_PAGES] pages (main body to Conclusion end, excluding references & appendix)
+**Page budget**: [MAX_PAGES] pages ([counting rule for this venue — ML conferences: main body to Conclusion end, excluding references & appendix; IEEE venues: including references])
 **Section count**: [N] (must match the number of section files that will be created)
 
 ## Claims-Evidence Matrix

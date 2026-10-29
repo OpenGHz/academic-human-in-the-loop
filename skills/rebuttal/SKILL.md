@@ -49,7 +49,7 @@ Workflow 4:   rebuttal (post-submission external reviews)
 
 ## Constants
 
-- **VENUE = `ICML`** — Default venue. Override if needed.
+- **VENUE = (unset)** — No default. Take it from `— venue:` or the user's inputs (paper source, review bundle); if it is missing, **stop and ask** (see Required Inputs). Never assume one: the venue sets the character limit and the rendering mode.
 - **RESPONSE_MODE = `TEXT_ONLY`** — v1 default.
 - **REVIEWER_MODEL = `gpt-6-astra`** — Default model for the Codex backend. Used for internal stress-testing. Manual backend uses a model the user chooses — it must be a recognized model from a different family (OpenAI, Anthropic, Google, DeepSeek, Moonshot/Kimi, Qwen).
 - **REVIEWER_BACKEND = `codex`** — Default: Codex MCP (xhigh). Override with `— reviewer: oracle-pro` for Oracle MCP, or `— reviewer: manual` for Manual Review MCP. If manual-review MCP is unavailable, stop and print the install command; do not fall back to Codex. See `shared-references/reviewer-routing.md`.
