@@ -2,7 +2,7 @@
 
 **Source:** IEEE RAS PaperPlaza keyword list, 2026 cycle. This is the *authoritative* vocabulary — the submission portal requires authors to pick keywords from this list, not to invent them. Papers whose free-form `\begin{IEEEkeywords}` block diverges from PaperPlaza selections may be routed to the wrong area chair.
 
-**When to use:** whenever `TARGET_VENUE = IEEE_CONF` AND the narrative mentions IROS / ICRA / robot / manipulation / locomotion / navigation / teleoperation / sim2real / embodied agent. For non-robotics IEEE conferences (ICC, GLOBECOM, etc.) this vocabulary does not apply.
+**When to use:** whenever `TARGET_VENUE = IEEE_CONF` AND the narrative mentions IROS / ICRA / robot / manipulation / locomotion / navigation / teleoperation / sim2real / embodied agent. For non-robotics IEEE conferences (ICC, GLOBECOM, etc.) this vocabulary does not apply. RA-L has its own list: [`ral-keywords.md`](ral-keywords.md).
 
 **ICRA 2027 submission rules (updated):**
 
