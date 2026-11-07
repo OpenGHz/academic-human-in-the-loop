@@ -1,6 +1,6 @@
 ---
 name: pick-keywords
-description: "Suggest paper keywords for the `\\keywords{}` / `\\begin{IEEEkeywords}` block. Venue-aware: for `IEEE_CONF` targeting IROS/ICRA it picks 3–5 terms from the IEEE RAS controlled vocabulary (`shared-references/icra-keywords.md`); for CoRL/NeurIPS/ICLR/CVPR it proposes free-form terms that match the paper's actual contribution. Use when user says \"选关键词\", \"pick keywords\", \"IEEEkeywords\", \"suggest keywords\", or is filling in the keyword block during paper-write."
+description: "Suggest paper keywords for the `\\keywords{}` / `\\begin{IEEEkeywords}` block. Venue-aware: for `IEEE_CONF` targeting IROS/ICRA it picks 3–5 terms from the IEEE RAS controlled vocabulary (`shared-references/icra-keywords.md`); for RA-L it picks 2–5, the first two from the RA-L list (`shared-references/ral-keywords.md`); for CoRL/NeurIPS/ICLR/CVPR it proposes free-form terms that match the paper's actual contribution. Use when user says \"选关键词\", \"pick keywords\", \"IEEEkeywords\", \"suggest keywords\", or is filling in the keyword block during paper-write."
 argument-hint: "[abstract-or-narrative-path] [— venue: <venue>]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, mcp__codex__codex, mcp__codex__codex-reply
 ---
@@ -13,7 +13,7 @@ Suggest paper keywords for: **$ARGUMENTS**
 
 - **REVIEWER_MODEL = `gpt-5.5`** — Model used via Codex MCP for a second opinion on the shortlist. Must be an OpenAI model.
 - **DEFAULT_VENUE = `ICLR`** — Fallback if neither `— venue:` nor the input document declares one.
-- **N_KEYWORDS_MIN = 3, N_KEYWORDS_MAX = 5** — Standard for both PMLR (CoRL) and most IEEE venues. **ICRA 2027 exception: exactly 3 keywords, one per priority tier (1, 2, 3).** Check the venue-specific rules below.
+- **N_KEYWORDS_MIN = 3, N_KEYWORDS_MAX = 5** — Standard for both PMLR (CoRL) and most IEEE venues. **ICRA 2027 exception: exactly 3 keywords, one per priority tier (1, 2, 3).** **RA-L: 2–5 keywords, the first two from the RA-L list.** Check the venue-specific rules below.
 
 ## Inputs (auto-detect, first hit wins)
 
@@ -26,12 +26,13 @@ If none of these exist, ask the user for a one-paragraph description of the pape
 
 ## Venue Resolution
 
-Priority: `— venue:` CLI arg > input document's `## Target Venue` section > `DEFAULT_VENUE`. Parse case-insensitively; strip year suffix (`"ICRA 2026"` → `IEEE_CONF` with robotics flag; `"CoRL 2026"` → `CORL`). **RA-L exception:** `paper-plan` and `paper-write` draft RA-L papers as `IEEE_CONF`, but **do not** use `ICRA_CONTROLLED` for `RA-L` / `RAL`. RA-L wants 2–5 keywords beneath the abstract, and the first two must come from RA-L's own predefined set, which is selected in PaperPlaza. Treat RA-L as the `IEEE_JOURNAL` case under "When NOT to Use": point the user to the RA-L keyword list in PaperPlaza, and never apply the ICRA 3-tier rule.
+Priority: `— venue:` CLI arg > input document's `## Target Venue` section > `DEFAULT_VENUE`. Parse case-insensitively; strip year suffix (`"ICRA 2026"` → `IEEE_CONF` with robotics flag; `"CoRL 2026"` → `CORL`). **RA-L exception:** `paper-plan` and `paper-write` draft RA-L papers as `IEEE_CONF`, so match the raw venue string first: `RA-L`, `RAL` or "Robotics and Automation Letters" resolves to `RAL_CONTROLLED`, whatever the template.
 
 Set `VOCABULARY_MODE` from the resolved venue:
 
 | Resolved venue | narrative mentions robot / manipulation / etc. | `VOCABULARY_MODE` |
 |---|---|---|
+| `RA-L` / `RAL` | any | `RAL_CONTROLLED` |
 | `IEEE_CONF` | yes | `ICRA_CONTROLLED` |
 | `IEEE_CONF` | no | `IEEE_FREE` |
 | `CORL` | any | `PMLR_FREE` |
@@ -73,6 +74,12 @@ This sketch guides the keyword search — it is NOT the output.
 6. Verify the total character count (sum of keyword string lengths) ≤ 250.
 7. Apply anti-patterns from the vocabulary file: prune candidates that violate "keyword because it sounds impressive" rules.
 
+#### If `VOCABULARY_MODE = RAL_CONTROLLED`
+
+1. Read [`../shared-references/ral-keywords.md`](../shared-references/ral-keywords.md) into working memory. It is the authoritative RA-L vocabulary and carries the RA-L rules and selection guidance; the ICRA tiers and 250-character limit stay out of this mode.
+2. Draft 4–7 candidates, each tagged with its RA-L subject area or `free-form`, with at least two list terms from different subject areas to fill slots 1–2.
+3. Copy list terms character for character from `ral-keywords.md` (`Long term Interaction`, `Sensor-based Control`).
+
 #### If `VOCABULARY_MODE ∈ {PMLR_FREE, ML_FREE, IEEE_FREE}`
 
 1. Free-form generation, but constrained by these principles:
@@ -94,6 +101,10 @@ Below is the abstract and {M} candidates I generated.
  priority-2, one from priority-3. The first keyword (priority 1) becomes
  the session title — it must be broad enough to group 4–6 papers. Total
  character count ≤ 250. Paste the relevant vocabulary sections here.}
+{if VOCABULARY_MODE == RAL_CONTROLLED: state that keywords 1 and 2 MUST
+ come verbatim from the attached RA-L list; keywords 3–5 are optional and
+ may be free-form only for a central concept the list lacks. No priority
+ tiers. Paste the relevant RA-L subject areas here.}
 
 Return exactly {N} keywords, one per line, in priority order (priority 1
 → 2 → 3 for ICRA; most-central → least-central otherwise). After the list,
@@ -146,6 +157,12 @@ LaTeX snippet:
 > The `\begin{IEEEkeywords}` block and the portal selections (including
 > priority assignments) must match, or the area chair may route the paper
 > wrong. You cannot change keywords after submission.
+
+{if RAL_CONTROLLED — label each keyword (RA-L: {subject area}) or
+ (free-form) in place of (priority N), then add:}
+> ⚠ RA-L: select keywords 1–2 in PaperPlaza from the RA-L list, in this
+> order. The `\begin{IEEEkeywords}` block must start with the same two
+> strings.
 ```
 
 Do NOT auto-edit `main.tex` or `sections/`. The user reviews and pastes.
@@ -158,18 +175,20 @@ If the user follows up with "put them in" / "更新到论文" / "apply", locate 
 
 - Never invent an ICRA vocabulary term. If in `ICRA_CONTROLLED` mode and Codex proposes a term not in the file, drop it silently and note "Codex proposed `X`; not in vocabulary, dropped."
 - **For `ICRA_CONTROLLED` mode: emit exactly 3 keywords, one per priority tier (1, 2, 3).** Verify the tier assignment matches the category suffix in `icra-keywords.md` (no suffix or `1` = tier 1, suffix `2` = tier 2, suffix `3` = tier 3). Report total character count; reject if > 250.
+- **For `RAL_CONTROLLED` mode: emit 2–5 keywords; keywords 1–2 verbatim from `ral-keywords.md`.** If Codex puts an off-list term in slot 1 or 2, demote it to slots 3–5 or drop it, and say which.
 - For other modes: emit 3–5 keywords as appropriate.
 - Never edit the paper without an explicit follow-up instruction from the user.
-- Always report which mode (`ICRA_CONTROLLED` / `PMLR_FREE` / etc.) drove the selection — the user needs this to know whether the terms are portal-strict.
+- Always report which mode (`ICRA_CONTROLLED` / `RAL_CONTROLLED` / `PMLR_FREE` / etc.) drove the selection — the user needs this to know whether the terms are portal-strict.
 
 ## When NOT to Use
 
 - If the paper is not yet drafted (no abstract, no narrative). Run `/paper-plan` first.
-- If the target venue is `IEEE_JOURNAL` — journals have different (often narrower) keyword lists per journal (T-RO vs. RA-L vs. T-PAMI vs. T-Cyber). Consult the specific journal's Author Guide, not this skill.
+- If the target venue is an `IEEE_JOURNAL` other than RA-L — journals have different (often narrower) keyword lists per journal (T-RO vs. T-PAMI vs. T-Cyber). Consult the specific journal's Author Guide, not this skill.
 - To pick arXiv categories (`cs.RO`, `cs.LG`, ...). Use `/arxiv-metadata` for that.
 
 ## References
 
 - [`../shared-references/icra-keywords.md`](../shared-references/icra-keywords.md) — the IEEE RAS controlled vocabulary (authoritative for IROS/ICRA).
+- [`../shared-references/ral-keywords.md`](../shared-references/ral-keywords.md) — the RA-L controlled vocabulary and keyword rules.
 - [`../shared-references/venue-checklists.md`](../shared-references/venue-checklists.md) — the IROS/ICRA preferences subsection points here.
 - [`../arxiv-metadata/SKILL.md`](../arxiv-metadata/SKILL.md) — for arXiv primary categories and ACM class codes.
