@@ -44,7 +44,7 @@ def test_inventory_leaves_out_git_submodules() -> None:
 def test_codex_shared_reference_set_matches_mainline() -> None:
     main_refs = {p.name for p in (MAIN_SKILLS / "shared-references").glob("*.md")}
     codex_refs = {p.name for p in (CODEX_SKILLS / "shared-references").glob("*.md")}
-    assert len(main_refs) == 35
+    assert len(main_refs) == 36
     assert codex_refs == main_refs
 
 
