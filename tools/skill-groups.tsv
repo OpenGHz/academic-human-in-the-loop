@@ -112,6 +112,7 @@ skill	paper-talk	paper-visuals	paper-slides,slides-polish	演讲稿+幻灯一体
 skill	slides-polish	paper-visuals	-	幻灯片打磨
 skill	paper-slides-render	paper-visuals	-	幻灯+讲稿合成带配音的 MP4
 skill	paper-video	paper-visuals	-	投稿演示视频打包与合规检查
+skill	paper-rollout-video	paper-visuals	paper-video	仿真 rollout 渲染补充视频(规则选镜头、代码合成、可复现)
 skill	rebuttal	submission	render-html	W4:审稿意见解析与安全回复
 skill	resubmit-pipeline	submission	auto-paper-improvement-loop,proof-checker,paper-claim-audit,citation-audit,kill-argument,paper-compile,integrity-forensics	被拒后重投全流程
 skill	camera-ready-prep	submission	-	录用后终稿准备(审稿意见/合规/arXiv 包)
