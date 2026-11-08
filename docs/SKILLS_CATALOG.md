@@ -1,6 +1,6 @@
 # ARIS Skills Catalog
 
-Every skill that ships with ARIS, grouped by role. **98 skills** as of the
+Every skill that ships with ARIS, grouped by role. **99 skills** as of the
 latest update; new skills land via PR and get added to the table below.
 
 - Each `Skill` link goes to the canonical `SKILL.md` (the LLM-readable spec).
@@ -151,6 +151,7 @@ After-paper outputs and venue porting.
 | [`/paper-slides`](../skills/paper-slides/SKILL.md) | Conference presentation — Beamer LaTeX → PDF (+ editable PPTX on demand) + speaker notes + full talk script. PPTX export is deferred until the deck is final; pass `— with-pptx: true` to build it upfront. Talk types: `poster-talk` / `spotlight` / `oral` / `invited` (live audience) and `supplementary-video` (≈3 min self-contained overview for submission attachments — CoRL / ICRA / RSS / NeurIPS-supp; hands off to `/paper-slides-render` + `/paper-video --mode submission`) | LaTeX, python-pptx |
 | [`/paper-slides-render`](../skills/paper-slides-render/SKILL.md) | Bridge between `/paper-slides` (PDF + script) and `/paper-video` — TTS via `edge-tts`, rasterize via `pdftoppm`, compose per-slide ffmpeg segments, optional whisper-aligned SRT burn-in; per-slide `[VIDEO: path]` markers swap the still PNG for a clip with auto-loop / silent-pad | `edge-tts`, `pdftoppm`, `ffmpeg`, optional `openai-whisper` |
 | [`/paper-video`](../skills/paper-video/SKILL.md) | Submission demo video (CoRL / ICRA / RSS / NeurIPS-supp / project page) under hard size and duration gates — H.264 MP4, ≤180 s, ≤250 MB by default; optional supplementary zip | ffmpeg |
+| [`/paper-rollout-video`](../skills/paper-rollout-video/SKILL.md) | Supplementary video rendered from simulated policy rollouts — shots picked by fixed rules from the evaluation files, bare panels rendered from checkpoints, pages composed in code with every number read from the paper source, Codex cross-review, `/paper-video` gate, and a byte-for-byte `--panels` rebuild from panels committed via Git LFS | GPU simulator, Pillow, imageio-ffmpeg, Codex MCP, `/paper-video` |
 | [`/slides-polish`](../skills/slides-polish/SKILL.md) | Per-page Codex review + targeted python-pptx / Beamer fixes (font scaling, frame resize, banner-as-tcolorbox, italic leak guard, em-dash spacing, CJK font hint, anonymity placeholder discipline) | Codex MCP, python-pptx |
 | [`/paper-poster-html`](../skills/paper-poster-html/SKILL.md) | **Default** conference poster — single HTML/CSS file with measurement-driven hard gates (two-hue tokens, real paper figures with provenance, anti-patch-loop fix vocabulary) → print-ready PDF via headless Chromium | Playwright (Chromium), PyMuPDF |
 | [`/paper-poster`](../skills/paper-poster/SKILL.md) | DEPRECATED — redirect stub to `/paper-poster-html` (legacy LaTeX pipeline retired; in git history) | — |

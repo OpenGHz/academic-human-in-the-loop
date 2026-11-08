@@ -27,7 +27,7 @@ acceptance requires actual identities, completed scope, and the applicable gate.
 The two partial overlays are frozen; [migration](skills/skills-codex/README.md#migrate-frozen-partial-overlays)
 preserves existing links and customizations.
 
-**Full catalog**: [`docs/SKILLS_CATALOG.md`](docs/SKILLS_CATALOG.md) — **98 skills**, grouped by role.
+**Full catalog**: [`docs/SKILLS_CATALOG.md`](docs/SKILLS_CATALOG.md) — **99 skills**, grouped by role.
 
 Use [`/lean-formalize`](skills/lean-formalize/SKILL.md) when the user requests Lean work or a substantial mathematical obligation benefits from formal verification. It preserves the original statement, connects the proof, and checks the final declaration and its axioms; ordinary mathematical drafting continues to use `/proof-writer`.
 
@@ -149,6 +149,7 @@ Post-paper:      W4 (rebuttal), W5 (resubmit to new venue), W6 (talk)
 | W5 | `/resubmit-pipeline "paper/" --- venue: X` | polished paper + new venue | `<NEW_VENUE_DIR>/` + `RESUBMIT_REPORT.json` | Port to another venue under hard constraints |
 | W6 | `/paper-talk "paper/" --- venue: X` | paper | Beamer + PPTX + speaker notes + Q&A prep | Conference talk after acceptance |
 | W6.5 | `/paper-video "paper/" --- venue: CORL` | raw clips + paper | `submission/video/supplementary.mp4` + `verify.json` | Robotics venues (CoRL / ICRA / RSS) and NeurIPS-supp video |
+| W6.5b | `/paper-rollout-video "paper/" --- venue: RAL` | checkpoints + evaluation files + paper | `<output>.mp4` + `plan.json` + panels + `verify.json` | Footage rendered from trained policies in simulation, reproducible from committed panels |
 | W6.6 | `/paper-slides-render "slides/" [--- with-subtitles]` | `slides/main.pdf` + `slides/TALK_SCRIPT.md` | `slides/render/presentation.mp4` + `verify.json` | Turn slides + talk script into a narrated MP4 (bridges /paper-slides → /paper-video) |
 
 Hard constraints on W5: no new experiments, no bib edits, no framework changes, never overwrites prior submissions. Enforced via `--edit-whitelist` + `RESUBMIT_REPORT.json` 7-state failure-mode ledger.
