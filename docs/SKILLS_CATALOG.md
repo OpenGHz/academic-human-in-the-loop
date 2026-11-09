@@ -1,6 +1,6 @@
 # ARIS Skills Catalog
 
-Every skill that ships with ARIS, grouped by role. **98 skills** as of the
+Every skill that ships with ARIS, grouped by role. **99 skills** as of the
 latest update; new skills land via PR and get added to the table below.
 
 - Each `Skill` link goes to the canonical `SKILL.md` (the LLM-readable spec).
@@ -155,6 +155,7 @@ After-paper outputs and venue porting.
 | [`/paper-poster-html`](../skills/paper-poster-html/SKILL.md) | **Default** conference poster — single HTML/CSS file with measurement-driven hard gates (two-hue tokens, real paper figures with provenance, anti-patch-loop fix vocabulary) → print-ready PDF via headless Chromium | Playwright (Chromium), PyMuPDF |
 | [`/paper-poster`](../skills/paper-poster/SKILL.md) | DEPRECATED — redirect stub to `/paper-poster-html` (legacy LaTeX pipeline retired; in git history) | — |
 | [`/arxiv-metadata`](../skills/arxiv-metadata/SKILL.md) | arXiv submission-form metadata from the paper source — Title / Authors / Abstract / Comments / Report-no / Journal-ref / DOI / ACM-class / MSC-class + suggested category. Enforces arXiv's real rules per [prep.html](https://info.arxiv.org/help/prep.html): ASCII-only fields (Unicode → TeX accents, not the reverse), 1920-char abstract hard gate, macro expansion, affiliation parenthesized format, archive-gated ACM/MSC. Blocks on anonymized author lists | `pdfinfo` (page count) |
+| [`/cover-note`](../skills/cover-note/SKILL.md) | Cover note / cover letter for the submission form — plain text for the editor: what the submission is, why it fits the venue, and the declarations (originality, earlier versions, AI-use disclosure, conflicts); venue rules from `venue-checklists.md` (RA-L / PaperPlaza on file), stages initial / revision / resubmission / final | None |
 | [`/camera-ready-prep`](../skills/camera-ready-prep/SKILL.md) | After an accept / revise decision: review checklist, de-anonymization, PaperCept / RAS compliance (Type 3 fonts, margins, page limits), plain-text abstract, self-contained arXiv source package | LaTeX, Ghostscript |
 
 (Orchestrators `/paper-talk` for the talk pipeline and `/resubmit-pipeline`
