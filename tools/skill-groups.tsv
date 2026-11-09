@@ -116,6 +116,7 @@ skill	rebuttal	submission	render-html	W4:审稿意见解析与安全回复
 skill	resubmit-pipeline	submission	auto-paper-improvement-loop,proof-checker,paper-claim-audit,citation-audit,kill-argument,paper-compile,integrity-forensics	被拒后重投全流程
 skill	camera-ready-prep	submission	-	录用后终稿准备(审稿意见/合规/arXiv 包)
 skill	arxiv-metadata	submission	-	生成 arXiv 提交元数据
+skill	cover-note	submission	-	投稿表单里给编辑的 cover note
 skill	grant-proposal	submission	research-lit,novelty-check,research-review	基金申请书(NSFC/NSF/科研費等)
 skill	patent-pipeline	patent	prior-art-search,patent-novelty-check,invention-structuring,claims-drafting,specification-writing,patent-review,jurisdiction-format	专利撰写全流程
 skill	invention-structuring	patent	-	粗 idea 结构化成发明披露
