@@ -29,7 +29,7 @@ The editor reads the cover note apart from the paper, and the abstract already r
 
 Read the venue's section of [`../shared-references/venue-checklists.md`](../shared-references/venue-checklists.md) and its **Cover note** entry. If the venue has no section or no such entry, fetch its author-information and submission-procedure pages with WebFetch and quote what they require of the note at this stage. If the form text the user pasted contradicts the entry, the form wins; tell the user the entry is stale.
 
-Done when you can name who reads the note and can list every item the venue requires in it at this stage, each with its source, or can state that the sources require none.
+Done when you can say, with its source, who reads the note or that the sources name no one, and can list every item the venue requires in it at this stage, each with its source, or can state that the sources require none.
 
 The reader decides the anonymity of the note:
 
@@ -66,6 +66,7 @@ Sincerely,
 The authors
 ```
 
+- Address the reader by the title the sources give; when they name none, write `Dear Editor,`.
 - Keep the body within MAX_WORDS, and keep numbers out of the second paragraph.
 - For a revision or resubmission, the first paragraph names the previous submission ("a revised version of RA-L submission <number>, ...") and points to the response file; the point-by-point response stays in that file.
 - When the user trims the draft, edit OUTPUT and show the whole note again.
