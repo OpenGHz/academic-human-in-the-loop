@@ -126,14 +126,36 @@ this correct and consistent:
   last). Recount from the end after each insertion to confirm.
 - **Number affiliations by order of first appearance** ($^{1}$, $^{2}$, …).
 - **Co-first authors share one mark** (e.g., `*`), **co-corresponding share another** (e.g., `\dag`).
-  Add a `\thanks{*Equal contribution; \dag Corresponding Author.}` footnote.
+  Use the venue template's author-note mechanism; where `\thanks` is supported, add
+  `\thanks{*Equal contribution; \dag Corresponding Author.}`. IEEEtran conference mode disables
+  `\thanks` by default; enable it with `\IEEEoverridecommandlockouts` only when the venue template
+  permits these footnotes.
 - **Group emails by shared domain** following the project's house style
   (e.g., `\{ghz23,jyf23,chenzx24\}@mails.tsinghua.edu.cn`).
+- **Keep author information tidy within the venue template's layout.** In an affiliation footnote,
+  keep an email group together with `\mbox{...}` only if it fits the available line width; split
+  longer groups. For an IEEEtran `\thanks` with a 1em first-line indent, putting
+  `\hangindent=1em\hangafter=1\raggedright` at its start and `\newline` before the emails can align
+  continuation lines and separate the emails. Use this hanging, ragged-right style only when
+  consistent with the venue template.
 - **Pull every name/affiliation/email from the provided source** (e.g., `authors.json`) and verify
   each email maps to the right person. Watch for near-duplicate names (e.g., "Lei Han" vs "Lei Hao").
+  Write the email text with a short script that reads the source and emits the LaTeX, and check it
+  with a script that compares the source against the `.tex` and the PDF text. Do not retype
+  addresses you have read: some environments show emails to the model as placeholders, so a
+  retyped address can look right to you and still be wrong in the file.
 
 After editing, **recompile and read the author line back from the PDF** (`pdftotext -f 1 -l 1`)
-to confirm marks, affiliation numbers, and emails render correctly.
+to confirm marks, affiliation numbers, and emails render correctly. Text read-back does not
+establish layout, so also:
+
+- check the log for `Overfull \hbox` associated with the title, author information, or footnotes.
+  In IEEEtran conference mode, author rows do not wrap automatically; use `\\` between names if a
+  row overflows. For other classes or modes, follow the template's author-layout commands;
+- recheck the page count against the venue limit in the required final template, since author
+  information can take additional space on page 1;
+- render page 1 (`pdftoppm -f 1 -l 1 -r 150 -png main.pdf page1`) and inspect the byline,
+  affiliations, and footnotes.
 
 ### 4. Apply the directly-fixable review items (the ✅ bucket)
 
