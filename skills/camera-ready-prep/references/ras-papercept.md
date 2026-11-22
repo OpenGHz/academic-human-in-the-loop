@@ -58,7 +58,7 @@
 
 核对日期 2026-10-14，来源是 RA-L Final Submission Checklist 和 Information for Authors：
 
-- **换模板**：投稿时用 RAS 会议格式（`ieeeconf`）；录用后改为 `\documentclass[letterpaper, 10 pt, journal, twoside]{ieeetran}`。RA-L 的 Information for Authors 页面链接了官方样例 `RA-L-Template-YY.tex` / `.pdf`，建议从它起步，不要从 `ieee_journal.tex` 起步。
+- **换模板**：投稿时用 RAS 会议格式（`ieeeconf`）；录用后改为 `\documentclass[letterpaper, 10 pt, journal, twoside]{IEEEtran}`。RA-L 的 Information for Authors 页面链接了官方样例 `RA-L-Template-YY.tex` / `.pdf`，建议从它起步，不要从 `ieee_journal.tex` 起步。
 - **补上录用后才有的内容**：
   - 页眉：`IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MONTH, YEAR`。
   - 首页脚注："Manuscript received: ...; Revised: ...; Accepted: ..."，"This paper was recommended for publication by Editor ... upon evaluation of the Associate Editor and Reviewers' comments."，然后是基金、单位与邮箱，以及 "Digital Object Identifier (DOI): see top of this page."
