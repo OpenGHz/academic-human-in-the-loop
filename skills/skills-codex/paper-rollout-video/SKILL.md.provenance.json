@@ -1,0 +1,12 @@
+{
+  "created_by": "aris-auto",
+  "author_model": "claude-fable-5-2",
+  "author_family": "anthropic",
+  "reviewer_model": "gpt-6.1-sol",
+  "reviewer_family": "openai",
+  "review_independence": "cross-family",
+  "acceptance_status": "accepted",
+  "verdict_id": "01a21c09-8678-7d82-bfb9-de774769f97f",
+  "content_hash": "f9cb40605dd89d553c9bcc9609bd47d638a94aacaa8cee222e33ea35940820d3",
+  "stamped_at": "2026-11-27T08:26:24Z"
+}
