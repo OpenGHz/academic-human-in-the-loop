@@ -23,6 +23,11 @@ reproducible build: a compose script, the raw panels with their shot plan, and a
 - **STYLE** (defaults the user can override) = black background with white text; a soft
   synthesized soundtrack; few words per page, with motion (growing bars, curves drawn over
   time, diagrams built step by step) carrying the point instead of text cards.
+- **TIMING** (defaults the user can override) = a 3 s title page; a page lasts as long as the
+  action it needs to show, plus about 2 to 3 s for reading after its last animation
+  finishes; when the footage would end first, shorten the page instead of holding a frozen
+  frame; on a page whose rows play in turn, the first row starts at once, a waiting row is
+  dimmed, and the numbers to be compared show from the start.
 - **REVIEWER** = a secondary Codex agent, `gpt-6-astra` at `xhigh`, read-only, one agent for
   the whole job (save its id).
 
@@ -50,6 +55,14 @@ Selection is a rule applied to the evaluation files; appearance plays no part:
   median difference over all clips; ties go to the first name.
 - **Failure shot**: among the clips the run failed in evaluation, the one whose return is
   closest to that run's mean return; when the run failed on none, drop the failure page.
+- **Mechanism shot**: when a page illustrates a difference the paper explains (one method
+  fails in a named way where the other succeeds), the median clip may show both succeeding.
+  Restrict the clips first to those that show the difference, by a criterion computed from
+  the evaluation files or the per-step records (rerun the evaluation with step records when
+  the logged files lack the quantity), then apply the clip rule above inside that set.
+  Record the criterion and how many clips meet it in `plan.json`; show the paper's number
+  for the difference on the same page when it reports one; and, as in Step 3, confirm that
+  the rendered shot shows the behavior.
 - **Window**: the one free choice, the seconds inside a clip, picked to show motion; the video
   says so.
 
@@ -100,10 +113,25 @@ Apply each rule to every page:
   Later pages carry only what differs: the motion, its time window, the bars.
 - **Grid**: the heading at the same height on every page, at most one footnote line, one
   sentence per line in lists, last lines of two words or more, every element clear of every
-  other.
+  other. Draw headings, captions and footnotes with shared helpers so that one style holds
+  on every page; break a wrapped caption at a phrase boundary into lines of similar length;
+  right-align numbers to be compared in columns.
+- **Marks**: explain data marks and colours with labels or one shared legend, and remove
+  annotation marks (arrows, rules, underlines) that explain nothing.
 - **Names**: readable and sourced: `walk1_subject1` becomes "LAFAN1: Walk 1, subject 1".
   Keep the field's technical terms (seed, iteration, return, rollout, the paper's own
   vocabulary); a less "engineering" look means readable identifiers, not paraphrase.
+- **Captions**: a caption describes what the viewer sees or a claim the paper supports. How
+  a clip was produced (re-run, picked, trimmed) stays in the README of Step 9, apart from
+  the guide page's rules, the window note of Step 2 and what the user asks to see on screen.
+- **Wording**: use the paper's terms and keep its claims; paraphrase only for length, coin
+  no term the paper does not define, and take the closing page from the paper's own
+  conclusion. Quoted phrases go through the abort check of Step 4. When a phrase of the
+  paper reads ambiguously on screen, raise it with the user; the paper changes only with
+  their approval.
+- **Attribution**: a line about one method says which, by its name or, where the page
+  colours the methods, by its colour; each method keeps its name, side and colour on every
+  page.
 - **One statistic per row**: a bar shows one quantity and its label names it ("Full-clip
   evaluation return", "Mean return of 3 seeds at iteration N"). A number on screen is one the
   paper reports or one the label pins down exactly; a one-seed count belongs on its own row,
@@ -173,7 +201,28 @@ deliver. Put the final MP4 where Step 1 said (in the repository only through Git
 dated desktop copy when the user wants one, and report duration, size, md5, the gate result
 and what changed since the last version.
 
+Document each page's sources, each clip's selection rule and every trim in a README beside
+the video; `plan.json` holds the shot details.
+
 Done when the fresh-checkout `--panels` rebuild has the same md5 as the delivered MP4.
+
+### Step 10: Revise on feedback
+
+The user watches the delivered video and asks for changes, often in rounds days apart, after
+the context that held this file is gone. For each round:
+
+1. Reread this skill and the decisions recorded in Step 1 before touching the script.
+2. Restate the requested changes as a numbered list in the user's language, with changed
+   on-screen text as the Step 7 table and one still per alternative when a layout choice is
+   open; wait for the go-ahead unless the user already asked for the changes to be applied.
+3. Apply the changes; a shared style changed on one page (a footnote's size, the form of a
+   caption) is changed on every page that uses it.
+4. Preview the changed pages as stills taken outside the page fades, and watch changed
+   motion and page endings at normal speed.
+5. Repeat Step 7 when on-screen text or numbers changed, then Steps 8 and 9, and push only
+   when the user says so.
+
+Done when the requested revision is delivered where Step 1 said.
 
 ## Outputs
 
@@ -181,4 +230,5 @@ Done when the fresh-checkout `--panels` rebuild has the same md5 as the delivere
 <raw>/plan.json, <raw>/<shot>.mp4, <raw>/<shot>.shot.json    # shot plan, bare panels, provenance
 <output>.mp4, <output>.text.json, verify.json                 # video, on-screen strings, gate result
 tools/<build script> [--panels]                               # one-command rebuild
+README.md                                                     # page sources, selection rules, trims
 ```
